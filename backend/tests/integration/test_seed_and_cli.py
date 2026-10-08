@@ -34,8 +34,16 @@ async def test_seed_creates_departments_and_users_idempotently(db_session: Async
     assert analyst.department.name == "Finance"
     department_count = await db_session.scalar(select(func.count()).select_from(Department))
     assert (department_count or 0) >= 4
+    seeded_ids = [
+        str(user_id)
+        for user_id in await db_session.scalars(
+            select(User.id).where(User.email.in_([u.email for u in SEED_USERS]))
+        )
+    ]
     created_events = await db_session.scalar(
-        select(func.count()).select_from(AuditLog).where(AuditLog.action == "user.created")
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.action == "user.created", AuditLog.entity_id.in_(seeded_ids))
     )
     assert created_events == len(SEED_USERS)
 

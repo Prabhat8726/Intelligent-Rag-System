@@ -5,6 +5,8 @@ docintel create-user --email ...   create a user (password prompted or read from
 docintel check-ai                  verify the configured AI provider end-to-end
 docintel worker [--until-idle]     run the background job worker
 docintel worker-health             exit 0 if the worker heartbeat is fresh (container probe)
+docintel generate-documents        synthetic POs/invoices/delivery notes with ground truth
+docintel ingest DIR                upload a directory through the REST API and wait for results
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import math
 import signal
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
@@ -253,6 +256,59 @@ def _worker_health(settings: Settings) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------------------- synthetic data
+def _generate_documents(args: argparse.Namespace) -> int:
+    try:
+        from docintel.synthetic.generator import generate_dataset
+    except ImportError:  # reportlab lives in the optional `synthetic` dependency group
+        _fail("The synthetic generator needs reportlab: run `uv sync` (default groups).")
+        return EXIT_USAGE
+    manifest = generate_dataset(
+        Path(args.output), seed=args.seed, bundles_per_scenario=args.bundles_per_scenario
+    )
+    scenarios = len(manifest["scenarios"])
+    _ok(
+        f"generated {manifest['document_count']} documents across {scenarios} scenarios "
+        f"in {args.output} (seed {args.seed})"
+    )
+    return EXIT_OK
+
+
+async def _ingest(settings: Settings, args: argparse.Namespace) -> int:
+    from docintel.tools.ingest import IngestError, ingest_directory, summarize
+
+    if args.password_stdin:
+        password = sys.stdin.readline().rstrip("\n")
+    elif settings.seed_user_password is not None:
+        password = settings.seed_user_password.get_secret_value()
+    else:
+        _fail("Provide the password with --password-stdin or SEED_USER_PASSWORD.")
+        return EXIT_USAGE
+    try:
+        items = await ingest_directory(
+            Path(args.directory),
+            api_url=args.api_url,
+            email=args.email,
+            password=password,
+            timeout_seconds=args.timeout,
+        )
+    except IngestError as exc:
+        _fail(str(exc))
+        return EXIT_FAILURE
+    for item in items:
+        detail = item.inspection_kind or item.error or ""
+        print(f"  {item.status or item.http_status!s:<16} {item.file:<40} {detail}")
+    summary = summarize(items)
+    _ok(f"summary: {summary} (report: {Path(args.directory) / 'ingest-report.json'})")
+    unfinished = sum(
+        1 for item in items if item.document_id and item.status in {"PENDING", "PROCESSING"}
+    )
+    if unfinished:
+        _fail(f"{unfinished} document(s) unfinished after {args.timeout}s; is a worker running?")
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------------------- entrypoint
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="docintel", description="Document Intelligence admin CLI")
@@ -272,6 +328,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--until-idle", action="store_true", help="process runnable jobs, then exit"
     )
     commands.add_parser("worker-health", help="exit 0 if the worker heartbeat is fresh")
+    generate = commands.add_parser("generate-documents", help="create a synthetic dataset")
+    generate.add_argument("--output", default="synthetic_data/generated")
+    generate.add_argument("--seed", type=int, default=42)
+    generate.add_argument("--bundles-per-scenario", type=int, default=1)
+    ingest = commands.add_parser("ingest", help="upload a directory via the REST API")
+    ingest.add_argument("directory")
+    ingest.add_argument("--api-url", default="http://localhost:8000")
+    ingest.add_argument("--email", default="analyst@docintel.local")
+    ingest.add_argument("--password-stdin", action="store_true")
+    ingest.add_argument("--timeout", type=float, default=300.0)
     return parser
 
 
@@ -291,6 +357,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_worker(settings, until_idle=args.until_idle))
         case "worker-health":
             return _worker_health(settings)
+        case "generate-documents":
+            return _generate_documents(args)
+        case "ingest":
+            return asyncio.run(_ingest(settings, args))
         case _:  # argparse enforces the choices
             return EXIT_USAGE
 
