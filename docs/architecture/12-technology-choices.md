@@ -1,0 +1,67 @@
+# 12 — Technology Choices & Free/Low-Cost Strategy
+
+Versions were checked against PyPI / npm / the Gemini SDK source on 2026-10-08.
+Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
+
+## 1. Backend
+
+| Concern | Choice | Why | Alternatives considered |
+|---|---|---|---|
+| Language | Python 3.13 | Best AI/document ecosystem; typed | — |
+| Package manager | **uv** (lockfile, fast, standard `pyproject.toml`) | Reproducible installs in CI/Docker | Poetry (slower), pip-tools |
+| Web framework | **FastAPI** 0.14x + Pydantic 2 | Async, OpenAPI out of the box, validation | Django (heavier ORM coupling), Litestar |
+| ASGI server | Uvicorn | Standard, production-ready behind a proxy | Hypercorn |
+| ORM / migrations | **SQLAlchemy 2.1** (async) + **Alembic** | Mature, typed, explicit migrations | SQLModel (thin layer, less control) |
+| DB driver | **psycopg 3** | One driver for async app *and* sync migrations/scripts; LISTEN/NOTIFY for the queue | asyncpg (async only) |
+| Database | **PostgreSQL 17 + pgvector 0.8** | Relational + vectors + FTS + queue + audit in one service; iterative HNSW scans for filtered search | Pinecone/Qdrant (extra service, cost), Elasticsearch |
+| Job queue | **Postgres `SKIP LOCKED` queue** (own, ~200 LOC, Phase 2) | Transactional enqueue, no Redis, visibility in SQL | Celery+Redis, Dramatiq, procrastinate |
+| Auth | **PyJWT** + **pwdlib[argon2]** | Both are what current FastAPI docs recommend; python-jose and passlib are effectively unmaintained | Authlib, external IdP (OIDC later) |
+| Settings | pydantic-settings | Typed env config with validation, `SecretStr` | dynaconf |
+| Logging | **structlog** (JSON in prod) | Structured, contextvars for request ids, redaction processor | std logging only |
+| Metrics | prometheus-client (Phase 11) | De-facto standard, free | OpenTelemetry metrics (can be added) |
+| LLM SDK | **google-genai 2.x** | Google's current unified SDK; `google-generativeai` is legacy | REST by hand |
+| Agent framework | **LangGraph 1.x** (Phase 7) | Explicit state graphs, conditional edges, mature | Custom state machine, CrewAI |
+| MCP | official `mcp` Python SDK (Phase 7) | Reference implementation | — |
+| PDF | **pypdfium2** (render) + **pdfplumber** (text, words, tables) | Permissive licences, word-level boxes | PyMuPDF (AGPL), Docling (heavy torch deps; optional future upgrade) |
+| OCR | **Tesseract 5** (pytesseract) | Free, local, word boxes + confidences | PaddleOCR / docTR / EasyOCR (torch-heavy) |
+| Fuzzy matching | rapidfuzz | Fast, MIT | thefuzz |
+| Classifier | scikit-learn (TF-IDF + calibrated LR) | Calibrated probabilities, tiny, private | Fine-tuned transformer (cost, data needs) |
+| Local embeddings | fastembed (ONNX) `bge-base-en-v1.5` | No torch, 768-d to match Gemini | sentence-transformers (torch) |
+| Synthetic docs | reportlab + Pillow + Faker | Deterministic PDF generation with ground truth | — |
+| Tests | pytest, pytest-asyncio, httpx `ASGITransport`, **respx** (HTTP transport mocks) | Real SDK code paths tested without network | — |
+| Quality | ruff (lint+format), mypy (strict) | Fast, comprehensive | black+flake8+isort |
+
+## 2. Frontend
+
+| Concern | Choice | Why |
+|---|---|---|
+| Framework | **React 19** + TypeScript 6.0 | Required by the prompt; TS 6.0 instead of 7.0 because `typescript-eslint` supports `<6.1` |
+| Build | **Vite 8** | Fast dev server, simple proxy to the API |
+| Styling | **Tailwind CSS 4** (`@tailwindcss/vite`) | Required; v4 needs no PostCSS config |
+| Routing | React Router 7 | Stable, well-known API |
+| Server state | TanStack Query 5 | Caching, polling for async jobs (analysis, processing) |
+| Tests | Vitest 5 + Testing Library + jsdom 29 | jsdom 29 because 30 requires Node ≥ 22.22.2 |
+| Lint | ESLint 10 flat config + typescript-eslint + react-hooks | |
+| Serving | nginx (alpine) | Static files + reverse proxy + headers |
+
+## 3. Infrastructure
+
+| Concern | Choice | Why |
+|---|---|---|
+| Containers | Docker, multi-stage builds, non-root | Required; small images |
+| Local orchestration | docker compose with health checks and a one-shot `migrate` service | Ordered, reproducible startup |
+| CI | GitHub Actions | Required; free for public repos |
+| Object storage (prod) | S3-compatible API (AWS S3, Cloudflare R2, MinIO) | One implementation covers most clouds; R2 has a free tier |
+| Hosting (Phase 11) | Single VM with docker compose (e.g. an always-free ARM VM) + managed backups | Workers need a long-running process; most PaaS free tiers sleep or disallow workers |
+
+## 4. Free / low-cost strategy
+
+| Cost driver | Strategy |
+|---|---|
+| LLM | Gemini free tier for development **with synthetic data only** (free-tier terms forbid sensitive data — C1); deterministic-first pipeline; local classifier; one extraction call per document version; caching; client-side rate limiting; daily budget guard |
+| Embeddings | Batched, cached by content hash; local fastembed option = $0 |
+| OCR | Tesseract locally = $0 |
+| Vector DB / queue / search | All inside PostgreSQL = no extra services |
+| Storage | Local FS in dev; R2/MinIO in staging |
+| CI | GitHub Actions free minutes; LLM evals not run on every PR |
+| Hosting | One small VM runs the whole compose stack |

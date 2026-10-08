@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend - lint, types, migrations, tests, audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg17
+        env:
+          POSTGRES_USER: docintel
+          POSTGRES_PASSWORD: docintel
+          POSTGRES_DB: docintel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U docintel -d docintel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://docintel:docintel@localhost:5432/docintel
+      TEST_DATABASE_URL: postgresql+psycopg://docintel:docintel@localhost:5432/docintel
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.32"
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install locked dependencies
+        run: uv sync --frozen
+
+      - name: Lint and format check
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+
+      - name: Type check (mypy --strict)
+        run: uv run mypy src tests
+
+      - name: Migrations apply and match the ORM models
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+
+      - name: Unit, integration and security tests
+        run: uv run pytest
+
+      - name: Dependency vulnerability audit
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt -o "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --disable-pip --progress-spinner off
+
+  frontend:
+    name: Frontend - lint, types, tests, build, audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Scan git history for secrets
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo" zricethezav/gitleaks:v8.30.1 git /repo --redact --no-banner
+
+  containers:
+    name: Containers - build, compose up, smoke test
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create CI-only environment file
+        run: |
+          cp .env.example .env
+          jwt_secret="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=${jwt_secret}|" .env
+          sed -i "s|^SEED_USER_PASSWORD=.*|SEED_USER_PASSWORD=ci-only-demo-passphrase|" .env
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start stack and wait for health checks
+        run: docker compose up -d --wait db api web
+
+      - name: Smoke test through nginx
+        run: ./scripts/smoke_test.sh
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

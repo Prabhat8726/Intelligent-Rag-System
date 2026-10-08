@@ -1,0 +1,90 @@
+[project]
+name = "docintel"
+version = "0.1.0"
+description = "Enterprise Document Intelligence Platform - backend (API, workers, AI, MCP)"
+requires-python = ">=3.13,<3.14"
+license = "MIT"
+dependencies = [
+    "alembic>=1.20,<2",
+    "fastapi>=0.142.4,<0.143",
+    "google-genai>=2.29,<3",
+    "httpx>=0.28.1,<0.29",
+    "psycopg[binary]>=3.3.6,<4",
+    "pwdlib[argon2]>=0.3.1,<0.4",
+    "pydantic>=2.13,<3",
+    "pydantic-settings>=2.15,<3",
+    "pyjwt>=2.15.1,<3",
+    "sqlalchemy[asyncio]>=2.1.4,<2.2",
+    "structlog>=26.1,<27",
+    "uvicorn[standard]>=0.54,<0.55",
+]
+
+[project.scripts]
+docintel = "docintel.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4,<3",
+    "pytest>=9.1,<10",
+    "pytest-asyncio>=1.4,<2",
+    "respx>=0.23.1,<0.24",
+    "ruff>=0.16.10,<0.17",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/docintel"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "S", "ASYNC", "C4", "SIM", "RUF", "PTH", "N", "T20", "PT", "RET",
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S311"]  # asserts, test passwords, non-crypto random
+"src/docintel/db/migrations/versions/**" = ["N999"]
+"src/docintel/cli.py" = ["T201"]  # the CLI prints to stdout by design
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are evaluated once by design.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body", "fastapi.Header"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+packages = ["docintel"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["respx.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+markers = [
+    "integration: needs a PostgreSQL server (TEST_DATABASE_URL)",
+]
+filterwarnings = ["error::DeprecationWarning:docintel.*"]
