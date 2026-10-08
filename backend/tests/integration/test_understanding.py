@@ -29,11 +29,11 @@ from docintel.synthetic.scenarios import Scenario
 from docintel.workers.runner import Worker
 from tests.conftest import auth_headers
 from tests.factories.files import (
-    INVOICE_LINES,
+    INVOICE_LAYOUT,
     invoice_pdf_bytes,
+    layout_image,
     pdf_bytes,
     scanned_pdf_bytes,
-    text_image,
 )
 from tests.integration.conftest import Env
 
@@ -109,7 +109,7 @@ class LowConfidenceOCR:
 
 # ------------------------------------------------------------------------------ happy paths
 async def test_scanned_invoice_is_read_classified_and_previewed(env: Env) -> None:
-    scan = scanned_pdf_bytes([text_image(INVOICE_LINES, dpi=200)], dpi=200)
+    scan = scanned_pdf_bytes([layout_image(INVOICE_LAYOUT, dpi=200)], dpi=200)
     document_id = await env.upload(scan, "scan.pdf")
     assert await env.worker().run_until_idle() == 1
 

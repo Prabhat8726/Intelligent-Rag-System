@@ -343,3 +343,40 @@ async def test_human_corrections_rescore_the_document() -> None:
     assert apply_correction(date, "") is True  # confirmed: not on the document
     assert date.value is None
     assert date.found is True
+
+
+async def test_a_missing_line_item_table_blocks_auto_acceptance_until_confirmed() -> None:
+    lines = INVOICE_PAGE_LINES[:8] + INVOICE_PAGE_LINES[-3:]
+    outcome = await extract(
+        service(), [make_page(lines, sizes={"Kestrel Industrial Supply Inc.": 13.0})]
+    )
+    count = field(outcome, "line_items")
+    assert count.found is False
+    assert count.required is True
+    assert outcome.status == ExtractionStatus.PARTIAL
+    assert outcome.scoring.reasons[0] == ReviewReason.MISSING_REQUIRED_FIELDS
+    assert outcome.output()["line_items"] == []  # the count is not an output field
+
+    assert apply_correction(count, "") is True  # reviewer: this invoice has no item table
+    scoring = score_fields(INVOICE, outcome.fields, ExtractionPolicy())
+    assert ReviewReason.MISSING_REQUIRED_FIELDS not in scoring.reasons
+
+    complete = await extract(service())
+    assert field(complete, "line_items").value == 2
+
+
+async def test_document_currency_comes_from_the_page_when_nothing_else_says() -> None:
+    page = make_page(
+        [
+            [(50, "Northwind Freight")],
+            [(50, "Delivery Note No."), (200, "DN-1")],
+            [(50, "Delivery Date"), (200, "03/07/2026")],
+            [(50, "Currency"), (200, "USD")],
+        ],
+        sizes={"Northwind Freight": 14.0},
+    )
+    svc = service(vendors=[])
+    outcome = await svc.extract(ExtractionRequest(DocumentType.DELIVERY_NOTE, [page], []))
+    assert outcome is not None
+    assert outcome.signals["context"]["currency"] == "USD"
+    assert field(outcome, "delivery_date").value == "2026-03-07"  # MDY for a US-dollar document

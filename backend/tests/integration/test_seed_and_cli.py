@@ -11,9 +11,10 @@ from docintel import cli
 from docintel.auth.passwords import PasswordPolicyError
 from docintel.auth.seed import SEED_USERS, seed_demo_identities
 from docintel.core.errors import ConflictError
-from docintel.db.models import AuditLog, Department, User
+from docintel.db.models import AuditLog, Department, User, Vendor
 from docintel.tools import ingest as ingest_tool
 from docintel.tools.ingest import IngestItem
+from docintel.vendors.seed import seed_demo_vendors
 from tests.conftest import PRODUCTION_SECRET, make_settings
 
 pytestmark = pytest.mark.integration
@@ -103,6 +104,46 @@ async def test_cli_check_ai_without_key_fails_cleanly(capsys: pytest.CaptureFixt
     output = capsys.readouterr().out
     assert "GEMINI_API_KEY is not set" in output
     assert "synthetic" in output
+
+
+async def test_cli_check_ai_reports_an_unreachable_ollama(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = make_settings(
+        llm_provider="ollama",
+        ollama_model="vlm:7b",
+        ollama_base_url="http://127.0.0.1:9",  # nothing listens on the discard port
+        llm_max_retries=0,
+    )
+    assert await cli._check_ai(settings) == cli.EXIT_FAILURE
+    output = capsys.readouterr().out
+    assert "is the server running" in output
+    assert "[SKIP] embeddings" in output
+    assert "free tier" not in output  # the Gemini data-use warning is Gemini-specific
+
+
+async def test_cli_llm_usage_summarizes_recorded_calls(
+    database_url: str, db_session: AsyncSession, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settings = make_settings(database_url=database_url, llm_daily_request_budget=50)
+    assert await cli._llm_usage(settings, days=1) == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "No LLM calls" in out or "est. cost USD" in out
+
+
+async def test_seed_creates_the_demo_vendor_master(db_session: AsyncSession) -> None:
+    created, existing = await seed_demo_vendors(db_session)
+    assert created == []  # the session fixture already seeded them: seeding is idempotent
+    assert "Kestrel Industrial Supply Inc." in existing
+    vendor = await db_session.scalar(
+        select(Vendor).where(Vendor.canonical_name == "Altamira Components GmbH")
+    )
+    assert vendor is not None
+    assert (vendor.default_currency, vendor.tax_id_key, vendor.aliases) == (
+        "EUR",
+        "DE298374615",
+        [],
+    )
 
 
 def test_generate_documents_needs_no_server_configuration(

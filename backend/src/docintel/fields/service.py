@@ -46,6 +46,7 @@ from docintel.fields.normalize import (
     NormalizationContext,
     NormalizationStatus,
     comparable,
+    currencies_in,
     infer_date_order,
     name_similarity,
     normalize_value,
@@ -206,7 +207,10 @@ def _assemble(schema: SchemaInfo, fields: list[ResolvedField], pick: Any) -> dic
     result: dict[str, Any] = {}
     groups: dict[str, dict[int, dict[str, Any]]] = {}
     lists: dict[str, list[Any]] = {}
+    table = schema.table.name if schema.table else None
     for item in fields:
+        if item.group is None and item.name == table:
+            continue  # the row count; the rows themselves follow
         if item.group is None:
             result[item.name] = pick(item)
         elif schema.table is not None and item.group == schema.table.name:
@@ -458,6 +462,43 @@ def _vendor_backed(vendor: VendorMatch | None, *candidates: _Assessed | None) ->
     return None
 
 
+def _row_count_field(name: str, required: bool, fields: list[ResolvedField]) -> ResolvedField:
+    """How many table rows were read, as a field of its own: required for line-item documents,
+    so a document whose table was not found is never auto-accepted. A reviewer confirms "none"
+    (empty correction) when the document really has no rows."""
+    rows = sorted({f.row_index for f in fields if f.group == name and f.row_index is not None})
+    if not rows:
+        missing = _resolved(name, name, ValueType.INTEGER, required, None, agreement=None)
+        missing.method = "no table rows found"
+        return missing
+    first_page = next((f.page for f in fields if f.group == name and f.page is not None), None)
+    return ResolvedField(
+        path=name,
+        name=name,
+        value_type=ValueType.INTEGER,
+        required=required,
+        original_value=str(len(rows)),
+        normalized={"value": len(rows), "status": NormalizationStatus.OK.value},
+        page=first_page,
+        source_text=None,
+        bbox=None,
+        evidence=EvidenceStatus.VERIFIED,
+        origin=Origin.DERIVED,
+        method="rows of the detected table",
+        signals={
+            "evidence": EvidenceStatus.VERIFIED.value,
+            "evidence_score": 100.0,
+            "normalization": NormalizationStatus.OK.value,
+            "ocr": None,
+            "anchor": 1.0,
+            "conflicts": 0,
+            "page_matches_citation": True,
+            "agreement": None,
+            "consistency": None,
+        },
+    )
+
+
 def _row_key(row: RowCandidate) -> str:
     sku = row.cells.get("sku")
     if sku is not None:
@@ -697,7 +738,7 @@ class FieldExtractionService:
 
         # Vendor first: its master data can supply the document currency.
         vendor = await self._match_vendor(schema, local, model)
-        currency = self._currency(schema, local, model, vendor)
+        currency = self._currency(schema, local, model, vendor, texts)
         context = document_context(texts, currency, decimal_comma)
 
         fields: list[ResolvedField] = []
@@ -753,6 +794,10 @@ class FieldExtractionService:
                             row_index=index,
                         )
                     )
+
+        if schema.table is not None:
+            count = _row_count_field(schema.table.name, schema.rows_required, fields)
+            fields.insert(len(schema.scalars), count)
 
         for list_field in schema.lists:
             local_items = local.lists.get(list_field.name, [])
@@ -831,6 +876,7 @@ class FieldExtractionService:
         local: ExtractorOutput,
         model: ExtractorOutput | None,
         vendor: VendorMatch | None,
+        texts: Sequence[str] = (),
     ) -> str | None:
         for source in (local, model):
             if source is None or "currency" not in source.scalars:
@@ -843,6 +889,9 @@ class FieldExtractionService:
                 return str(normalized.value)
         if vendor is not None and vendor.default_currency:
             return vendor.default_currency
+        printed = set().union(*(currencies_in(text) for text in texts)) if texts else set()
+        if len(printed) == 1:
+            return printed.pop()  # one currency code/symbol printed on the whole document
         assumed = local.scalars.get("currency")
         if assumed is not None:
             normalized = normalize_value(ValueType.CURRENCY, assumed.raw_value)

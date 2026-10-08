@@ -260,3 +260,34 @@ def test_statement_period_range_feeds_both_dates() -> None:
     assert output.scalars["statement_period_start"].raw_value == "01/03/2026"
     assert output.scalars["statement_period_end"].raw_value == "31/03/2026"
     assert output.scalars["bank_name"].raw_value == "Example Bank"
+
+
+def test_item_code_merged_into_the_description_is_split_off() -> None:
+    page = make_page([[(50, "x")]])
+    table = _table(
+        ["#", "Item", "Qty", "Amount"],
+        [["1", "BRG-6204 Deep groove ball bearing 6204-2RS", "100", "460.00"]],
+    )
+    (row,) = LayoutExtractor(INVOICE).extract([page], [table]).rows
+    assert row.cells["sku"].raw_value == "BRG-6204"
+    assert row.cells["description"].raw_value == "Deep groove ball bearing 6204-2RS"
+    plain = _table(["#", "Item", "Qty", "Amount"], [["1", "Steel bolts box of 100", "4", "8.00"]])
+    (row,) = LayoutExtractor(INVOICE).extract([page], [plain]).rows
+    assert "sku" not in row.cells  # prose stays prose
+
+
+def test_letterhead_never_picks_labels_of_any_schema_or_split_titles() -> None:
+    page = make_page(
+        [
+            [(50, "DELIVERY N OTE")],
+            [(50, "Currency")],
+            [(50, "Northwind Freight")],
+        ],
+        sizes={"DELIVERY N OTE": 20.0, "Currency": 14.0, "Northwind Freight": 12.0},
+    )
+    candidate = (
+        LayoutExtractor(SCHEMA_INFO[DocumentType.DELIVERY_NOTE])
+        .extract([page], [])
+        .scalars["vendor_name"]
+    )
+    assert candidate.raw_value == "Northwind Freight"

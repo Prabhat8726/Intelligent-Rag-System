@@ -126,6 +126,20 @@ def detect_currency(text: str, context_currency: str | None = None) -> tuple[str
     return None
 
 
+def currencies_in(text: str) -> set[str]:
+    """ISO codes and unambiguous symbols printed anywhere in `text`."""
+    found = {
+        match.group(1) for match in _ISO_PATTERN.finditer(text) if match.group(1) in ISO_CURRENCIES
+    }
+    lowered = text.casefold()
+    found |= {
+        code
+        for symbol, code, unambiguous in _SYMBOLS
+        if unambiguous and symbol in lowered and not symbol.isalpha() and not symbol.endswith(".")
+    }
+    return found
+
+
 # ------------------------------------------------------------------------------ numbers
 # Characters that group thousands but never mark decimals: space, apostrophe, right single
 # quote (Swiss style), no-break and narrow no-break spaces.

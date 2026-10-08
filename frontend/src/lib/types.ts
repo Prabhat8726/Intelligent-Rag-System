@@ -85,6 +85,12 @@ export interface DocumentSummary {
   created_at: string;
   updated_at: string;
   current_version: DocumentVersion | null;
+  vendor?: VendorSummary | null;
+}
+
+export interface VendorSummary {
+  id: string;
+  canonical_name: string;
 }
 
 export interface ProcessingJob {
@@ -208,4 +214,88 @@ export interface Page<T> {
   total: number;
   limit: number;
   offset: number;
+}
+
+export type EvidenceStatus = "VERIFIED" | "FUZZY" | "UNSUPPORTED" | "NOT_FOUND" | "HUMAN";
+export type FieldOrigin = "LOCAL" | "LLM" | "BOTH" | "DERIVED" | "HUMAN";
+export type ReviewLevel = "AUTO" | "ANALYST_REVIEW" | "MANDATORY_REVIEW";
+
+export interface NormalizedValue {
+  value: string | number | boolean | null;
+  status: "OK" | "UNCERTAIN" | "INVALID" | "CONFIRMED_EMPTY";
+  rule?: string;
+  alternatives?: string[];
+  currency?: string | null;
+  currency_from?: string;
+  vendor?: { vendor_id: string; canonical_name: string; score: number; method: string } | null;
+  [key: string]: unknown;
+}
+
+export interface ExtractedField {
+  id: string;
+  field_path: string;
+  field_name: string;
+  group_name: string | null;
+  row_index: number | null;
+  value_type: string;
+  is_required: boolean;
+  original_value: string | null;
+  normalized_value: NormalizedValue | null;
+  page_number: number | null;
+  source_text: string | null;
+  bbox: number[] | null;
+  evidence_status: EvidenceStatus;
+  origin: FieldOrigin | null;
+  method: string | null;
+  confidence: string;
+  confidence_signals: Record<string, unknown>;
+  alternatives: { origin: string; value: string; page: number | null; evidence: string }[];
+  corrected_value: string | null;
+  corrected_normalized: NormalizedValue | null;
+  correction_note: string | null;
+  corrected_by: { id: string; full_name: string } | null;
+  corrected_at: string | null;
+}
+
+export interface ExtractionCheck {
+  code: string;
+  status: "PASS" | "FAIL";
+  fields: string[];
+  expected: string;
+  actual: string;
+  message: string;
+}
+
+export interface ExtractionSignals {
+  llm?: { mode: string; used: boolean; reason?: string; model?: string; cache_hit?: boolean; errors?: string[] };
+  external_ai?: { allowed: boolean; effective_sensitivity: Sensitivity; reason: string };
+  context?: { date_order: string | null; date_order_reason: string | null; currency: string | null };
+  [key: string]: unknown;
+}
+
+export interface Extraction {
+  id: string;
+  document_version_id: string;
+  schema_name: string;
+  schema_version: number;
+  status: "SUCCEEDED" | "PARTIAL" | "FAILED";
+  method: "LOCAL" | "LLM" | "COMBINED";
+  provider: string | null;
+  model: string | null;
+  prompt_version: string | null;
+  overall_confidence: string;
+  review_level: ReviewLevel;
+  checks: ExtractionCheck[];
+  signals: ExtractionSignals;
+  validation_error_count: number;
+  created_at: string;
+  fields: ExtractedField[];
+  vendor: VendorSummary | null;
+}
+
+/** Where to draw attention on a page preview (an extracted value's source). */
+export interface Highlight {
+  page: number;
+  bbox: number[];
+  label: string;
 }

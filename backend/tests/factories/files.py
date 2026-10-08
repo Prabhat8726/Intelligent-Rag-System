@@ -134,27 +134,66 @@ def image_file_bytes(image: Image.Image, fmt: str = "PNG", *, dpi: int | None = 
     return buffer.getvalue()
 
 
-INVOICE_LINES = [
-    "INVOICE",
-    "Kestrel Industrial Supply Inc.",
-    "Invoice No.  INV-1001",
-    "Invoice Date  2026-03-01",
-    "Bill To  Meridian Manufacturing Co.",
-    "Description   Qty   Unit Price   Amount",
-    "Hex bolt M10x40 zinc   5   14.31   71.55",
-    "Total Due  71.55 USD",
-    "Please remit payment within 30 days quoting the invoice number.",
+# A short invoice with a real (column-aligned) line-item table: (x, text) segments per line.
+INVOICE_LAYOUT: list[list[tuple[float, str]]] = [
+    [(72, "INVOICE")],
+    [(72, "Kestrel Industrial Supply Inc.")],
+    [(72, "Invoice No.  INV-1001")],
+    [(72, "Invoice Date  2026-03-01")],
+    [(72, "Bill To  Meridian Manufacturing Co.")],
+    [],
+    [(72, "Description"), (260, "Qty"), (320, "Unit Price"), (420, "Amount")],
+    [(72, "Hex bolt M10x40 zinc"), (260, "5"), (320, "14.31"), (420, "71.55")],
+    [(72, "Washer M10, pack of 50"), (260, "2"), (320, "3.20"), (420, "6.40")],
+    [],
+    [(72, "Total Due  77.95 USD")],
+    [(72, "Please remit payment within 30 days quoting the invoice number.")],
 ]
+INVOICE_LINES = ["  ".join(text for _, text in line) for line in INVOICE_LAYOUT if line]
+
+
+def layout_pdf_bytes(
+    layout: list[list[tuple[float, str]]], *, font_size: float = 11, footer: str | None = None
+) -> bytes:
+    """One native page with text placed at the given x positions, line by line."""
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4, invariant=1)
+    pdf.setFont("Helvetica", font_size)
+    lines: list[list[tuple[float, str]]] = [*layout, [(72.0, footer)]] if footer else layout
+    for index, line in enumerate(lines):
+        for x, text in line:
+            pdf.drawString(x, 760 - index * font_size * 1.6, text)
+    pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
+
+
+def layout_image(layout: list[list[tuple[float, str]]], *, dpi: int = 200) -> Image.Image:
+    """A grayscale 'scan' of `layout_pdf_bytes(layout)` (no text layer)."""
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(layout_pdf_bytes(layout))
+    try:
+        image: Image.Image = document[0].render(scale=dpi / 72).to_pil().convert("L")
+        return image
+    finally:
+        document.close()
 
 
 def invoice_pdf_bytes(pages: int = 1) -> bytes:
-    """A realistic (short) invoice with a text layer that the classifier recognizes confidently."""
+    """A realistic (short) invoice the classifier recognizes and the extractor reads fully.
+    Extra pages carry terms, as real multi-page invoices do."""
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4, invariant=1)
     for number in range(pages):
         pdf.setFont("Helvetica", 11)
-        for index, line in enumerate([*INVOICE_LINES, f"Page {number + 1} of {pages}"]):
-            pdf.drawString(72, 760 - index * 18, line)
+        body: list[list[tuple[float, str]]] = (
+            INVOICE_LAYOUT if number == 0 else [[(72.0, "Terms and conditions of sale apply.")]]
+        )
+        footer: list[tuple[float, str]] = [(72.0, f"Page {number + 1} of {pages}")]
+        for index, line in enumerate([*body, footer]):
+            for x, text in line:
+                pdf.drawString(x, 760 - index * 11 * 1.6, text)
         pdf.showPage()
     pdf.save()
     return buffer.getvalue()

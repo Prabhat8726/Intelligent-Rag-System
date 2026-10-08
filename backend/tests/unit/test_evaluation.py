@@ -127,3 +127,51 @@ def test_report_files(tmp_path: Path) -> None:
     assert "| text | 90.0% |" in markdown
     assert "docintel evaluate --suite demo" in markdown
     assert "* synthetic" in markdown
+
+
+async def test_extraction_scoring_on_a_native_synthetic_invoice(tmp_path: Path) -> None:
+    from docintel.db.models import DocumentType
+    from docintel.documents.validation import FileKind
+    from docintel.evaluation.common import extract_file
+    from docintel.evaluation.extraction_suite import (
+        aggregate,
+        demo_vendor_records,
+        score_document,
+    )
+    from docintel.fields.service import (
+        ExtractionPolicy,
+        ExtractionRequest,
+        FieldExtractionService,
+    )
+    from docintel.fields.vendors import StaticVendorDirectory
+    from docintel.processing.extraction import ExtractionOptions
+    from docintel.processing.tables import stitch_tables
+    from docintel.synthetic.generator import generate_dataset
+    from docintel.synthetic.scenarios import Scenario
+    from tests.unit.test_extraction import FakeOCR
+
+    manifest = generate_dataset(tmp_path, seed=8, scenarios=[Scenario.VENDOR_NAME_VARIANT])
+    entry = next(d for d in manifest["documents"] if d["document_type"] == "INVOICE")
+    truth = json.loads((tmp_path / entry["ground_truth"]).read_text())
+    pages = await extract_file(
+        tmp_path / entry["file"], FileKind.PDF, FakeOCR(), ExtractionOptions()
+    )
+    service = FieldExtractionService(
+        policy=ExtractionPolicy(llm_mode="never"),
+        vendors=StaticVendorDirectory(demo_vendor_records()),
+    )
+    outcome = await service.extract(
+        ExtractionRequest(DocumentType.INVOICE, pages, stitch_tables(pages))
+    )
+    assert outcome is not None
+    score = score_document(DocumentType.INVOICE, truth, outcome)
+    # A printed vendor-name variant and another date format: both normalized correctly.
+    assert score["fields"]["vendor_name"]["correct"]
+    assert score["fields"]["invoice_date"]["correct"]
+    assert all(record["correct"] == record["truth"] for record in score["fields"].values())
+    assert score["rows"]["matched"] == len(truth["line_items"])
+    assert not score["any_error"]
+    summary = aggregate([score])
+    assert summary["all_fields"]["f1"] == 1.0
+    assert summary["line_items"]["cell_accuracy"] == 1.0
+    assert summary["documents_fully_correct_rate"] == 1.0

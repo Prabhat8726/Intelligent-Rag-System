@@ -32,8 +32,10 @@ from docintel.fields.normalize import (
     find_numbers,
     normalize_label,
     normalize_value,
+    squash,
 )
 from docintel.fields.schemas import (
+    SCHEMA_INFO,
     ColumnField,
     ListField,
     ScalarField,
@@ -64,7 +66,7 @@ ANCHOR_DERIVED_EXPLICIT = 0.9
 ANCHOR_DERIVED_ASSUMED = 0.7
 
 TITLE_KEYS = frozenset(
-    normalize_label(title)
+    squash(title)
     for title in (
         "invoice",
         "tax invoice",
@@ -86,6 +88,13 @@ TITLE_KEYS = frozenset(
         "curriculum vitae",
         "resume",
     )
+)
+# Labels of every schema: none of them is ever a company or person name.
+ANY_SCHEMA_LABELS = frozenset(
+    normalize_label(label)
+    for info in SCHEMA_INFO.values()
+    for field in info.scalars
+    for label in field.meta.labels
 )
 _VALUE_START = re.compile(r"^[\d$€£¥₹(+-]|^[A-Z]{3}\s?\d")
 _SEPARATORS = ":#- " + chr(0x2013)  # colon, hash, hyphen, space, en dash
@@ -401,8 +410,10 @@ class LayoutExtractor:
                 continue
             if any(_inside(segment.bbox, area) for area in table_areas):
                 continue
-            if is_name and (segment.label in TITLE_KEYS or ":" in segment.text):
-                continue
+            if is_name and (squash(segment.text) in TITLE_KEYS or ":" in segment.text):
+                continue  # squashed: OCR splits "DELIVERY NOTE" into "DELIVERY N OTE"
+            if is_name and segment.label in ANY_SCHEMA_LABELS:
+                continue  # e.g. "Currency" on a delivery note, whose schema has no currency
             if is_name and normalize_value(ValueType.DATE, segment.text).valid:
                 continue
             options.append(segment)
@@ -496,6 +507,7 @@ class LayoutExtractor:
                         method=f"table column '{_header_text(table, index)}'",
                     )
                 _split_quantity_unit(cells, table_field)
+                _split_code_description(cells, table_field)
                 if _plausible_row(cells, table_field) and not self._summary_row(cells):
                     rows.append(
                         RowCandidate(
@@ -631,6 +643,43 @@ def _split_quantity_unit(cells: dict[str, Candidate], table_field: TableField) -
         bbox=quantity.bbox,
         ocr_confidence=quantity.ocr_confidence,
         method=f"{quantity.method}, split from '{quantity.raw_value}'",
+    )
+
+
+_LEADING_CODE = re.compile(r"^([A-Z0-9]+(?:[-/.][A-Z0-9]+)+|[A-Z]{2,}\d[A-Z0-9]*)\s+(\S.*)$")
+
+
+def _split_code_description(cells: dict[str, Candidate], table_field: TableField) -> None:
+    """'BRG-6204 Deep groove ball bearing' in the description column when the item-code column
+    was lost (OCR merged the header): the leading code becomes the SKU."""
+    description = cells.get("description")
+    if description is None or "sku" in cells:
+        return
+    if not any(column.name == "sku" for column in table_field.columns):
+        return
+    match = _LEADING_CODE.match(description.raw_value)
+    if match is None or not any(ch.isdigit() for ch in match.group(1)):
+        return
+    note = f"{description.method}, split from '{description.raw_value}'"
+    cells["sku"] = Candidate(
+        match.group(1),
+        description.page,
+        description.source_text,
+        Origin.LOCAL,
+        anchor=ANCHOR_HEADER_INFERRED,
+        bbox=description.bbox,
+        ocr_confidence=description.ocr_confidence,
+        method=note,
+    )
+    cells["description"] = Candidate(
+        match.group(2),
+        description.page,
+        description.source_text,
+        Origin.LOCAL,
+        anchor=ANCHOR_HEADER_INFERRED,
+        bbox=description.bbox,
+        ocr_confidence=description.ocr_confidence,
+        method=note,
     )
 
 

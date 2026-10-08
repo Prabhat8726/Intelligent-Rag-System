@@ -272,6 +272,8 @@ class ExtractionSchema(BaseModel):
     SCHEMA_NAME: ClassVar[str]
     SCHEMA_VERSION: ClassVar[int]
     DOCUMENT_TYPE: ClassVar[DocumentType]
+    # The table (line items, transactions) must have rows; "none" needs a reviewer's word.
+    ROWS_REQUIRED: ClassVar[bool] = False
 
 
 _VENDOR_LABELS = ("vendor", "supplier", "seller", "sold by", "issued by", "from", "remit to")
@@ -281,6 +283,7 @@ class InvoiceV1(ExtractionSchema):
     SCHEMA_NAME: ClassVar[str] = "invoice"
     SCHEMA_VERSION: ClassVar[int] = 1
     DOCUMENT_TYPE: ClassVar[DocumentType] = DocumentType.INVOICE
+    ROWS_REQUIRED: ClassVar[bool] = True
 
     vendor_name: Annotated[
         Value,
@@ -395,6 +398,7 @@ class PurchaseOrderV1(ExtractionSchema):
     SCHEMA_NAME: ClassVar[str] = "purchase_order"
     SCHEMA_VERSION: ClassVar[int] = 1
     DOCUMENT_TYPE: ClassVar[DocumentType] = DocumentType.PURCHASE_ORDER
+    ROWS_REQUIRED: ClassVar[bool] = True
 
     po_number: Annotated[
         Value,
@@ -494,6 +498,7 @@ class DeliveryNoteV1(ExtractionSchema):
     SCHEMA_NAME: ClassVar[str] = "delivery_note"
     SCHEMA_VERSION: ClassVar[int] = 1
     DOCUMENT_TYPE: ClassVar[DocumentType] = DocumentType.DELIVERY_NOTE
+    ROWS_REQUIRED: ClassVar[bool] = True
 
     delivery_note_number: Annotated[
         Value,
@@ -756,6 +761,7 @@ class BankStatementV1(ExtractionSchema):
     SCHEMA_NAME: ClassVar[str] = "bank_statement"
     SCHEMA_VERSION: ClassVar[int] = 1
     DOCUMENT_TYPE: ClassVar[DocumentType] = DocumentType.BANK_STATEMENT
+    ROWS_REQUIRED: ClassVar[bool] = True
 
     bank_name: Annotated[Value, FieldMeta(ValueType.ORGANIZATION, letterhead=0.9)] = Field(
         default=None, description="Name of the bank"
@@ -906,6 +912,10 @@ class SchemaInfo:
     @property
     def required_fields(self) -> tuple[str, ...]:
         return tuple(field.name for field in self.scalars if field.meta.required)
+
+    @property
+    def rows_required(self) -> bool:
+        return self.table is not None and self.model.ROWS_REQUIRED
 
     def scalar(self, name: str) -> ScalarField | None:
         return next((field for field in self.scalars if field.name == name), None)

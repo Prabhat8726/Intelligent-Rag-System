@@ -87,7 +87,13 @@ async def test_generated_documents_flow_through_api_queue_and_worker(
     for item in items:
         if item.status == "REVIEW_REQUIRED":
             assert item.variant == "scanned", (item.doc_id, item.review_reasons)
-            assert set(item.review_reasons or []) <= {"EXTRACTION_UNCERTAIN", "LOW_OCR_CONFIDENCE"}
+            # OCR noise can cost a table row or a label; it must show as a review reason.
+            assert set(item.review_reasons or []) <= {
+                "EXTRACTION_UNCERTAIN",
+                "MISSING_REQUIRED_FIELDS",
+                "EXTRACTION_INCONSISTENT",
+                "LOW_OCR_CONFIDENCE",
+            }
     native = [item for item in items if item.variant == "native"]
     assert {item.status for item in native} == {"COMPLETED"}
     assert by_doc["B0001-INV"].inspection_kind == "native_pdf"

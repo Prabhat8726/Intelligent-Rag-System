@@ -8,7 +8,7 @@ docintel worker [--until-idle]     run the background job worker
 docintel worker-health             exit 0 if the worker heartbeat is fresh (container probe)
 docintel generate-documents        synthetic POs/invoices/delivery notes with ground truth
 docintel ingest DIR                upload a directory through the REST API and wait for results
-docintel evaluate --suite ...      OCR / classification / table metrics -> evaluation/reports
+docintel evaluate --suite ...      OCR / classification / table / extraction metrics
 """
 
 from __future__ import annotations
@@ -21,23 +21,26 @@ import os
 import signal
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
+from sqlalchemy import func, select
 
 from docintel.ai.base import EmbeddingTask, LLMRequest, ModelTier
 from docintel.ai.errors import ProviderError
 from docintel.ai.gemini import GeminiLLMProvider
+from docintel.ai.ollama import OllamaLLMProvider
 from docintel.ai.registry import build_embedding_provider, build_llm_provider
 from docintel.audit.service import SYSTEM_REQUEST
 from docintel.auth.passwords import PasswordPolicyError
 from docintel.auth.seed import seed_demo_identities
 from docintel.auth.service import UserService
-from docintel.core.config import LogFormat, Settings, get_settings
+from docintel.core.config import LLMProviderName, LogFormat, Settings, get_settings
 from docintel.core.errors import ConflictError
 from docintel.core.logging import configure_logging, get_logger
-from docintel.db.models import Role
+from docintel.db.models import LLMCall, LLMCallStatus, Role
 from docintel.db.session import create_engine, create_sessionmaker
 from docintel.processing.ocr import OCRUnavailableError, TesseractOCRProvider
 from docintel.processing.services import build_processing_services, load_corrections
@@ -153,6 +156,16 @@ async def _check_llm(settings: Settings) -> bool:
         return False
     healthy = True
     try:
+        if isinstance(llm, OllamaLLMProvider):
+            pulled = await llm.list_models()
+            _ok(f"Ollama reachable at {settings.ollama_base_url}; {len(pulled)} model(s) pulled")
+            for tier in ModelTier:
+                model = llm.model_for(tier)
+                if model in pulled or f"{model}:latest" in pulled:
+                    _ok(f"{tier.value} model '{model}' is pulled")
+                else:
+                    healthy = False
+                    _fail(f"{tier.value} model '{model}' is not pulled (run: ollama pull {model})")
         if isinstance(llm, GeminiLLMProvider):
             available = await llm.list_generation_models()
             _ok(f"API key accepted; {len(available)} generation models available")
@@ -220,14 +233,66 @@ async def _check_embeddings(settings: Settings) -> bool:
 
 
 async def _check_ai(settings: Settings) -> int:
-    print(
-        "NOTE: on the Gemini free tier, Google may use prompts for product improvement and\n"
-        "human review. Only send synthetic or non-sensitive data\n"
-        "(see docs/architecture/01-requirements.md, finding C1).\n"
-    )
+    if settings.llm_provider == LLMProviderName.GEMINI:
+        print(
+            "NOTE: on the Gemini free tier, Google may use prompts for product improvement and\n"
+            "human review. Only send synthetic or non-sensitive data\n"
+            "(see docs/architecture/01-requirements.md, finding C1).\n"
+        )
     llm_ok = await _check_llm(settings)
-    embeddings_ok = await _check_embeddings(settings)
+    if settings.gemini_api_key is None and settings.llm_provider == LLMProviderName.OLLAMA:
+        print("[SKIP] embeddings: GEMINI_API_KEY not set (embeddings are needed from Phase 6)")
+        embeddings_ok = True
+    else:
+        embeddings_ok = await _check_embeddings(settings)
     return EXIT_OK if llm_ok and embeddings_ok else EXIT_FAILURE
+
+
+async def _llm_usage(settings: Settings, days: int) -> int:
+    """Calls, tokens and estimated cost per day, provider, model and purpose (llm_calls)."""
+    since = datetime.now(UTC) - timedelta(days=days)
+    engine = create_engine(settings)
+    try:
+        async with create_sessionmaker(engine)() as session:
+            day = func.date_trunc("day", LLMCall.created_at)
+            rows = (
+                await session.execute(
+                    select(
+                        day,
+                        LLMCall.provider,
+                        LLMCall.model,
+                        LLMCall.purpose,
+                        func.count(),
+                        func.count().filter(LLMCall.status == LLMCallStatus.FAILED),
+                        func.coalesce(func.sum(LLMCall.input_tokens), 0),
+                        func.coalesce(func.sum(LLMCall.output_tokens), 0),
+                        func.sum(LLMCall.estimated_cost_usd),
+                    )
+                    .where(LLMCall.created_at >= since)
+                    .group_by(day, LLMCall.provider, LLMCall.model, LLMCall.purpose)
+                    .order_by(day.desc(), LLMCall.provider, LLMCall.model, LLMCall.purpose)
+                )
+            ).all()
+    finally:
+        await engine.dispose()
+    if not rows:
+        print(f"No LLM calls in the last {days} day(s).")
+        return EXIT_OK
+    print(
+        f"{'day':<10} {'provider':<9} {'model':<28} {'purpose':<21} {'calls':>5} {'failed':>6}  "
+        f"{'tokens in/out':<17} est. cost USD"
+    )
+    for when, provider, model, purpose, calls, failed, tokens_in, tokens_out, cost in rows:
+        estimate = "not configured" if cost is None else f"{cost:.6f}"
+        print(
+            f"{when:%Y-%m-%d} {provider:<9} {model:<28} {purpose:<21} {calls:>5} {failed:>6}  "
+            f"{tokens_in:>8}/{tokens_out:<8} {estimate}"
+        )
+    if settings.llm_daily_request_budget:
+        print(
+            f"Daily request budget: {settings.llm_daily_request_budget} (LLM_DAILY_REQUEST_BUDGET)"
+        )
+    return EXIT_OK
 
 
 # ---------------------------------------------------------------------------- worker
@@ -389,6 +454,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
     """Offline evaluation with production defaults; needs the dev/synthetic dependency groups."""
     try:
         from docintel.evaluation.classification_suite import run_classification_suite
+        from docintel.evaluation.extraction_suite import run_extraction_suite
         from docintel.evaluation.ocr_suite import run_ocr_suite
         from docintel.evaluation.tables_suite import run_tables_suite
     except ImportError as exc:  # reportlab is not installed in the runtime image
@@ -396,13 +462,19 @@ async def _evaluate(args: argparse.Namespace) -> int:
         return EXIT_USAGE
     defaults = Settings.model_fields
     output = Path(args.output)
-    suites = ["ocr", "classification", "tables"] if args.suite == "all" else [args.suite]
+    suites = (
+        ["ocr", "classification", "tables", "extraction"] if args.suite == "all" else [args.suite]
+    )
     try:
         for suite in suites:
             if suite == "ocr":
                 report = await run_ocr_suite(output, quick=args.quick, languages=args.languages)
             elif suite == "tables":
                 report = await run_tables_suite(output, quick=args.quick, languages=args.languages)
+            elif suite == "extraction":
+                report = await run_extraction_suite(
+                    output, quick=args.quick, languages=args.languages
+                )
             else:
                 report = await run_classification_suite(
                     output,
@@ -432,6 +504,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--password-stdin", action="store_true", help="read the password from stdin"
     )
     commands.add_parser("check-ai", help="verify AI provider credentials and models")
+    usage = commands.add_parser("llm-usage", help="LLM calls, tokens and estimated cost")
+    usage.add_argument("--days", type=int, default=7, help="look back this many days (default 7)")
     commands.add_parser("check-ocr", help="verify the OCR engine and configured languages")
     worker = commands.add_parser("worker", help="run the background job worker")
     worker.add_argument(
@@ -450,7 +524,9 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--timeout", type=float, default=300.0)
     evaluate = commands.add_parser("evaluate", help="run evaluation suites and write reports")
     evaluate.add_argument(
-        "--suite", choices=["ocr", "classification", "tables", "all"], default="all"
+        "--suite",
+        choices=["ocr", "classification", "tables", "extraction", "all"],
+        default="all",
     )
     evaluate.add_argument("--output", default="../evaluation/reports")
     evaluate.add_argument("--quick", action="store_true", help="small datasets (smoke test)")
@@ -485,6 +561,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_create_user(settings, args))
         case "check-ai":
             return asyncio.run(_check_ai(settings))
+        case "llm-usage":
+            return asyncio.run(_llm_usage(settings, args.days))
         case "check-ocr":
             return asyncio.run(_check_ocr(settings))
         case "worker":
