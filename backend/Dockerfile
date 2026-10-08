@@ -31,6 +31,13 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     APP_ENV=production \
     LOG_FORMAT=json
 
+# Tesseract 5 OCR engine with English, German and orientation (OSD) data. More languages:
+# install tesseract-ocr-<lang> and set OCR_LANGUAGES (e.g. eng+fra).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-osd \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
     && mkdir -p /data/storage \

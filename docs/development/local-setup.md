@@ -9,6 +9,7 @@
 | uv | 0.11.x | https://docs.astral.sh/uv/getting-started/installation/ |
 | Node.js | 22 LTS (≥ 22.13) | Frontend tooling |
 | GNU make, curl, python3 | any recent | Developer commands and smoke test |
+| Tesseract OCR | 5.x with English + OSD data | Needed by the worker and the tests on the host (`apt install tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd`, `brew install tesseract`). The Docker image includes it. Verify with `make check-ocr` |
 
 ## First run
 
@@ -65,7 +66,9 @@ make process API_URL=http://localhost:8080       # ... or through the Docker sta
 Each bundle has a purchase order, delivery note and invoice plus a `.json` ground-truth file
 listing the intended discrepancies; `manifest.json` describes the dataset. `make process` logs
 in as `analyst@docintel.local` with `SEED_USER_PASSWORD`, writes `ingest-report.json` next to
-the dataset and exits non-zero unless every document reaches `COMPLETED`. Uploading the same
+the dataset and exits non-zero when a document fails, is rejected or does not finish
+(`REVIEW_REQUIRED` counts as processed; add `INGEST_FLAGS=--require-completed` to fail on it,
+as CI does). Uploading the same
 dataset again is allowed: the copies are flagged as exact duplicates.
 
 ## Everyday commands
@@ -77,6 +80,8 @@ dataset again is allowed: the copies are flagged as exact duplicates.
 | `make format` | Auto-format backend code |
 | `make migrate` | Apply migrations to the local database |
 | `make worker` | Process queued jobs on the host until the queue is empty |
+| `make check-ocr` | Verify Tesseract, the configured languages and TSV output |
+| `make evaluate` | Run the OCR, classification and table evaluations (~10 min) → `evaluation/reports/` |
 | `cd backend && uv run --env-file ../.env alembic revision -m "..."` | New migration (write it by hand, then `alembic check`) |
 
 ## Troubleshooting
@@ -86,6 +91,8 @@ dataset again is allowed: the copies are flagged as exact duplicates.
 | `Missing .env` | Run `make env` |
 | `warning: Failed to parse environment file` from uv | A value in `.env` contains spaces without quotes: wrap it in double quotes |
 | Documents stay `Queued` | No worker is running: `make dev` starts one, or run `make worker`; in Docker check `docker compose ps worker` |
+| Worker exits with `OCR engine not found` or `language data missing` | Install Tesseract and the languages in `OCR_LANGUAGES` (see prerequisites); `make check-ocr` |
+| Many documents end in `Needs review` | Open one: the banner names the reason. `Document type is uncertain` → correct it (reviewer role), or configure `GEMINI_API_KEY` for the LLM fallback; low OCR confidence → check the scan quality |
 | Port 5432 already in use | Another Postgres is running. Set `POSTGRES_PORT=5433` and update `DATABASE_URL`/`TEST_DATABASE_URL` in `.env` |
 | `/health/ready` returns 503 with `schema is not at migration head` | Run `make migrate` (or `make up`, which runs the migrate service) |
 | `JWT_SECRET_KEY looks like a placeholder` | You are in `staging`/`production` with the example secret: generate a real one |

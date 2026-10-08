@@ -11,7 +11,7 @@ architecture decisions are validated by running code immediately.
 |---|---|---|---|
 | **0 — Architecture & Foundation** | Requirements, architecture, schema, API, agent, RAG, security, evaluation design; runnable foundation | `docs/`, backend skeleton (config, logging, errors, health, DB, migrations, auth+RBAC, audit, AI provider layer + Gemini), frontend shell, Docker, CI, Makefile | See §1 below |
 | **2 — Document ingestion** ✅ | Upload, validation, storage abstraction, versions, job queue, worker, synthetic generator v1 | `POST/GET/DELETE /documents`, `LocalStorage` + S3-compatible storage, PG job queue + worker, `make generate-documents` | Valid files stored + job queued atomically; invalid/oversized/spoofed rejected (security tests); worker processes jobs with retries/leases |
-| 3 — OCR & understanding | Per-page inspection, native text, Tesseract OCR, layout blocks, tables, classification, sensitivity gate | `document_pages`, `document_tables`, classifier + LLM fallback, page preview images | Mixed PDFs handled per page; CER/WER measured on synthetic-noisy; classification metrics reported |
+| **3 — OCR & understanding** ✅ | Per-page inspection, native text, Tesseract OCR, layout blocks, tables, classification, sensitivity gate | `document_pages`, `document_tables`, classifier + LLM fallback, page preview images | Mixed PDFs handled per page; CER/WER measured on synthetic-noisy; classification metrics reported |
 | 4 — Structured extraction | Schemas, extraction, repair, evidence, normalization, confidence, LLM usage tracking, Ollama provider | `document_extractions`, `extracted_fields`, `llm_calls`, `/extraction`, `/evidence` | Field metrics measured; malformed JSON handled; every field has provenance or is flagged |
 | 5 — Comparison & rules | Comparison engine, rule engine, duplicates, versions diff, review queue | `/comparisons`, `/rules`, `/review-tasks`, contract version diff | Discrepancy P/R/F1 on scenarios; rules configurable; CI regression suite |
 | 6 — Knowledge & RAG | KB ingestion, chunking, embeddings, hybrid retrieval, citations, semantic search, fastembed local provider | `/knowledge/*`, `/search` | Retrieval metrics measured with ablations; access filters proven by tests |
@@ -95,3 +95,38 @@ Frontend and delivery
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 2 (by design): OCR, classification, extraction and near-duplicate detection (same invoice number, different file) — Phases 3–5.
+
+## 3. Phase 3 acceptance criteria
+
+Status as of 2026-10-08, same legend as §1. Metrics live in `evaluation/reports/` (ADR-027).
+
+Text extraction
+- ✅ Per page: PDF text layer (pypdfium2 words with boxes in displayed orientation, all four page rotations) or OCR; unusable text layers fall back to OCR (`unit/test_native_text.py`, `unit/test_extraction.py`)
+- ✅ Tesseract via subprocess: TSV parsing, per-page timeout kills the process, missing engine / language / TSV output fails fast at worker start (`unit/test_ocr.py`, `docintel check-ocr`)
+- ✅ Scans: low-DPI upscaling, projection-profile deskew, orientation correction of sideways pages, EXIF orientation, OCR token clean-up; bounded page parallelism; one failing page does not fail the document (`unit/test_ocr.py`, `unit/test_extraction.py`)
+- ✅ Mixed PDFs handled per page (`unit/test_extraction.py::test_mixed_pdf_decides_per_page`, `integration/test_worker.py`)
+- ✅ CER/WER measured on `synthetic-noisy` per degradation, with a preprocessing ablation (`evaluation/reports/ocr.md`)
+
+Layout and tables
+- ✅ Lines, column segments, reading-order blocks, label/value grids row by row, headings (`unit/test_layout.py`)
+- ✅ Geometry-based tables with wrapped cells, row-rhythm stop, lost leading header, multi-page stitching (`unit/test_tables.py`); native line-item tables match ground truth exactly (`unit/test_tables.py::test_native_line_item_tables_match_ground_truth`, `evaluation/reports/tables.md`)
+- ⏳ Scanned tables are partially recovered (row recall and cell accuracy in `evaluation/reports/tables.md`); Phase 4 extraction reads the page text and images as well, not only detected tables
+
+Classification and AI gate
+- ✅ Local calibrated classifier for nine types, trained at worker start from the synthetic corpus plus human corrections; deterministic fingerprint (`unit/test_classification.py`)
+- ✅ LLM fallback behind the sensitivity gate; agreement-based confidence; hallucinated evidence penalized; provider errors degrade to review (`unit/test_classification.py`, `integration/test_understanding.py` with a fake provider)
+- ✅ Content findings (payment cards, SSNs → RESTRICTED; resume/bank statement → CONFIDENTIAL) block external AI; values never stored (`unit/test_classification.py`, `integration/test_understanding.py::test_confidential_documents_never_reach_the_llm`)
+- ✅ Classification metrics reported: accuracy, macro-F1, per class, confusion matrix, ECE, auto-accept error rate (`evaluation/reports/classification.md`) — on synthetic data only, stated in the report
+- ⏳ LLM fallback against the real Gemini API: needs the user's key (`make check-ai`)
+
+Persistence, API, UI
+- ✅ Migration 0003 round-trips and matches the models (`integration/test_database.py`)
+- ✅ Pages, preview images, tables, classification history and human correction via API; access control on every new endpoint; correction audited; human label survives reprocessing (`integration/test_understanding.py`)
+- ✅ `REVIEW_REQUIRED` with reasons (`NO_TEXT_FOUND`, `CLASSIFICATION_UNCERTAIN`, `LOW_OCR_CONFIDENCE`, `OCR_FAILED`)
+- ✅ UI: type column and filter, classification card with evidence and correction, page viewer with preview, word boxes and text, tables (`frontend/src/documents/documents.test.tsx`)
+
+Delivery
+- ✅ Dockerfile installs Tesseract (eng, deu, osd); worker verifies OCR before claiming jobs
+- ⏳ The Dockerfile's `apt-get install` step itself was not run in the build environment (`deb.debian.org` blocked by its network policy); the stack was verified with the same Tesseract version supplied by a sandbox-only base-image shim. CI builds the real image
+- ✅ CI: Tesseract installed for tests, evaluation suites smoke run, dataset ingest with `--require-completed`; `actionlint` clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)

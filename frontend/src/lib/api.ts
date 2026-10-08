@@ -72,19 +72,31 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return payload as T;
 }
 
-const BLOB_URL_LIFETIME_MS = 30_000;
-
-/** Download an authenticated file: fetch with the bearer token, then save the blob. */
-export async function downloadFile(path: string, token: string | null, fallbackName: string): Promise<void> {
+/** GET with the bearer token; non-2xx responses become ApiError (problem details if present). */
+async function authorizedFetch(path: string, token: string | null, signal?: AbortSignal): Promise<Response> {
   const response = await fetch(path, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     credentials: "same-origin",
+    signal,
   });
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
     const payload: unknown = contentType.includes("json") ? await response.json() : null;
     throw new ApiError(response.status, isProblemDetail(payload) ? payload : null);
   }
+  return response;
+}
+
+/** Fetch an authenticated binary resource (e.g. a page preview image). */
+export async function fetchBlob(path: string, token: string | null, signal?: AbortSignal): Promise<Blob> {
+  return (await authorizedFetch(path, token, signal)).blob();
+}
+
+const BLOB_URL_LIFETIME_MS = 30_000;
+
+/** Download an authenticated file: fetch with the bearer token, then save the blob. */
+export async function downloadFile(path: string, token: string | null, fallbackName: string): Promise<void> {
+  const response = await authorizedFetch(path, token);
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

@@ -22,10 +22,11 @@ Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 | LLM SDK | **google-genai 2.x** | Google's current unified SDK; `google-generativeai` is legacy | REST by hand |
 | Agent framework | **LangGraph 1.x** (Phase 7) | Explicit state graphs, conditional edges, mature | Custom state machine, CrewAI |
 | MCP | official `mcp` Python SDK (Phase 7) | Reference implementation | — |
-| PDF | **pypdfium2** (render) + **pdfplumber** (text, words, tables) | Permissive licences, word-level boxes | PyMuPDF (AGPL), Docling (heavy torch deps; optional future upgrade) |
-| OCR | **Tesseract 5** (pytesseract) | Free, local, word boxes + confidences | PaddleOCR / docTR / EasyOCR (torch-heavy) |
-| Fuzzy matching | rapidfuzz | Fast, MIT | thefuzz |
-| Classifier | scikit-learn (TF-IDF + calibrated LR) | Calibrated probabilities, tiny, private | Fine-tuned transformer (cost, data needs) |
+| PDF | **pypdfium2** 5.x (validation, rendering, text layer with character boxes) | Permissive licence, one parser for every PDF task, C speed | PyMuPDF (AGPL), pdfplumber (second parser of untrusted input; dropped in Phase 3, ADR-021), Docling (heavy torch deps; optional future upgrade) |
+| OCR | **Tesseract 5** called as a subprocess (TSV output) | Free, local, word boxes + confidences; subprocess gives real timeouts | pytesseract (thin wrapper, adds nothing), PaddleOCR / docTR / EasyOCR (torch-heavy) |
+| Image maths | NumPy 2 + SciPy (deskew, line detection) | Vectorized, already required by scikit-learn | OpenCV (large binary for two operations) |
+| Fuzzy matching | RapidFuzz 3 | Fast, MIT; CER/WER and evidence matching | thefuzz, python-Levenshtein |
+| Classifier | scikit-learn 1.9 (TF-IDF + calibrated LR) | Calibrated probabilities, tiny, private, trains in seconds | Fine-tuned transformer (cost, data needs) |
 | Local embeddings | fastembed (ONNX) `bge-base-en-v1.5` | No torch, 768-d to match Gemini | sentence-transformers (torch) |
 | Synthetic docs | reportlab + Pillow + Faker | Deterministic PDF generation with ground truth | — |
 | Tests | pytest, pytest-asyncio, httpx `ASGITransport`, **respx** (HTTP transport mocks) | Real SDK code paths tested without network | — |

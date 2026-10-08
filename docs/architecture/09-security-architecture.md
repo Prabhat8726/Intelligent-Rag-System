@@ -53,7 +53,16 @@ and model output as untrusted input** at every boundary.
 * Tool allowlist; no shell/OS/network/SQL tools; authz per call as the requesting user.
 * Budgets: max steps, max LLM calls, timeouts per tool and per run.
 * Outputs validated: citations exist, evidence ids exist, findings can't contradict deterministic facts, recommendations in allowlist, guardrail rules.
-* Sensitivity routing to keep confidential content away from external providers (C1).
+* Sensitivity routing to keep confidential content away from external providers (C1). Implemented
+  in Phase 3 (`docintel/ai/routing.py`, ADR-026): effective sensitivity = max(upload label,
+  detected payment cards / SSNs → RESTRICTED, resume / bank statement → CONFIDENTIAL); above
+  `AI_EXTERNAL_MAX_SENSITIVITY` no text leaves the worker; findings store counts, never values.
+  Tests: `tests/unit/test_classification.py`, `tests/integration/test_understanding.py`.
+* Document text sent to an LLM is wrapped as untrusted data with an instruction not to follow
+  instructions inside it; the LLM can only choose from a fixed label set (enum schema), and its
+  answer is checked against the text (evidence quote) before it counts.
+* Page preview images are served like downloads: access-checked, `nosniff`, sandbox CSP,
+  `Cache-Control: private`.
 
 ### Data protection
 * Secrets only via environment / `.env` (git-ignored) as `SecretStr`; never logged (structlog redaction processor masks keys like `password`, `token`, `secret`, `api_key`, `authorization`).

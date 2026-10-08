@@ -1,4 +1,4 @@
-import type { DocumentStatus } from "../lib/types";
+import type { ClassificationMethod, DocumentStatus, DocumentType } from "../lib/types";
 
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -49,11 +49,45 @@ export const INSPECTION_LABELS: Record<string, string> = {
   image: "Image (needs OCR)",
 };
 
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  INVOICE: "Invoice",
+  PURCHASE_ORDER: "Purchase order",
+  CONTRACT: "Contract",
+  RECEIPT: "Receipt",
+  DELIVERY_NOTE: "Delivery note",
+  RESUME: "Resume",
+  BANK_STATEMENT: "Bank statement",
+  POLICY: "Policy",
+  OTHER: "Other",
+};
+
+export const DOCUMENT_TYPES = Object.keys(DOCUMENT_TYPE_LABELS) as DocumentType[];
+
+export const METHOD_LABELS: Record<ClassificationMethod, string> = {
+  LOCAL_MODEL: "Local model",
+  LLM: "AI model",
+  ENSEMBLE: "Local model confirmed by AI",
+  HUMAN: "Human",
+};
+
+export const REVIEW_REASON_LABELS: Record<string, string> = {
+  CLASSIFICATION_UNCERTAIN: "Document type is uncertain",
+  NO_TEXT_FOUND: "No readable text was found",
+  LOW_OCR_CONFIDENCE: "Text recognition confidence is low on at least one page",
+  OCR_FAILED: "Text recognition failed on at least one page",
+};
+
+export function formatPercent(value: string | number | null): string {
+  if (value === null) return "—";
+  return `${Math.round(Number(value) * 100)}%`;
+}
+
 export const PAGE_SIZE = 25;
 
-export function documentsUrl(params: { status: string; q: string; offset: number }): string {
+export function documentsUrl(params: { status: string; type?: string; q: string; offset: number }): string {
   const search = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(params.offset) });
   if (params.status) search.set("status", params.status);
+  if (params.type) search.set("document_type", params.type);
   if (params.q.trim()) search.set("q", params.q.trim());
   return `/api/v1/documents?${search.toString()}`;
 }

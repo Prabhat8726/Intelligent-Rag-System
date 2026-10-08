@@ -51,6 +51,13 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --frozen
 
+      - name: Install Tesseract OCR
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd
+          tesseract --version
+
       - name: Lint and format check
         run: |
           uv run ruff check src tests
@@ -66,6 +73,9 @@ jobs:
 
       - name: Unit, integration and security tests
         run: uv run pytest
+
+      - name: Evaluation suites smoke run (quick datasets)
+        run: uv run docintel evaluate --quick --output "$RUNNER_TEMP/evaluation"
 
       - name: Dependency vulnerability audit
         run: |
@@ -142,7 +152,7 @@ jobs:
       - name: Generate the synthetic dataset and process it through the stack
         run: |
           make generate-documents
-          make process API_URL=http://localhost:8080
+          make process API_URL=http://localhost:8080 INGEST_FLAGS=--require-completed
 
       - name: Container logs
         if: failure()

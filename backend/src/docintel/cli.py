@@ -8,6 +8,7 @@ docintel worker [--until-idle]     run the background job worker
 docintel worker-health             exit 0 if the worker heartbeat is fresh (container probe)
 docintel generate-documents        synthetic POs/invoices/delivery notes with ground truth
 docintel ingest DIR                upload a directory through the REST API and wait for results
+docintel evaluate --suite ...      OCR / classification / table metrics -> evaluation/reports
 """
 
 from __future__ import annotations
@@ -377,6 +378,40 @@ async def _ingest(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# ---------------------------------------------------------------------------- evaluation
+async def _evaluate(args: argparse.Namespace) -> int:
+    """Offline evaluation with production defaults; needs the dev/synthetic dependency groups."""
+    try:
+        from docintel.evaluation.classification_suite import run_classification_suite
+        from docintel.evaluation.ocr_suite import run_ocr_suite
+        from docintel.evaluation.tables_suite import run_tables_suite
+    except ImportError as exc:  # reportlab is not installed in the runtime image
+        _fail(f"evaluation needs the synthetic dependency group (uv sync): {exc}")
+        return EXIT_USAGE
+    defaults = Settings.model_fields
+    output = Path(args.output)
+    suites = ["ocr", "classification", "tables"] if args.suite == "all" else [args.suite]
+    try:
+        for suite in suites:
+            if suite == "ocr":
+                report = await run_ocr_suite(output, quick=args.quick, languages=args.languages)
+            elif suite == "tables":
+                report = await run_tables_suite(output, quick=args.quick, languages=args.languages)
+            else:
+                report = await run_classification_suite(
+                    output,
+                    threshold=defaults["classification_min_confidence"].default,
+                    corpus_per_class=defaults["classification_corpus_per_class"].default,
+                    quick=args.quick,
+                    languages=args.languages,
+                )
+            _ok(f"{report.title}: {output / (suite + '.md')}")
+    except OCRUnavailableError as exc:
+        _fail(str(exc))
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------------------- entrypoint
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="docintel", description="Document Intelligence admin CLI")
@@ -407,6 +442,13 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--email", default="analyst@docintel.local")
     ingest.add_argument("--password-stdin", action="store_true")
     ingest.add_argument("--timeout", type=float, default=300.0)
+    evaluate = commands.add_parser("evaluate", help="run evaluation suites and write reports")
+    evaluate.add_argument(
+        "--suite", choices=["ocr", "classification", "tables", "all"], default="all"
+    )
+    evaluate.add_argument("--output", default="../evaluation/reports")
+    evaluate.add_argument("--quick", action="store_true", help="small datasets (smoke test)")
+    evaluate.add_argument("--languages", default="eng", help="Tesseract languages")
     ingest.add_argument(
         "--require-completed",
         action="store_true",
@@ -424,6 +466,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ingest":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_ingest(args))
+    if args.command == "evaluate":
+        configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
+        return asyncio.run(_evaluate(args))
 
     settings = get_settings()
     configure_logging(level="WARNING", log_format=settings.effective_log_format)

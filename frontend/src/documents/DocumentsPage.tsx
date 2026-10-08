@@ -5,7 +5,16 @@ import { Link } from "react-router";
 import { useAuth } from "../auth/useAuth";
 import { apiRequest } from "../lib/api";
 import type { DocumentStatus, DocumentSummary, Page } from "../lib/types";
-import { ACTIVE_STATUSES, documentsUrl, formatBytes, formatDateTime, PAGE_SIZE } from "./format";
+import {
+  ACTIVE_STATUSES,
+  DOCUMENT_TYPE_LABELS,
+  DOCUMENT_TYPES,
+  documentsUrl,
+  formatBytes,
+  formatDateTime,
+  formatPercent,
+  PAGE_SIZE,
+} from "./format";
 import { DocumentStatusBadge } from "./StatusBadge";
 import { UploadForm } from "./UploadForm";
 
@@ -15,14 +24,15 @@ const STATUS_OPTIONS: (DocumentStatus | "")[] = ["", "PENDING", "PROCESSING", "C
 export function DocumentsPage() {
   const { token, user } = useAuth();
   const [status, setStatus] = useState("");
+  const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
   const canUpload = user?.permissions.includes("documents:upload") ?? false;
 
   const documents = useQuery({
-    queryKey: ["documents", status, query, offset],
+    queryKey: ["documents", status, type, query, offset],
     queryFn: ({ signal }) =>
-      apiRequest<Page<DocumentSummary>>(documentsUrl({ status, q: query, offset }), { token, signal }),
+      apiRequest<Page<DocumentSummary>>(documentsUrl({ status, type, q: query, offset }), { token, signal }),
     placeholderData: keepPreviousData,
     // Poll only while something is still being processed.
     refetchInterval: (current) =>
@@ -37,7 +47,8 @@ export function DocumentsPage() {
       <div>
         <h1 className="text-xl font-semibold">Documents</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Uploaded files are validated, stored and inspected page by page. Extraction arrives in a later phase.
+          Uploaded files are validated, read page by page (text layer or OCR) and classified. Field extraction
+          arrives in a later phase.
         </p>
       </div>
 
@@ -75,6 +86,22 @@ export function DocumentsPage() {
                 </option>
               ))}
             </select>
+            <select
+              aria-label="Filter by type"
+              value={type}
+              onChange={(event) => {
+                setType(event.target.value);
+                setOffset(0);
+              }}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+            >
+              <option value="">All types</option>
+              {DOCUMENT_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {DOCUMENT_TYPE_LABELS[value]}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -97,6 +124,7 @@ export function DocumentsPage() {
               <tr>
                 <th className="px-5 py-2 font-medium">Document</th>
                 <th className="py-2 font-medium">Status</th>
+                <th className="py-2 font-medium">Type</th>
                 <th className="py-2 text-right font-medium">Pages</th>
                 <th className="py-2 text-right font-medium">Size</th>
                 <th className="py-2 pl-6 font-medium">Uploaded by</th>
@@ -116,6 +144,18 @@ export function DocumentsPage() {
                   </td>
                   <td className="py-2">
                     <DocumentStatusBadge status={document.status} />
+                  </td>
+                  <td className="py-2 text-slate-700">
+                    {document.document_type ? (
+                      <>
+                        {DOCUMENT_TYPE_LABELS[document.document_type]}
+                        <span className="ml-1 text-xs text-slate-500 tabular-nums">
+                          {formatPercent(document.type_confidence)}
+                        </span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="py-2 text-right tabular-nums">{document.current_version?.page_count ?? "—"}</td>
                   <td className="py-2 text-right tabular-nums">

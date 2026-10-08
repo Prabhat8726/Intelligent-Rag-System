@@ -181,12 +181,19 @@ Implemented by migration `0002_documents_and_jobs` (✅ Phase 2).
 
 ### Phase 3 — understanding
 
+Implemented by migration `0003_document_understanding` (✅ Phase 3). Results belong to a
+document **version** and are replaced when the version is reprocessed.
+
 | Table | Purpose / notable columns |
 |---|---|
-| `document_pages` | `version_id`, `page_number` (unique pair), `width`, `height`, `rotation`, `extraction_method` CHECK (`NATIVE, OCR, VISION`), `text`, `words jsonb` (`[text, x0, y0, x1, y1, conf]`), `blocks jsonb` (layout), `ocr_confidence`, `image_storage_key` (rendered preview). |
-| `document_tables` | `version_id`, `table_index`, `page_start`, `page_end`, `header jsonb`, `bbox jsonb`, `extraction_method`, `confidence`. |
-| `table_rows` | `table_id`, `row_index`, `page_number`, `cells jsonb`, `bbox jsonb`. Unique (table_id, row_index). |
-| `document_classifications` | History of labels: `label`, `confidence`, `method` CHECK (`LOCAL_MODEL, LLM, ENSEMBLE, HUMAN`), `signals jsonb`, `created_by`, `is_current`. Partial unique index: one `is_current` per document. Human corrections become training/eval data. |
+| `document_pages` | `document_version_id`, `page_number` (unique pair), `width`, `height`, `unit` CHECK (`pt`, `px`), `rotation_applied` CHECK (0/90/180/270), `extraction_method` CHECK (`NATIVE, OCR`), `ocr_confidence` (0–100), `word_count`, `text`, `words jsonb` (`[text, x0, y0, x1, y1, ocr_conf, size]`, top-left origin, page units), `layout jsonb` (lines with column segments, reading-order blocks, deskew angle, warnings), `preview_storage_key` + `preview_width`/`preview_height` (PNG in document storage). |
+| `document_tables` | `document_version_id`, `table_index` (unique pair), `page_start`, `page_end` (CHECK end ≥ start), `header jsonb`, `bbox jsonb`, `extraction_method` CHECK (`NATIVE, OCR, MIXED`), `confidence` (0–1, layout heuristic), `row_count`. |
+| `table_rows` | `table_id` (CASCADE), `row_index` (unique pair), `page_number`, `cells jsonb`, `bbox jsonb`. |
+| `document_classifications` | History of labels: `document_id`, `document_version_id`, `label` CHECK (document types), `confidence` (0–1), `method` CHECK (`LOCAL_MODEL, LLM, ENSEMBLE, HUMAN`), `model_version` (classifier fingerprint), `signals jsonb` (local probabilities, keyword evidence, LLM use, gate decision), `note`, `created_by_id`, `is_current`; `created_at` defaults to `clock_timestamp()`. Partial unique index: one `is_current` row per document. A `HUMAN` row is never replaced by later processing; human rows are training data for the local model. |
+
+Also added: `documents.review_reasons jsonb` (codes explaining `REVIEW_REQUIRED`) and
+`document_versions.sensitivity_assessment jsonb` (content findings — counts and pages only —
+type minimum and detected sensitivity, input to the external-AI gate).
 
 ### Phase 4 — extraction
 

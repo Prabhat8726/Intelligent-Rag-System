@@ -1,10 +1,18 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { saveSession } from "../auth/session";
 import { filenameFromDisposition } from "../lib/api";
-import type { DocumentDetail, DocumentSummary, Page } from "../lib/types";
+import type {
+  Classification,
+  DocumentDetail,
+  DocumentSummary,
+  DocumentTable,
+  Page,
+  PageDetail,
+  PageSummary,
+} from "../lib/types";
 import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
 import { documentsUrl } from "./format";
 
@@ -25,6 +33,7 @@ function document(overrides: Partial<DocumentSummary> = {}): DocumentSummary {
     duplicate_of_id: null,
     duplicate_reason: null,
     processing_error: null,
+    review_reasons: [],
     last_processed_at: "2026-10-08T10:00:00Z",
     created_at: "2026-10-08T09:59:00Z",
     updated_at: "2026-10-08T10:00:00Z",
@@ -154,6 +163,10 @@ describe("document detail", () => {
         { page_number: 2, width: 595.28, height: 841.89, unit: "pt", rotation: 0, text_chars: 0, image_objects: 1, method: "OCR", dpi: null },
       ],
     },
+    sensitivity_assessment: null,
+    classification: null,
+    classification_history: [],
+    pages: [],
     latest_job: {
       id: "job-1",
       job_type: "DOCUMENT_PROCESSING",
@@ -226,5 +239,188 @@ describe("filenameFromDisposition", () => {
     );
     expect(filenameFromDisposition('attachment; filename="plain.pdf"')).toBe("plain.pdf");
     expect(filenameFromDisposition(null)).toBeNull();
+  });
+});
+
+const ANALYST_WITH_REVIEW = [...ANALYST_PERMISSIONS];
+
+describe("document understanding", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const machine: Classification = {
+    id: "cls-1",
+    label: "INVOICE",
+    confidence: "0.6200",
+    method: "LOCAL_MODEL",
+    model_version: "tfidf-lr-v1:abc",
+    signals: {
+      local: [
+        { label: "INVOICE", probability: 0.62 },
+        { label: "RECEIPT", probability: 0.3 },
+      ],
+      keywords: { INVOICE: ["invoice", "total due"] },
+      llm: { used: false, reason: "no external AI provider configured" },
+    },
+    note: null,
+    created_by: null,
+    is_current: true,
+    created_at: "2026-10-08T10:00:00Z",
+  };
+  const firstPage: PageSummary = {
+    page_number: 1,
+    width: 595,
+    height: 842,
+    unit: "pt",
+    rotation_applied: 0,
+    extraction_method: "OCR",
+    ocr_confidence: "91.40",
+    word_count: 2,
+    preview_width: 300,
+    preview_height: 424,
+    has_preview: true,
+  };
+  const understood: DocumentDetail = {
+    ...document({ status: "REVIEW_REQUIRED", document_type: "INVOICE", type_confidence: "0.6200" }),
+    review_reasons: ["CLASSIFICATION_UNCERTAIN"],
+    inspection: null,
+    latest_job: null,
+    sensitivity_assessment: { findings: [], type_minimum: null, detected: null },
+    classification: machine,
+    classification_history: [machine],
+    pages: [firstPage],
+  };
+  const pageDetail: PageDetail = {
+    ...firstPage,
+    text: "INVOICE\n\nTotal Due  71.55",
+    words: [
+      ["INVOICE", 72, 60, 160, 80, 95.5, 20],
+      ["71.55", 300, 400, 340, 412, 42.0, 11],
+    ],
+    layout: { lines: [], blocks: [], warnings: [] },
+  };
+  const tables: DocumentTable[] = [
+    {
+      id: "tbl-1",
+      table_index: 0,
+      page_start: 1,
+      page_end: 2,
+      header: ["#", "Item", "Amount"],
+      bbox: [0, 0, 1, 1],
+      extraction_method: "NATIVE",
+      confidence: "1.0000",
+      row_count: 1,
+      rows: [{ row_index: 0, page_number: 1, cells: ["1", "BLT-M10", "71.55"], bbox: [0, 0, 1, 1] }],
+    },
+  ];
+
+  function understandingRoutes(detail: DocumentDetail = understood) {
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:page-1", revokeObjectURL: () => undefined }));
+    return {
+      [`/api/v1/documents/${DOC_ID}`]: () => jsonResponse(detail),
+      [`/api/v1/documents/${DOC_ID}/pages/1`]: () => jsonResponse(pageDetail),
+      [`/api/v1/documents/${DOC_ID}/pages/1/image`]: () =>
+        new Response(new Uint8Array([137, 80, 78, 71]), { headers: { "content-type": "image/png" } }),
+      [`/api/v1/documents/${DOC_ID}/tables`]: () => jsonResponse(tables),
+    };
+  }
+
+  it("shows type, evidence, review reasons, page text and preview, and tables", async () => {
+    const user = signedIn();
+    mockFetch({ "/api/v1/auth/me": () => jsonResponse(user), ...understandingRoutes() });
+    renderApp(`/documents/${DOC_ID}`);
+
+    const card = await screen.findByRole("region", { name: "Document type" });
+    expect(within(card).getByText("Invoice", { selector: "span.text-lg" })).toBeInTheDocument();
+    expect(within(card).getByText("62% confidence")).toBeInTheDocument();
+    expect(within(card).getByText("invoice, total due")).toBeInTheDocument();
+    expect(within(card).getByText(/Not used: no external AI provider configured/)).toBeInTheDocument();
+    expect(screen.getByText("Document type is uncertain")).toBeInTheDocument();
+
+    expect(await screen.findByText(/Total Due 71\.55/)).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "Page 1 preview" })).toHaveAttribute("src", "blob:page-1");
+    expect(screen.getByText(/OCR · confidence 91%/)).toBeInTheDocument();
+
+    const tablesRegion = screen.getByRole("region", { name: "Tables" });
+    expect(await within(tablesRegion).findByText("BLT-M10")).toBeInTheDocument();
+    expect(within(tablesRegion).getByText(/pages 1–2/)).toBeInTheDocument();
+  });
+
+  it("lets a reviewer correct the document type", async () => {
+    const user = signedIn(ANALYST_WITH_REVIEW);
+    const corrected: Classification = {
+      ...machine,
+      id: "cls-2",
+      label: "RECEIPT",
+      confidence: "1.0000",
+      method: "HUMAN",
+      created_by: { id: user.id, full_name: "Finance Analyst" },
+      note: "till receipt",
+    };
+    let current: DocumentDetail = understood;
+    const routes = understandingRoutes();
+    const fetchMock = mockFetch({
+      "/api/v1/auth/me": () => jsonResponse(user),
+      ...routes,
+      [`/api/v1/documents/${DOC_ID}`]: () => jsonResponse(current),
+      [`/api/v1/documents/${DOC_ID}/classification`]: () => {
+        current = {
+          ...understood,
+          status: "COMPLETED",
+          review_reasons: [],
+          document_type: "RECEIPT",
+          classification: corrected,
+          classification_history: [corrected, { ...machine, is_current: false }],
+        };
+        return jsonResponse(corrected);
+      },
+    });
+    const actor = userEvent.setup();
+    renderApp(`/documents/${DOC_ID}`);
+
+    await actor.click(await screen.findByRole("button", { name: "Correct type" }));
+    const form = screen.getByRole("form", { name: "Correct document type" });
+    await actor.selectOptions(within(form).getByLabelText("Document type"), "RECEIPT");
+    await actor.type(within(form).getByLabelText("Note (optional)"), "till receipt");
+    await actor.click(within(form).getByRole("button", { name: "Save" }));
+
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(patch?.[1]?.body as string)).toEqual({ document_type: "RECEIPT", note: "till receipt" });
+    const card = screen.getByRole("region", { name: "Document type" });
+    expect(await within(card).findByText("Receipt", { selector: "span.text-lg" })).toBeInTheDocument();
+    expect(within(card).getByText(/Human · Finance Analyst/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Document type is uncertain")).not.toBeInTheDocument();
+    });
+  });
+
+  it("hides the correction from users without review permission", async () => {
+    const viewer = signedIn(["documents:read"]);
+    mockFetch({ "/api/v1/auth/me": () => jsonResponse(viewer), ...understandingRoutes() });
+    renderApp(`/documents/${DOC_ID}`);
+    await screen.findByRole("region", { name: "Document type" });
+    expect(screen.queryByRole("button", { name: "Correct type" })).not.toBeInTheDocument();
+  });
+
+  it("shows the type in the inbox and filters by it", async () => {
+    const user = signedIn();
+    const typed = document({ document_type: "INVOICE", type_confidence: "0.9600" });
+    const fetchMock = mockFetch({
+      "/api/v1/auth/me": () => jsonResponse(user),
+      [LIST_URL]: () => jsonResponse(page([typed])),
+      [documentsUrl({ status: "", type: "INVOICE", q: "", offset: 0 })]: () => jsonResponse(page([typed])),
+    });
+    const actor = userEvent.setup();
+    renderApp("/documents");
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("Invoice")).toBeInTheDocument();
+    expect(within(table).getByText("96%")).toBeInTheDocument();
+    await actor.selectOptions(screen.getByLabelText("Filter by type"), "INVOICE");
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([url]) => typeof url === "string" && url.includes("document_type=INVOICE")),
+      ).toBe(true);
+    });
   });
 });

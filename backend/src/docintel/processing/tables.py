@@ -33,6 +33,11 @@ CONTINUATION_PITCH = 1.6
 # Once rows exist, a line further below than this multiple of the table's median row pitch is
 # no longer part of it (the gap before totals or a footer is larger than the row rhythm).
 ROW_PITCH_JUMP = 1.6
+# Rows may start this far (x text size) left of the first header label: OCR often loses a
+# narrow leading header such as "#" while the row numbers below it survive.
+LEFT_OVERHANG = 6.0
+# Consecutive-page tables continue each other when this share of header cells agree.
+STITCH_HEADER_AGREEMENT = 0.75
 _DIGIT = re.compile(r"\d")
 _LETTER = re.compile(r"[^\W\d_]")
 
@@ -113,7 +118,7 @@ def _detect_one(
     ]
     header_words = _line_words(page, header_line)
     size = _line_size(header_words)
-    left_edge = header_boxes[0].x0 - 2 * size
+    left_edge = header_boxes[0].x0 - LEFT_OVERHANG * size
 
     # Candidate body: lines below the header that stay close and start inside the table.
     body_lines: list[int] = []
@@ -128,6 +133,15 @@ def _detect_one(
         previous_center = line.bbox.center_y
     if not body_lines:
         return None
+
+    # Most rows carry a segment left of the first header label: its header was lost (e.g. an
+    # unreadable "#"). Add an unlabelled column for it instead of merging it into the next.
+    first_segments = [
+        BBox.enclosing([w.bbox for w in _segment_words(page, index, 0)]) for index in body_lines
+    ]
+    overhang = [box for box in first_segments if box.x1 < header_boxes[0].x0 - 0.25 * size]
+    if len(overhang) * 2 > len(body_lines):
+        header_boxes = [BBox.enclosing(overhang), *header_boxes]
 
     bounds = _column_bounds(header_boxes, [_line_words(page, i) for i in body_lines])
     header = [" ".join(cell) for cell in _assign(header_words, bounds)]
@@ -199,20 +213,42 @@ def _normalized_header(header: list[str]) -> list[str]:
     return [" ".join(cell.casefold().split()) for cell in header]
 
 
+def header_offset(first: list[str], second: list[str]) -> int | None:
+    """How many leading cells `second` lacks relative to `first` if the headers match, else None.
+
+    Matching = most labels equal (OCR may garble a short label). One missing leading column is
+    tolerated: OCR often merges an unreadable "#" column into the next one on a later page.
+    """
+    a, b = _normalized_header(first), _normalized_header(second)
+    for offset in (0, 1):
+        candidate = a[offset:]
+        if offset and len(a[0]) > 1:  # only a short or empty leading label may go missing
+            continue
+        if len(candidate) != len(b) or not b:
+            continue
+        same = sum(x == y for x, y in zip(candidate, b, strict=True))
+        if same >= STITCH_HEADER_AGREEMENT * len(b):
+            return offset
+    return None
+
+
 def stitch_tables(pages: list[PageContent]) -> list[DocumentTable]:
-    """Merge tables continued on the next page under an identical header."""
+    """Merge tables continued on the next page under the same header."""
     result: list[DocumentTable] = []
     methods: list[set[str]] = []
     for page in pages:
         for index, table in enumerate(page.tables):
             previous = result[-1] if result else None
-            continues = (
-                previous is not None
-                and index == 0
-                and previous.page_end == page.page_number - 1
-                and _normalized_header(previous.header) == _normalized_header(table.header)
+            offset = (
+                header_offset(previous.header, table.header)
+                if previous is not None and index == 0 and previous.page_end == page.page_number - 1
+                else None
             )
-            if continues and previous is not None:
+            if offset is not None and previous is not None:
+                continued = [
+                    TableRow([""] * offset + row.cells, row.bbox, row.page_number)
+                    for row in table.rows
+                ]
                 rows = len(previous.rows) + len(table.rows)
                 merged_confidence = (
                     previous.confidence * len(previous.rows) + table.confidence * len(table.rows)
@@ -222,7 +258,7 @@ def stitch_tables(pages: list[PageContent]) -> list[DocumentTable]:
                     page_end=page.page_number,
                     bbox=previous.bbox,
                     header=previous.header,
-                    rows=[*previous.rows, *table.rows],
+                    rows=[*previous.rows, *continued],
                     method=previous.method,
                     confidence=merged_confidence,
                 )

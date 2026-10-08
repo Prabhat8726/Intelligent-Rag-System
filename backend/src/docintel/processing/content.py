@@ -190,6 +190,8 @@ class PageContent:
     words: list[Word]
     # Clockwise rotation (degrees) applied to the page image before OCR, 0 for native pages.
     rotation_applied: int = 0
+    # Small-angle correction (degrees, counter-clockwise) applied before OCR; 0 if none.
+    deskew_degrees: float = 0.0
     ocr_confidence: float | None = None
     lines: list[Line] = field(default_factory=list)
     blocks: list[Block] = field(default_factory=list)
@@ -210,6 +212,7 @@ class PageContent:
             "version": CONTENT_VERSION,
             "lines": [line.to_json() for line in self.lines],
             "blocks": [block.to_json() for block in self.blocks],
+            "deskew_degrees": self.deskew_degrees,
             "warnings": self.warnings,
         }
 

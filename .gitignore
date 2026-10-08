@@ -23,8 +23,11 @@ coverage/
 
 # Generated data and artefacts
 synthetic_data/generated/
+# Evaluation reports are committed (ADR-027); anything else written there is not.
 evaluation/reports/*
 !evaluation/reports/.gitkeep
+!evaluation/reports/*.md
+!evaluation/reports/*.json
 storage/
 
 # Editors / OS

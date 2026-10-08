@@ -19,6 +19,9 @@ from docintel.processing.ocr import (
     parse_tsv,
 )
 from docintel.processing.preprocess import (
+    clean_ocr_words,
+    deskew,
+    estimate_skew_degrees,
     is_line_artifact,
     remove_ruling_lines,
     strip_line_artifacts,
@@ -106,6 +109,14 @@ async def test_slow_engine_is_killed(tmp_path: Path) -> None:
     assert OCRTimeoutError.retryable
 
 
+async def test_missing_tsv_output_is_a_configuration_error(tmp_path: Path) -> None:
+    script = tmp_path / "plain-text-ocr"
+    script.write_text("#!/bin/sh\necho 'Invoice 1001'\n")
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    with pytest.raises(OCRUnavailableError, match="TSV"):
+        await TesseractOCRProvider(command=str(script)).recognize(Image.new("L", (10, 10)), dpi=72)
+
+
 async def test_engine_error_is_reported(tmp_path: Path) -> None:
     script = tmp_path / "broken-ocr"
     script.write_text("#!/bin/sh\necho 'Error: cannot read input' >&2\nexit 1\n")
@@ -122,6 +133,9 @@ async def test_engine_error_is_reported(tmp_path: Path) -> None:
         ("__", True),
         ("|+|", True),
         ("--", True),
+        ("[", True),
+        ("]}", True),
+        ("(1)", False),
         ("—", False),
         ("-", False),
         ("I", False),
@@ -150,3 +164,49 @@ def test_remove_ruling_lines_keeps_text() -> None:
     assert cleaned[400, 700] == 255
     text_area = np.asarray(image)[150:260, 190:420]
     assert (np.asarray(cleaned)[150:260, 190:420] == text_area).all()
+
+
+def ocr_word(text: str, *, conf: float = 90, width: float = 60, height: float = 30) -> OCRWord:
+    return OCRWord(text, 0, 0, width, height, conf, (1, 1, 1))
+
+
+def test_clean_ocr_words_drops_noise_but_keeps_text() -> None:
+    words = [
+        ocr_word("Description"),
+        ocr_word("Qty"),
+        ocr_word("|Item"),  # rule glued to a word: stripped
+        ocr_word("S", conf=0),  # engine guess
+        ocr_word("ef", height=2),  # flat fragment of a horizontal rule
+        ocr_word("i", width=20, height=70),  # grid line crossing the row, read as "i"
+        ocr_word("I", width=8, height=30),  # a real capital I at text height
+        ocr_word("[", conf=66),
+        ocr_word("5"),
+    ]
+    assert [word.text for word in clean_ocr_words(words)] == [
+        "Description",
+        "Qty",
+        "Item",
+        "I",
+        "5",
+    ]
+    assert clean_ocr_words([]) == []
+
+
+@pytest.mark.parametrize("angle", [0.0, 0.8, -1.5, 3.0, -4.2])
+def test_skew_is_estimated_from_the_image(angle: float) -> None:
+    lines = [f"{line} with more words to fill the line" for line in LINES * 4]
+    image = text_image(lines, dpi=150).rotate(angle, expand=True, fillcolor=255)
+    # PIL rotates counter-clockwise: text then ascends to the right (negative skew).
+    assert estimate_skew_degrees(image) == pytest.approx(-angle, abs=0.15)
+
+
+def test_deskew_levels_the_text_and_skips_tiny_angles() -> None:
+    image = text_image([f"{line} with more words" for line in LINES * 4], dpi=150)
+    level, applied = deskew(image.rotate(2.5, expand=True, fillcolor=255))
+    assert applied == pytest.approx(-2.5, abs=0.15)
+    assert abs(estimate_skew_degrees(level)) < 0.15
+    untouched, none = deskew(image)
+    assert none == 0.0
+    assert untouched is image
+    blank = Image.new("L", (400, 300), 255)
+    assert estimate_skew_degrees(blank) == 0.0

@@ -5,8 +5,18 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useAuth } from "../auth/useAuth";
 import { ApiError, apiRequest, downloadFile } from "../lib/api";
 import type { DocumentDetail, ProcessingJob } from "../lib/types";
-import { ACTIVE_STATUSES, formatBytes, formatDateTime, formatDuration, INSPECTION_LABELS } from "./format";
+import { ClassificationCard } from "./ClassificationCard";
+import {
+  ACTIVE_STATUSES,
+  formatBytes,
+  formatDateTime,
+  formatDuration,
+  INSPECTION_LABELS,
+  REVIEW_REASON_LABELS,
+} from "./format";
+import { PageViewer } from "./PageViewer";
 import { DocumentStatusBadge } from "./StatusBadge";
+import { TablesSection } from "./TablesSection";
 
 const ACTIVE_REFRESH_MS = 2000;
 
@@ -84,6 +94,8 @@ export function DocumentDetailPage() {
   const version = document.current_version;
   const job = document.latest_job;
   const inspection = document.inspection;
+  const detected = document.sensitivity_assessment?.detected ?? null;
+  const processed = !ACTIVE_STATUSES.has(document.status) && document.status !== "FAILED";
 
   return (
     <div className="space-y-6">
@@ -147,6 +159,16 @@ export function DocumentDetailPage() {
           Processing failed: {document.processing_error}
         </p>
       )}
+      {document.review_reasons.length > 0 && (
+        <div role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="font-medium">Needs review</p>
+          <ul className="mt-1 list-disc pl-5">
+            {document.review_reasons.map((reason) => (
+              <li key={reason}>{REVIEW_REASON_LABELS[reason] ?? reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {document.duplicate_of_id && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Identical file already uploaded:{" "}
@@ -169,6 +191,18 @@ export function DocumentDetailPage() {
           <Field label="Department">{document.department?.name ?? "—"}</Field>
           <Field label="Uploaded">{formatDateTime(document.created_at)}</Field>
           <Field label="Last processed">{formatDateTime(document.last_processed_at)}</Field>
+          {detected && detected !== document.sensitivity && (
+            <Field label="Detected sensitivity">
+              {detected.toLowerCase()}
+              <span className="block text-xs font-normal text-slate-500">
+                {document.sensitivity_assessment?.findings
+                  .filter((finding) => finding.level !== null)
+                  .map((finding) => finding.kind.replace("_", " ").toLowerCase())
+                  .concat(document.sensitivity_assessment.type_minimum ? ["document type"] : [])
+                  .join(", ")}
+              </span>
+            </Field>
+          )}
           <div className="col-span-2 md:col-span-4">
             <Field label="SHA-256">
               <span className="font-mono text-xs">{version?.sha256 ?? "—"}</span>
@@ -176,6 +210,19 @@ export function DocumentDetailPage() {
           </div>
         </dl>
       </section>
+
+      {processed && <ClassificationCard document={document} />}
+
+      {document.pages.length > 0 && (
+        <section aria-labelledby="pages-heading" className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 id="pages-heading" className="font-medium">
+            Pages
+          </h2>
+          <PageViewer documentId={document.id} pages={document.pages} />
+        </section>
+      )}
+
+      {document.pages.length > 0 && <TablesSection documentId={document.id} />}
 
       <section aria-labelledby="processing-heading" className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 id="processing-heading" className="font-medium">

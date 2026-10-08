@@ -29,11 +29,7 @@ from docintel.processing.native import (
 )
 from docintel.processing.ocr import HEIGHT_TO_SIZE, OCRFailedError, OCRProvider, OCRResult
 from docintel.processing.pdf import open_pdf
-from docintel.processing.preprocess import (
-    is_line_artifact,
-    remove_ruling_lines,
-    strip_line_artifacts,
-)
+from docintel.processing.preprocess import clean_ocr_words, deskew, remove_ruling_lines
 
 # Assumed page width when an image carries no DPI metadata (A4 portrait, inches).
 _ASSUMED_PAGE_WIDTH_INCHES = 8.27
@@ -49,6 +45,7 @@ class ExtractionOptions:
     # Readings below this mean confidence (or with almost no words) get orientation detection.
     retry_orientation_below: float = 60.0
     remove_ruling_lines: bool = False
+    deskew: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +55,7 @@ class _OCRPage:
     height: float
     rotation: int
     skew: float
+    deskew_degrees: float
     confidence: float | None
     image: Image.Image
 
@@ -115,10 +113,8 @@ def _image_frame(path: Path, index: int) -> tuple[Image.Image, float]:
 
 def _words_from_ocr(result: OCRResult, to_units: float) -> list[Word]:
     words: list[Word] = []
-    for word in result.words:
-        text = strip_line_artifacts(word.text)
-        if not text or is_line_artifact(text, word.width, word.height):
-            continue
+    for word in clean_ocr_words(result.words):
+        text = word.text
         box = BBox(
             word.left * to_units,
             word.top * to_units,
@@ -134,6 +130,9 @@ async def _ocr_image(
 ) -> _OCRPage:
     if options.remove_ruling_lines:
         image = await asyncio.to_thread(remove_ruling_lines, image, dpi)
+    deskewed = 0.0
+    if options.deskew:
+        image, deskewed = await asyncio.to_thread(deskew, image)
     result = await ocr.recognize(image, dpi=dpi)
     rotation = 0
     confidence = result.mean_confidence
@@ -149,7 +148,10 @@ async def _ocr_image(
         width=image.width * to_units,
         height=image.height * to_units,
         rotation=rotation,
-        skew=result.skew,
+        # After the image deskew the page is level; the engine's line slopes are noisy in
+        # tables (one cell per "line"), so they are only used when deskewing is off.
+        skew=0.0 if options.deskew else result.skew,
+        deskew_degrees=deskewed,
         confidence=result.mean_confidence,
         image=image,
     )
@@ -189,6 +191,7 @@ async def _ocr_page(
     page_content.width, page_content.height = reading.width, reading.height
     page_content.words = reading.words
     page_content.rotation_applied = reading.rotation
+    page_content.deskew_degrees = reading.deskew_degrees
     page_content.ocr_confidence = reading.confidence
     page_content.preview_size = await asyncio.to_thread(
         _save_preview, reading.image, options.preview_width, preview_path

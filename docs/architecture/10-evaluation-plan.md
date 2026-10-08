@@ -37,8 +37,9 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 
 ## 3. Execution
 
-* `make evaluate` → `python -m docintel.evaluation run --suite all` → writes
-  `evaluation/reports/<timestamp>-<suite>.{json,md}` and an `evaluations` row.
+* `make evaluate` → `docintel evaluate --suite all` → writes
+  `evaluation/reports/<suite>.{json,md}` (stable names, git keeps history, ADR-027); the
+  `evaluations` table arrives in Phase 10.
 * CI runs the **deterministic** suites (normalization, comparison, rules,
   retrieval with a local embedding model) as regression gates.
 * LLM-dependent suites run manually or on a schedule (free-tier quotas), with a
@@ -46,8 +47,13 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 * Threshold calibration (confidence weights, retrieval score threshold) is done on
   `dev`, then frozen and reported on `test`.
 
-## 4. Phase 0 status
+## 4. Status
 
-All metrics: **Not yet measured.** Phase 0 delivers the evaluation design, the
-`evaluations` table design and the test infrastructure; datasets arrive with the
-generator in Phase 2.
+| Suite | Since | Report | Datasets |
+|---|---|---|---|
+| OCR (CER, WER, word F1 per degradation + preprocessing ablation) | Phase 3 | [`evaluation/reports/ocr.md`](../../evaluation/reports/ocr.md) | `synthetic-noisy`: first page of every native synthetic-core document (seed 7) under six degradations |
+| Classification (accuracy, macro-F1, per class, confusion, ECE, auto-accept error) | Phase 3 | [`evaluation/reports/classification.md`](../../evaluation/reports/classification.md) | held-out corpus text (seed 1001), corpus rendered to PDF and scanned (seed 2002), synthetic-core (seed 42) |
+| Line-item tables (found, row P/R, cell accuracy per column) | Phase 3 | [`evaluation/reports/tables.md`](../../evaluation/reports/tables.md) | synthetic-core (seed 11), native, re-rendered as scans and the dataset's own scans |
+
+Everything else (extraction, provenance, comparison, RAG, agent, system latency): **Not yet
+measured.** All current datasets are synthetic; reports say so next to the numbers.

@@ -1,5 +1,5 @@
 # Enterprise Document Intelligence Platform - developer commands.  Run `make` for the list.
-# Only targets that work today are defined; `evaluate` arrives with the evaluation phase.
+# Only targets that work today are defined.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -9,10 +9,12 @@ BACKEND := cd backend && uv run --env-file ../.env
 # API used by `make process`: the host API (make dev) by default; use http://localhost:8080 for make up.
 API_URL ?= http://localhost:8000
 DATASET ?= ../synthetic_data/generated
+# Extra flags for `make process`, e.g. INGEST_FLAGS=--require-completed (CI).
+INGEST_FLAGS ?=
 
 .PHONY: help env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
         reset-db logs seed-docker generate-documents process worker test test-backend \
-        test-frontend lint format check-ai smoke clean
+        test-frontend lint format check-ai check-ocr evaluate smoke clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -68,7 +70,7 @@ generate-documents: ## Generate synthetic POs, invoices and delivery notes with 
 	cd backend && uv run docintel generate-documents --output $(DATASET)
 
 process: require-env ## Upload the synthetic dataset through the API and wait for processing
-	$(BACKEND) docintel ingest $(DATASET) --api-url $(API_URL)
+	$(BACKEND) docintel ingest $(DATASET) --api-url $(API_URL) $(INGEST_FLAGS)
 
 down: ## Stop the Docker stack (volumes are kept)
 	$(COMPOSE) down
@@ -96,6 +98,12 @@ format: ## Auto-format backend code
 
 check-ai: require-env ## Verify GEMINI_API_KEY and configured models with real API calls
 	$(BACKEND) docintel check-ai
+
+check-ocr: require-env ## Verify the Tesseract OCR engine and configured languages
+	$(BACKEND) docintel check-ocr
+
+evaluate: ## Run OCR, classification and table evaluations -> evaluation/reports (several minutes)
+	cd backend && uv run docintel evaluate --output ../evaluation/reports
 
 smoke: ## Smoke-test the running Docker stack through nginx
 	./scripts/smoke_test.sh

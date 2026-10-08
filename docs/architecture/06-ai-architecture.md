@@ -41,8 +41,8 @@ classDiagram
 |---|---|---|
 | `LLMProvider` | Gemini via `google-genai` 2.x (**0**) | Ollama HTTP API (4) |
 | `EmbeddingProvider` | Gemini `gemini-embedding-001`, 768-d, L2-normalized (**0**) | `fastembed` `BAAI/bge-base-en-v1.5`, 768-d (6) |
-| `VisionProvider` | Gemini multimodal (3) | Ollama vision model (4, optional) |
-| `OCRProvider` | Tesseract 5 via `pytesseract` (3) | — (already local) |
+| `VisionProvider` | Gemini multimodal (4, with extraction — ADR-024) | Ollama vision model (4, optional) |
+| `OCRProvider` | Tesseract 5 via subprocess (**3**) | — (already local) |
 
 Cross-cutting concerns implemented **once** in the provider layer:
 
@@ -61,8 +61,8 @@ Cross-cutting concerns implemented **once** in the provider layer:
 * **Error taxonomy**: `ProviderConfigurationError`, `ProviderRateLimitError`,
   `ProviderUnavailableError`, `ProviderResponseError`, `StructuredOutputError`
   — callers branch on type, not on SDK internals.
-* **Sensitivity routing** (Phase 3): a router picks external vs local provider
-  per document sensitivity (`AI_EXTERNAL_MAX_SENSITIVITY`), see C1.
+* **Sensitivity routing** (Phase 3, implemented): `ExternalAIGate` allows external calls only up
+  to `AI_EXTERNAL_MAX_SENSITIVITY`, see C1 and §4.
 
 ## 2. Model selection (verified 2026-10-08, configurable)
 
@@ -82,37 +82,72 @@ Gemini 3.x notes honoured by the implementation: sampling parameters
 (`temperature/top_p/top_k`) are only sent if explicitly configured; thinking is
 controlled by `thinking_level` (`LOW/MEDIUM/HIGH`), optional.
 
-## 3. OCR & multimodal understanding (Module 3, Phase 3)
+## 3. OCR & document understanding (Module 3, Phase 3 — implemented)
 
-Per **page**, not per document (mixed PDFs are common):
+Per **page**, not per document (mixed PDFs are common). Code: `docintel/processing/`.
 
-1. **Inspect**: `pdfplumber` char count + text quality heuristics (printable
-   ratio, dictionary-word ratio) decide `NATIVE` vs `OCR`.
-2. **Native**: `pdfplumber` words with bounding boxes (PDF points, top-left origin).
-3. **OCR**: render with `pypdfium2` at 300 DPI → Pillow preprocessing
-   (grayscale, deskew via Tesseract OSD, adaptive threshold) → Tesseract
-   `image_to_data` → words, boxes, per-word confidence.
-4. **Vision fallback**: pages with mean OCR confidence below a threshold, or
-   detected tables in scanned pages, go to `VisionProvider` with a table/field
-   schema — only if the sensitivity gate allows.
-5. **Normalized representation**: `PageContent{page_number, width, height,
-   method, words[], lines[], blocks[], tables[], ocr_confidence}` — the single
-   format consumed by every downstream stage regardless of source.
+1. **Inspect** (`inspection.py`): per-page character and image counts decide `NATIVE` vs
+   `OCR` (ADR-017).
+2. **Native text** (`native.py`): pypdfium2 character boxes (loose boxes: advance width and
+   font ascent/descent) grouped into words, converted to the page's displayed orientation with
+   a top-left origin. A text layer whose characters are mostly unusable (private-use glyphs,
+   replacement characters) is OCR'd instead. pdfplumber is not used (ADR-021).
+3. **OCR** (`ocr.py`, `extraction.py`, `preprocess.py`): PDF pages rendered at 300 DPI; images
+   used as stored (EXIF orientation applied) and upscaled up to 2x below 250 DPI; projection-
+   profile **deskew** (rotation within ±5°); Tesseract 5 via subprocess (`tsv` output, per-page
+   timeout, `OMP_THREAD_LIMIT=1`, pages in parallel); a poor reading triggers orientation
+   detection (`--psm 0`) and the better of the two readings is kept; ruling-line debris and
+   noise tokens are dropped. Every step was kept or rejected by measurement
+   (`evaluation/reports/ocr.md`): median filtering, autocontrast and ruling-line removal made
+   synthetic scans worse and are off.
+4. **Layout** (`layout.py`): skew-tolerant line grouping, column segments (gap > 0.75 × text
+   size), blocks in reading order, label/value grids read row by row, headings by size.
+5. **Tables** (`tables.py`): one geometry-based detector for native and OCR pages (header row
+   of short labels, column boundaries that cut the fewest words, wrapped cells, row-rhythm
+   stop, a column for row numbers whose header OCR lost), stitched across pages under the same
+   header (ADR-021).
+6. **Normalized representation** (`content.py`): `PageContent{page_number, width, height, unit,
+   method, words[], lines[], blocks[], tables[], ocr_confidence, rotation_applied,
+   deskew_degrees}` — the single format consumed by every downstream stage. Persisted in
+   `document_pages` (words and layout as JSONB) and `document_tables`/`table_rows`; a PNG
+   preview per page goes to document storage.
 
-Licences: `pypdfium2` (Apache-2.0/BSD-3), `pdfplumber` (MIT), Tesseract
-(Apache-2.0). PyMuPDF rejected (AGPL-3.0).
+**Vision fallback deferred to Phase 4.** The plan sent low-confidence OCR pages to a vision
+model here. In Phase 4 the extraction prompt attaches page images for low-confidence pages
+anyway, which covers the same need with one call instead of two (ADR-024). Phase 3 flags such
+pages (`LOW_OCR_CONFIDENCE` review reason).
 
-## 4. Classification (Module 4, Phase 3)
+Licences: pypdfium2 (Apache-2.0/BSD-3), Tesseract (Apache-2.0), scikit-learn (BSD-3),
+RapidFuzz (MIT). PyMuPDF rejected (AGPL-3.0).
 
-* **Stage 1 — local model**: TF-IDF (word + char n-grams) + logistic regression,
-  probability-calibrated (`CalibratedClassifierCV`). Trained on the synthetic
-  corpus + stored human corrections. Microseconds, free, private.
-* **Stage 2 — LLM fallback** when local max-probability < `CLASSIFICATION_MIN_CONFIDENCE`
-  (and sensitivity allows): fast model with an enum-constrained schema.
-* **Final confidence** = local calibrated probability when stage 1 decides;
-  when the LLM decides, confidence comes from *agreement* signals (LLM label vs
-  local top-2, keyword evidence), not from the LLM's own number.
-* Human correction → `document_classifications(method=HUMAN)` → retraining set.
+## 4. Classification (Module 4, Phase 3 — implemented)
+
+Code: `docintel/classification/`.
+
+* **Stage 1 — local model**: TF-IDF (word 1–2-grams + character 3–5-grams on lower-cased text
+  with digits collapsed) + logistic regression, Platt-calibrated (`CalibratedClassifierCV`,
+  sigmoid, 3-fold). Trained **when the worker starts** on a seeded synthetic corpus covering
+  all nine types plus current human corrections (ADR-022); ~9–20 s, deterministic, no model
+  file to trust. Every prediction records the model fingerprint.
+* **Stage 2 — LLM fallback** when the local probability is below
+  `CLASSIFICATION_MIN_CONFIDENCE` (0.7) **and** the sensitivity gate allows external AI: the
+  fast model picks one label from the fixed list (enum-constrained structured output) and
+  quotes the text that supports it. The document text is passed as untrusted data.
+* **Confidence**: the local calibrated probability when stage 1 decides. When the LLM decides,
+  confidence comes from agreement signals only — agreement with the local top-1 (≥ 0.80) or
+  runner-up (0.65), keyword evidence (±0.10), and whether the quoted evidence is actually in
+  the text (−0.10 if not) — never from the LLM's own certainty (ADR-005).
+* **Routing**: below the threshold after both stages, or no LLM allowed/configured, the
+  document becomes `REVIEW_REQUIRED` with reason `CLASSIFICATION_UNCERTAIN`; the best local
+  guess is kept for the reviewer. LLM errors degrade to review; they never fail the job.
+* **Human correction** (`PATCH /documents/{id}/classification`) creates a `HUMAN`
+  classification that later processing never overrides, and becomes training data at the next
+  worker start.
+* **Sensitivity gate** (`docintel/ai/routing.py`): effective sensitivity = max(label set at
+  upload, content findings, type minimum of the likely types); content findings are Luhn-valid
+  payment card numbers and US SSNs (→ RESTRICTED); resumes and bank statements are at least
+  CONFIDENTIAL; IBANs and e-mail addresses are recorded without raising the level. Only counts
+  and page numbers are stored. Above `AI_EXTERNAL_MAX_SENSITIVITY` nothing leaves the worker.
 
 ## 5. Structured extraction (Modules 6–8, Phase 4)
 

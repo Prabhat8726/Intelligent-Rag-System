@@ -160,3 +160,27 @@ def test_native_line_item_tables_match_ground_truth(generated: Path) -> None:
         assert [row.cells for row in tables[0].rows] == expected, entry["file"]
         checked += 1
     assert checked >= 9
+
+
+def test_rows_left_of_a_lost_header_get_their_own_column() -> None:
+    # OCR lost the "#" header; the row numbers below it must not merge into "Item".
+    words = [w for w in table_words(ROWS) if w.text != "#"]
+    page = page_of(words)
+    (table,) = page.tables
+    assert table.header == ["", "Item", "Description", "Qty", "Unit", "Price"]
+    assert [row.cells[:2] for row in table.rows] == [["1", "BRG-6204"], ["2", "VLV-BL050"]]
+
+
+def test_continuation_page_missing_the_leading_column_is_stitched_and_aligned() -> None:
+    first = page_of(table_words(ROWS), number=1)
+    rest = [word(h, x, 200) for h, x in COLUMNS.items() if h != "#"] + table_words(
+        [("3", "GSK-150A", "Graphite gasket", "4", "pcs", "6.20")]
+    )[len(COLUMNS) :]
+    # The row number sits right next to the SKU here (merged by OCR), so no column is added.
+    rest = [w for w in rest if w.text != "3"]
+    second = page_of(rest, number=2)
+    assert len(second.tables[0].header) == len(COLUMNS) - 1
+    (table,) = stitch_tables([first, second])
+    assert (table.page_start, table.page_end) == (1, 2)
+    assert [row.cells[1] for row in table.rows] == ["BRG-6204", "VLV-BL050", "GSK-150A"]
+    assert table.rows[2].cells[0] == ""

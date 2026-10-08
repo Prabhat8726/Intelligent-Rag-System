@@ -43,12 +43,14 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 |---|---|---|---|
 | POST | `/api/v1/documents` (multipart: `file`, `sensitivity`, `department_id` admins only) → 201 | `documents:upload` | ✅ 2 |
 | GET | `/api/v1/documents` (filters: `status`, `document_type`, `mine`, `q` filename, `created_from`/`created_to`) | `documents:read` + scope | ✅ 2 (vendor filter 🔜 4) |
-| GET | `/api/v1/documents/{id}` (detail incl. page inspection + latest job) | `documents:read` + scope | ✅ 2 |
+| GET | `/api/v1/documents/{id}` (detail: inspection, latest job; from Phase 3 also pages, current classification + history, review reasons, sensitivity assessment) | `documents:read` + scope | ✅ 2/3 |
 | DELETE | `/api/v1/documents/{id}` (soft delete, cancels queued jobs) → 204 | `documents:delete` + scope | ✅ 2 |
 | GET | `/api/v1/documents/{id}/file` (attachment, `nosniff`, sandbox CSP) | `documents:read` + scope | ✅ 2 |
 | POST | `/api/v1/documents/{id}/process` (re-process) → 202, 409 if already active | `documents:process` + scope | ✅ 2 |
-| GET | `/api/v1/documents/{id}/pages/{n}` · `/pages/{n}/image` | `documents:read` | 🔜 3 |
-| PATCH | `/api/v1/documents/{id}/classification` (human correction) | `documents:review` | 🔜 3 |
+| GET | `/api/v1/documents/{id}/pages/{n}` (text, words with boxes `[text,x0,y0,x1,y1,conf,size]`, layout) | `documents:read` + scope | ✅ 3 |
+| GET | `/api/v1/documents/{id}/pages/{n}/image` (PNG preview, `nosniff`, sandbox CSP, `private` cache) | `documents:read` + scope | ✅ 3 |
+| GET | `/api/v1/documents/{id}/tables` (stitched tables with rows) | `documents:read` + scope | ✅ 3 |
+| PATCH | `/api/v1/documents/{id}/classification` `{document_type, note?}` (human correction, audited) | `documents:review` + scope | ✅ 3 |
 | GET | `/api/v1/documents/{id}/extraction` | `documents:read` | 🔜 4 |
 | GET | `/api/v1/documents/{id}/evidence` | `documents:read` | 🔜 4 |
 | PATCH | `/api/v1/documents/{id}/fields/{field_id}` (correction) | `documents:review` | 🔜 4 |

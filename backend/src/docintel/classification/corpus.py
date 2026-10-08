@@ -226,8 +226,11 @@ class _Gen:
         return f"{prefix}{self.rng.randint(10 ** (digits - 1), 10**digits - 1)}"
 
     def line_items(self, *, prices: bool, count: int | None = None) -> list[list[str]]:
+        if count is None:
+            # Mostly short orders, but long multi-page item lists occur in every business type.
+            count = self.rng.randint(10, 45) if self.maybe(0.2) else self.rng.randint(1, 8)
         rows = []
-        for index in range(count or self.rng.randint(1, 8)):
+        for index in range(count):
             description, unit, price = self.pick(PRODUCTS)
             quantity = self.rng.randint(1, 200)
             row = [str(index + 1), self.number("SKU-", 4), description, str(quantity), unit]

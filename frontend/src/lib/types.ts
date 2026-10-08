@@ -43,6 +43,18 @@ export interface ReadinessResponse {
 export type DocumentStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "REVIEW_REQUIRED";
 export type Sensitivity = "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED";
 export type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
+export type DocumentType =
+  | "INVOICE"
+  | "PURCHASE_ORDER"
+  | "CONTRACT"
+  | "RECEIPT"
+  | "DELIVERY_NOTE"
+  | "RESUME"
+  | "BANK_STATEMENT"
+  | "POLICY"
+  | "OTHER";
+export type ClassificationMethod = "LOCAL_MODEL" | "LLM" | "ENSEMBLE" | "HUMAN";
+export type ExtractionMethod = "NATIVE" | "OCR";
 
 export interface DocumentVersion {
   id: string;
@@ -58,7 +70,7 @@ export interface DocumentVersion {
 export interface DocumentSummary {
   id: string;
   display_filename: string;
-  document_type: string | null;
+  document_type: DocumentType | null;
   type_confidence: string | null;
   status: DocumentStatus;
   sensitivity: Sensitivity;
@@ -68,6 +80,7 @@ export interface DocumentSummary {
   duplicate_of_id: string | null;
   duplicate_reason: string | null;
   processing_error: string | null;
+  review_reasons: string[];
   last_processed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -109,9 +122,85 @@ export interface Inspection {
   version: number;
 }
 
+export interface ClassificationSignals {
+  local?: { label: DocumentType; probability: number }[];
+  keywords?: Partial<Record<DocumentType, string[]>>;
+  threshold?: number;
+  external_ai?: { allowed: boolean; effective_sensitivity: Sensitivity; reason: string };
+  llm?: { used: boolean; reason?: string; label?: DocumentType; quote_found?: boolean; model?: string };
+  previous?: { label: DocumentType; method: ClassificationMethod; confidence: string } | null;
+  reason?: string;
+}
+
+export interface Classification {
+  id: string;
+  label: DocumentType;
+  confidence: string;
+  method: ClassificationMethod;
+  model_version: string | null;
+  signals: ClassificationSignals;
+  note: string | null;
+  created_by: { id: string; full_name: string } | null;
+  is_current: boolean;
+  created_at: string;
+}
+
+export interface PageSummary {
+  page_number: number;
+  width: number;
+  height: number;
+  unit: "pt" | "px";
+  rotation_applied: number;
+  extraction_method: ExtractionMethod;
+  ocr_confidence: string | null;
+  word_count: number;
+  preview_width: number | null;
+  preview_height: number | null;
+  has_preview: boolean;
+}
+
+/** [text, x0, y0, x1, y1, ocr confidence | null, size] in page units, top-left origin. */
+export type PageWord = [string, number, number, number, number, number | null, number];
+
+export interface PageDetail extends PageSummary {
+  text: string;
+  words: PageWord[];
+  layout: { lines: unknown[]; blocks: { kind: string; bbox: number[] }[]; warnings: string[] };
+}
+
+export interface TableRow {
+  row_index: number;
+  page_number: number;
+  cells: string[];
+  bbox: number[];
+}
+
+export interface DocumentTable {
+  id: string;
+  table_index: number;
+  page_start: number;
+  page_end: number;
+  header: string[];
+  bbox: number[];
+  extraction_method: "NATIVE" | "OCR" | "MIXED";
+  confidence: string;
+  row_count: number;
+  rows: TableRow[];
+}
+
+export interface SensitivityAssessment {
+  findings: { kind: string; count: number; pages: number[]; level: Sensitivity | null }[];
+  type_minimum: Sensitivity | null;
+  detected: Sensitivity | null;
+}
+
 export interface DocumentDetail extends DocumentSummary {
   inspection: Inspection | null;
+  sensitivity_assessment: SensitivityAssessment | null;
   latest_job: ProcessingJob | null;
+  classification: Classification | null;
+  classification_history: Classification[];
+  pages: PageSummary[];
 }
 
 export interface Page<T> {

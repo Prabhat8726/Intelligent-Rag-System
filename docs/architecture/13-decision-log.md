@@ -98,5 +98,40 @@ Short ADRs: context → decision → consequences. New decisions are appended.
 
 ### ADR-020 — Client-side CLI commands do not load server configuration
 * **Context**: `generate-documents` and `ingest` run on a developer machine or in CI against a running stack; requiring `DATABASE_URL`/`JWT_SECRET_KEY` for them would force secrets onto machines that do not need them.
-* **Decision**: the CLI dispatches these commands before reading settings; `ingest` takes only an API URL and credentials (`--password-stdin` or `SEED_USER_PASSWORD`) and exits non-zero unless every document reaches `COMPLETED`.
+* **Decision**: the CLI dispatches these commands before reading settings; `ingest` takes only an API URL and credentials (`--password-stdin` or `SEED_USER_PASSWORD`) and exits non-zero when a document fails, is rejected or does not finish (`REVIEW_REQUIRED` counts as processed unless `--require-completed`, which CI uses).
 * **Consequences**: + the dataset tooling works anywhere, and CI fails when any document fails. − two code paths in `main()` (covered by `tests/integration/test_seed_and_cli.py`).
+
+### ADR-021 — One PDF library and one geometry-based layout path for native and OCR text
+* **Context**: the plan used pdfplumber (pdfminer.six) for native words and tables, with a vision model for tables on scans.
+* **Decision**: native words come from pypdfium2 (already used for validation and rendering); table detection runs on word geometry, so the same code handles native and OCR pages.
+* **Consequences**: + one parser of untrusted PDFs instead of two; identical coordinates for previews, words and tables; native line-item tables are exact on the synthetic set (`evaluation/reports/tables.md`). − heuristic thresholds (column gap 0.75 × text size, row rhythm); tables without a header row of short labels are not detected; scanned tables lose rows (measured, see the report).
+
+### ADR-022 — The local classifier is trained at worker start, not shipped as a file
+* **Context**: a pickled scikit-learn model is code execution on load and drifts from the code that built it; a separately trained artefact needs its own release process.
+* **Decision**: the worker trains the TF-IDF + logistic-regression model from the seeded synthetic corpus plus current human corrections (`document_classifications`, method HUMAN) at start-up, and records a fingerprint of the training data and library versions with every prediction.
+* **Consequences**: + nothing to unpickle; corrections take effect at the next worker start; predictions are traceable to a training set. − 9–20 s worker start-up; two workers started at different times may use different correction sets (visible in the fingerprint).
+
+### ADR-023 — OCR preprocessing is chosen by measurement
+* **Context**: OCR advice (binarize, denoise, remove lines, deskew) often hurts as much as it helps.
+* **Decision**: each step is an option evaluated by the OCR suite; only steps that improved the synthetic scans are on by default: upscaling low-DPI images, projection-profile deskew, token clean-up, orientation retry. Median filter, autocontrast and ruling-line removal are off (or absent).
+* **Consequences**: + defaults are justified by numbers in `evaluation/reports/ocr.md`. − measured on synthetic scans only; real scanners may need re-measurement (the suite can be rerun with other data later).
+
+### ADR-024 — Vision fallback moves to Phase 4 extraction
+* **Context**: the plan sent low-confidence OCR pages to a vision model in Phase 3.
+* **Decision**: Phase 3 flags such pages (`LOW_OCR_CONFIDENCE`); Phase 4 extraction attaches the page images of flagged pages to its (sensitivity-gated) LLM call.
+* **Consequences**: + one external call per document instead of two, and the image is used where the value is (field extraction). − until Phase 4, pages that OCR reads poorly are only flagged for review.
+
+### ADR-025 — Review reasons on the document, not a review table yet
+* **Context**: processing must say why a document needs a person; the review-task workflow arrives in Phase 5.
+* **Decision**: `documents.review_reasons` (JSON list of codes: `CLASSIFICATION_UNCERTAIN`, `NO_TEXT_FOUND`, `LOW_OCR_CONFIDENCE`, `OCR_FAILED`); a non-empty list sets `REVIEW_REQUIRED`. A human type correction clears `CLASSIFICATION_UNCERTAIN`; the document completes when nothing else is open.
+* **Consequences**: + reasons are visible in the API and UI now. − Phase 5 converts them into review tasks (assignment, SLA).
+
+### ADR-026 — Content-based sensitivity can only raise the level used for AI routing
+* **Context**: users mislabel documents; some content must never reach an external model.
+* **Decision**: payment card numbers (Luhn) and US SSNs imply RESTRICTED; resumes and bank statements imply CONFIDENTIAL; the gate uses the maximum of these and the uploaded label. The document's own label is not changed; findings store counts and pages, never values.
+* **Consequences**: + safe by construction for the patterns covered. − pattern coverage is narrow (no names/addresses detection); IBANs and e-mails are recorded but do not raise the level because they appear on ordinary invoices.
+
+### ADR-027 — Evaluation reports are committed under stable names
+* **Context**: README numbers must trace to a recorded run; the plan suggested timestamped files.
+* **Decision**: `docintel evaluate` writes `evaluation/reports/<suite>.json|.md` with commit (marked `+dirty` for uncommitted trees), versions, seeds and configuration; git history keeps older runs. CI runs the suites with small datasets as a smoke test.
+* **Consequences**: + one place to look, diffs show metric changes in review. − full runs take ~10 minutes and are run by a developer, not by CI.

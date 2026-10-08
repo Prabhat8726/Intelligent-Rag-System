@@ -96,6 +96,24 @@ never part of a key (ADR-014).
 | `JOB_RETRY_BASE_SECONDS` | `30` | Retry backoff: base × 2^(attempt−1) plus up to 10 % jitter, capped at 1 hour |
 | `WORKER_HEARTBEAT_FILE` | unset | File the worker touches while alive; `docintel worker-health` fails if it is older than max(60 s, 3 × poll interval, lease / 2). Compose sets `/tmp/docintel-worker.heartbeat` |
 
+### OCR and document understanding
+
+| Variable | Default | Description |
+|---|---|---|
+| `TESSERACT_CMD` | `tesseract` | Tesseract 5 executable (must be on `PATH` for the worker; the Docker image includes it). Check with `make check-ocr` |
+| `OCR_LANGUAGES` | `eng` | Tesseract language codes joined by `+`, e.g. `eng+deu`; the language data must be installed. More languages = slower OCR |
+| `OCR_DPI` | `300` | Resolution at which PDF pages without a text layer are rendered for OCR |
+| `OCR_UPSCALE_BELOW_DPI` | `250` | Images below this DPI are upscaled (max 2×) before OCR; `0` disables. Measured to help (ADR-023) |
+| `OCR_PAGE_TIMEOUT_SECONDS` | `120` | The OCR process for one page is killed after this; the job is retried |
+| `OCR_CONCURRENCY` | `2` | Pages OCR'd in parallel per document (each uses one CPU core) |
+| `OCR_REMOVE_RULING_LINES` | `false` | Remove table grid lines before OCR. Measured to make synthetic scans worse; kept for experiments |
+| `OCR_REVIEW_BELOW_CONFIDENCE` | `50` | A page whose mean OCR confidence is below this sends the document to review (`LOW_OCR_CONFIDENCE`) |
+| `PAGE_PREVIEW_WIDTH` | `1000` | Width in pixels of the page preview images stored per page |
+| `CLASSIFICATION_MIN_CONFIDENCE` | `0.7` | Below this the LLM fallback is tried (if allowed); still below → `REVIEW_REQUIRED` |
+| `CLASSIFICATION_LLM_FALLBACK` | `true` | Use the LLM for uncertain classifications when a key is configured and the gate allows |
+| `CLASSIFICATION_CORPUS_PER_CLASS` | `200` | Synthetic training documents per type for the local model (trained at worker start) |
+| `AI_EXTERNAL_MAX_SENSITIVITY` | `INTERNAL` | Highest effective sensitivity whose text may be sent to an external AI provider (`PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, `RESTRICTED`). Effective = max(upload label, detected card numbers/SSNs, type minimum for resumes and bank statements). On the Gemini free tier, upload synthetic data only, whatever this says |
+
 ### AI providers
 
 | Variable | Default | Description |

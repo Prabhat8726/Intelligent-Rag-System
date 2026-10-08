@@ -24,6 +24,7 @@ from PIL import Image
 # actually present, about 0.75x the font size on average (calibrated on synthetic pages).
 HEIGHT_TO_SIZE = 1 / 0.75
 _LANGUAGES = re.compile(r"^[A-Za-z_]+(\+[A-Za-z_]+)*$")
+TSV_HEADER = "level\tpage_num\tblock_num"
 
 
 class OCRError(Exception):
@@ -207,7 +208,10 @@ class TesseractOCRProvider:
         return [line.strip() for line in stdout.decode().splitlines()[1:] if line.strip()]
 
     async def verify(self) -> str:
-        """Fail fast when the engine or a configured language is missing. Returns the version."""
+        """Fail fast when the engine, a configured language or TSV output is missing.
+
+        Returns the engine version.
+        """
         version = await self.version()
         installed = set(await self.available_languages())
         missing = [lang for lang in self._languages.split("+") if lang not in installed]
@@ -217,6 +221,7 @@ class TesseractOCRProvider:
                 f"(installed: {sorted(installed)})"
             )
             raise OCRUnavailableError(msg)
+        await self.recognize(Image.new("L", (64, 32), 255), dpi=300)  # TSV output works
         return version
 
     async def recognize(self, image: Image.Image, *, dpi: int) -> OCRResult:
@@ -229,8 +234,13 @@ class TesseractOCRProvider:
             detail = stderr.decode(errors="replace").strip().splitlines()[-1:] or ["no output"]
             msg = f"tesseract exited with {code}: {detail[0][:200]}"
             raise OCRFailedError(msg)
+        tsv = stdout.decode("utf-8", errors="replace")
+        if not tsv.startswith(TSV_HEADER):
+            # Without its "tsv" config Tesseract prints plain text: every page would look empty.
+            msg = "Tesseract did not produce TSV output (tessdata/configs/tsv missing?)"
+            raise OCRUnavailableError(msg)
         return OCRResult(
-            words=parse_tsv(stdout.decode("utf-8", errors="replace")),
+            words=parse_tsv(tsv),
             width=image.width,
             height=image.height,
             latency_ms=(time.perf_counter() - started) * 1000,
