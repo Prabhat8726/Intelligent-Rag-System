@@ -3,6 +3,8 @@
 docintel seed                      demo departments + one user per role (not in staging/prod)
 docintel create-user --email ...   create a user (password prompted or read from stdin)
 docintel check-ai                  verify the configured AI provider end-to-end
+docintel worker [--until-idle]     run the background job worker
+docintel worker-health             exit 0 if the worker heartbeat is fresh (container probe)
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import argparse
 import asyncio
 import getpass
 import math
+import signal
 import sys
 from collections.abc import Sequence
 from typing import Literal
@@ -30,6 +33,8 @@ from docintel.core.errors import ConflictError
 from docintel.core.logging import configure_logging
 from docintel.db.models import Role
 from docintel.db.session import create_engine, create_sessionmaker
+from docintel.storage import build_storage
+from docintel.workers.runner import Worker, heartbeat_age_seconds
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -211,6 +216,43 @@ async def _check_ai(settings: Settings) -> int:
     return EXIT_OK if llm_ok and embeddings_ok else EXIT_FAILURE
 
 
+# ---------------------------------------------------------------------------- worker
+async def _worker(settings: Settings, *, until_idle: bool) -> int:
+    engine = create_engine(settings)
+    try:
+        worker = Worker(
+            settings=settings,
+            sessionmaker=create_sessionmaker(engine),
+            storage=build_storage(settings),
+        )
+        if until_idle:
+            processed = await worker.run_until_idle()
+            _ok(f"processed {processed} job(s); queue idle")
+            return EXIT_OK
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(signum, stop.set)
+        await worker.run(stop)
+        return EXIT_OK
+    finally:
+        await engine.dispose()
+
+
+def _worker_health(settings: Settings) -> int:
+    path = settings.worker_heartbeat_file
+    if path is None:
+        _fail("WORKER_HEARTBEAT_FILE is not configured")
+        return EXIT_FAILURE
+    age = heartbeat_age_seconds(path)
+    # A healthy worker touches the file at least once per poll interval or lease heartbeat.
+    limit = max(60.0, settings.worker_poll_interval_seconds * 3, settings.job_lease_seconds / 2)
+    if age is None or age > limit:
+        _fail(f"worker heartbeat is stale (age={age}, limit={limit})")
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------------------- entrypoint
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="docintel", description="Document Intelligence admin CLI")
@@ -225,6 +267,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--password-stdin", action="store_true", help="read the password from stdin"
     )
     commands.add_parser("check-ai", help="verify AI provider credentials and models")
+    worker = commands.add_parser("worker", help="run the background job worker")
+    worker.add_argument(
+        "--until-idle", action="store_true", help="process runnable jobs, then exit"
+    )
+    commands.add_parser("worker-health", help="exit 0 if the worker heartbeat is fresh")
     return parser
 
 
@@ -239,6 +286,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_create_user(settings, args))
         case "check-ai":
             return asyncio.run(_check_ai(settings))
+        case "worker":
+            configure_logging(level=settings.log_level, log_format=settings.effective_log_format)
+            return asyncio.run(_worker(settings, until_idle=args.until_idle))
+        case "worker-health":
+            return _worker_health(settings)
         case _:  # argparse enforces the choices
             return EXIT_USAGE
 

@@ -11,7 +11,9 @@ from __future__ import annotations
 import os
 import secrets
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import AsyncExitStack
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -25,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from docintel.api.app import create_app
 from docintel.api.deps import get_session
 from docintel.auth.passwords import hash_password
+from docintel.auth.tokens import create_access_token
 from docintel.core.config import Settings
 from docintel.db import migrations_runner
 from docintel.db.models import Department, Role, User
@@ -114,8 +117,43 @@ async def db_session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 
 # ------------------------------------------------------------------------------ application
 @pytest.fixture
-def settings(database_url: str) -> Settings:
-    return make_settings(database_url=database_url)
+def storage_root(tmp_path: Path) -> Path:
+    return tmp_path / "storage"
+
+
+@pytest.fixture
+def settings(database_url: str, storage_root: Path) -> Settings:
+    return make_settings(database_url=database_url, storage_local_root=storage_root)
+
+
+ClientFactory = Callable[..., Awaitable[httpx.AsyncClient]]
+
+
+@pytest.fixture
+async def client_factory(
+    database_url: str, storage_root: Path, db_session: AsyncSession
+) -> AsyncIterator[ClientFactory]:
+    """Build extra clients for apps with custom settings, sharing the test transaction."""
+    async with AsyncExitStack() as stack:
+
+        async def _build(**overrides: object) -> httpx.AsyncClient:
+            application = create_app(
+                make_settings(
+                    database_url=database_url, storage_local_root=storage_root, **overrides
+                )
+            )
+
+            async def _test_session() -> AsyncIterator[AsyncSession]:
+                yield db_session
+
+            application.dependency_overrides[get_session] = _test_session
+            await stack.enter_async_context(application.router.lifespan_context(application))
+            transport = httpx.ASGITransport(app=application, client=("203.0.113.10", 51000))
+            return await stack.enter_async_context(
+                httpx.AsyncClient(transport=transport, base_url="http://testserver")
+            )
+
+        yield _build
 
 
 @pytest.fixture
@@ -137,13 +175,28 @@ async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
         yield http
 
 
+def auth_headers(user: User) -> dict[str, str]:
+    """Bearer header for `user` without a login round-trip (login itself is tested elsewhere)."""
+    token = create_access_token(user_id=user.id, role=user.role, settings=make_settings()).token
+    return {"Authorization": f"Bearer {token}"}
+
+
 # ------------------------------------------------------------------------------ factories
+async def make_department(session: AsyncSession, prefix: str = "Dept") -> Department:
+    dept = Department(id=uuid.uuid4(), name=f"{prefix}-{uuid.uuid4().hex[:6]}")
+    session.add(dept)
+    await session.flush()
+    return dept
+
+
 @pytest.fixture
 async def department(db_session: AsyncSession) -> Department:
-    dept = Department(id=uuid.uuid4(), name=f"Finance-{uuid.uuid4().hex[:6]}")
-    db_session.add(dept)
-    await db_session.flush()
-    return dept
+    return await make_department(db_session, "Finance")
+
+
+@pytest.fixture
+async def other_department(db_session: AsyncSession) -> Department:
+    return await make_department(db_session, "Legal")
 
 
 async def make_user(

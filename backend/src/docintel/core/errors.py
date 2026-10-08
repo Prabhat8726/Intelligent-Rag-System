@@ -56,3 +56,20 @@ class ConflictError(AppError):
 class ServiceUnavailableError(AppError):
     status_code = 503
     title = "Service Unavailable"
+
+
+class PayloadTooLargeError(AppError):
+    status_code = 413
+    title = "Content Too Large"
+
+
+class UnsupportedMediaTypeError(AppError):
+    status_code = 415
+    title = "Unsupported Media Type"
+
+
+class UnprocessableContentError(AppError):
+    """Well-formed request whose content cannot be accepted (corrupt, encrypted, too many pages)."""
+
+    status_code = 422
+    title = "Unprocessable Content"

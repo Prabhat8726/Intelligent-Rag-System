@@ -50,7 +50,10 @@ def run_migrations_online() -> None:
     if connectable is not None:
         # A caller (e.g. tests) supplied an open connection.
         context.configure(
-            connection=connectable, target_metadata=target_metadata, compare_type=True
+            connection=connectable,
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True,
         )
         with context.begin_transaction():
             context.run_migrations()
@@ -58,7 +61,12 @@ def run_migrations_online() -> None:
 
     engine = create_engine(_database_url(), poolclass=pool.NullPool)
     with engine.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
     engine.dispose()

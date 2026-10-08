@@ -12,14 +12,21 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from docintel import __version__
-from docintel.api.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
+from docintel.api.middleware import (
+    BodySizeLimitMiddleware,
+    RequestContextMiddleware,
+    SecurityHeadersMiddleware,
+)
 from docintel.api.problems import register_exception_handlers
-from docintel.api.routers import auth, health
+from docintel.api.routers import auth, documents, health
 from docintel.core.config import Settings, get_settings
 from docintel.core.logging import configure_logging, get_logger
 from docintel.db.session import create_engine, create_sessionmaker
+from docintel.storage import build_storage
 
 API_V1_PREFIX = "/api/v1"
+# Multipart framing (boundaries, part headers, form fields) on top of the file itself.
+MULTIPART_OVERHEAD_BYTES = 1024 * 1024
 
 logger = get_logger(__name__)
 
@@ -33,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_engine(settings)
         app.state.engine = engine
         app.state.sessionmaker = create_sessionmaker(engine)
+        app.state.storage = build_storage(settings)
         logger.info("app.started", env=settings.app_env.value, version=__version__)
         try:
             yield
@@ -59,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     api_v1 = APIRouter(prefix=API_V1_PREFIX)
     api_v1.include_router(auth.router)
+    api_v1.include_router(documents.router)
     app.include_router(health.router)
     app.include_router(api_v1)
 
@@ -72,6 +81,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
             expose_headers=["X-Request-ID"],
         )
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        default_limit=settings.api_max_body_bytes,
+        overrides={
+            ("POST", f"{API_V1_PREFIX}/documents"): settings.upload_max_bytes
+            + MULTIPART_OVERHEAD_BYTES
+        },
+    )
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.hsts_enabled)
     return app

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -32,6 +33,11 @@ class LLMProviderName(StrEnum):
 
 class EmbeddingProviderName(StrEnum):
     GEMINI = "gemini"
+
+
+class StorageBackendName(StrEnum):
+    LOCAL = "local"
+    S3 = "s3"
 
 
 ThinkingLevel = Literal["MINIMAL", "LOW", "MEDIUM", "HIGH"]
@@ -94,6 +100,35 @@ class Settings(BaseSettings):
     embedding_requests_per_minute: int = Field(default=60, ge=1, le=10_000)
     embedding_batch_size: int = Field(default=100, ge=1, le=100)
 
+    # ---------------------------------------------------------------- HTTP limits
+    # Request bodies on non-upload endpoints (JSON APIs).
+    api_max_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+
+    # ---------------------------------------------------------------- uploads
+    upload_max_bytes: int = Field(default=25 * 1024 * 1024, ge=1024, le=500 * 1024 * 1024)
+    upload_max_pages: int = Field(default=200, ge=1, le=5000)
+    # 50 MP covers A4 at 600 DPI (~35 MP); larger images are rejected as potential bombs.
+    upload_max_image_pixels: int = Field(default=50_000_000, ge=1_000_000, le=500_000_000)
+
+    # ---------------------------------------------------------------- document storage
+    storage_backend: StorageBackendName = StorageBackendName.LOCAL
+    storage_local_root: Path = Path("storage")
+    s3_bucket: str | None = None
+    s3_endpoint_url: str | None = None  # e.g. Cloudflare R2, MinIO; None = AWS
+    s3_region: str | None = None
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: SecretStr | None = None
+    s3_key_prefix: str = ""
+
+    # ---------------------------------------------------------------- background jobs
+    worker_concurrency: int = Field(default=1, ge=1, le=32)
+    worker_poll_interval_seconds: float = Field(default=5.0, gt=0, le=300)
+    job_lease_seconds: int = Field(default=300, ge=10, le=3600)
+    job_max_attempts: int = Field(default=3, ge=1, le=20)
+    job_retry_base_seconds: float = Field(default=30.0, ge=0, le=3600)
+    # Touched by the worker on every loop; the container health check reads its age.
+    worker_heartbeat_file: Path | None = None
+
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None
 
@@ -113,7 +148,7 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return value
 
-    @field_validator("gemini_api_key", mode="before")
+    @field_validator("gemini_api_key", "s3_secret_access_key", mode="before")
     @classmethod
     def _empty_key_is_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
@@ -134,6 +169,9 @@ class Settings(BaseSettings):
             if "*" in self.cors_allowed_origins:
                 msg = "CORS_ALLOWED_ORIGINS must not contain '*' outside local/test"
                 raise ValueError(msg)
+        if self.storage_backend == StorageBackendName.S3 and not self.s3_bucket:
+            msg = "S3_BUCKET is required when STORAGE_BACKEND=s3"
+            raise ValueError(msg)
         return self
 
     # ---------------------------------------------------------------- derived values

@@ -357,10 +357,11 @@ class GeminiEmbeddingProvider(_GeminiClient):
             task_type=task.value, output_dimensionality=self._dimensions
         )
         for batch in batched(texts, self._batch_size, strict=False):
+            contents: list[types.PartUnion] = list(batch)
             call = functools.partial(
                 self._client.aio.models.embed_content,
                 model=self._model,
-                contents=list(batch),
+                contents=contents,
                 config=config,
             )
             response = await self._call(call)

@@ -14,11 +14,12 @@ import uuid
 from collections.abc import Iterable
 
 import structlog
+from fastapi import HTTPException
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from docintel.api.problems import PROBLEM_CONTENT_TYPE
-from docintel.core.context import request_id_var
+from docintel.core.context import current_request_id, request_id_var
 from docintel.core.logging import get_logger
 
 logger = get_logger("docintel.http")
@@ -84,27 +85,9 @@ class RequestContextMiddleware:
 
 
 async def _send_internal_error(send: Send, scope: Scope, request_id: str) -> None:
-    body = json.dumps(
-        {
-            "type": "about:blank",
-            "title": "Internal Server Error",
-            "status": 500,
-            "detail": "An unexpected error occurred.",
-            "instance": scope.get("path"),
-            "request_id": request_id,
-        }
-    ).encode()
-    await send(
-        {
-            "type": "http.response.start",
-            "status": 500,
-            "headers": [
-                (b"content-type", PROBLEM_CONTENT_TYPE.encode()),
-                (b"content-length", str(len(body)).encode()),
-            ],
-        }
+    await _send_problem(
+        send, scope, 500, "Internal Server Error", "An unexpected error occurred.", request_id
     )
-    await send({"type": "http.response.body", "body": body})
 
 
 class SecurityHeadersMiddleware:
@@ -144,3 +127,88 @@ class SecurityHeadersMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
+
+
+class BodySizeLimitMiddleware:
+    """Caps request body size while the body streams in (before any parsing or spooling).
+
+    Starlette parses multipart bodies completely before the endpoint runs, so the limit must be
+    enforced here: a declared Content-Length over the limit is rejected immediately, and bodies
+    without one (chunked) are counted and cut off as soon as they exceed it.
+    """
+
+    _METHODS = frozenset({"POST", "PUT", "PATCH"})
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        default_limit: int,
+        overrides: dict[tuple[str, str], int] | None = None,
+    ) -> None:
+        self.app = app
+        self.default_limit = default_limit
+        self.overrides = dict(overrides or {})
+
+    def _limit_for(self, method: str, path: str) -> int:
+        return self.overrides.get((method, path.rstrip("/") or "/"), self.default_limit)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("method") not in self._METHODS:
+            await self.app(scope, receive, send)
+            return
+        limit = self._limit_for(scope["method"], scope.get("path", ""))
+        declared = Headers(scope=scope).get("content-length")
+        if declared is not None and (not declared.isdigit() or int(declared) > limit):
+            await _send_problem(send, scope, 413, "Content Too Large", _too_large_detail(limit))
+            return
+
+        received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    # FastAPI re-raises HTTPException from body parsing (other errors become 400).
+                    raise HTTPException(status_code=413, detail=_too_large_detail(limit))
+            return message
+
+        await self.app(scope, limited_receive, send)
+
+
+def _too_large_detail(limit: int) -> str:
+    return f"The request body exceeds the limit of {limit // (1024 * 1024) or 1} MB."
+
+
+async def _send_problem(
+    send: Send,
+    scope: Scope,
+    status: int,
+    title: str,
+    detail: str,
+    request_id: str | None = None,
+) -> None:
+    body = json.dumps(
+        {
+            "type": "about:blank",
+            "title": title,
+            "status": status,
+            "detail": detail,
+            "instance": scope.get("path"),
+            "request_id": request_id or current_request_id(),
+        }
+    ).encode()
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", PROBLEM_CONTENT_TYPE.encode()),
+                (b"content-length", str(len(body)).encode()),
+                (b"connection", b"close"),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})

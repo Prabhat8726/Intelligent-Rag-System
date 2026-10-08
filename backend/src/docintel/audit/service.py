@@ -26,6 +26,12 @@ class AuditAction(StrEnum):
     AUTHZ_DENIED = "authz.denied"
     USER_CREATED = "user.created"
     DEPARTMENT_CREATED = "department.created"
+    DOCUMENT_UPLOADED = "document.uploaded"
+    DOCUMENT_DOWNLOADED = "document.downloaded"
+    DOCUMENT_DELETED = "document.deleted"
+    DOCUMENT_REPROCESS_REQUESTED = "document.reprocess_requested"
+    DOCUMENT_PROCESSING_COMPLETED = "document.processing.completed"
+    DOCUMENT_PROCESSING_FAILED = "document.processing.failed"
 
 
 @dataclass(frozen=True, slots=True)

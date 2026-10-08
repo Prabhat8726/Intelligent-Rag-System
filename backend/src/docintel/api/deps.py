@@ -17,6 +17,7 @@ from docintel.core.config import Settings
 from docintel.core.errors import AuthenticationError, PermissionDeniedError
 from docintel.core.logging import get_logger
 from docintel.db.models import AuditOutcome, User
+from docintel.storage import DocumentStorage
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,11 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
         yield session
 
 
+def get_storage(request: Request) -> DocumentStorage:
+    storage: DocumentStorage = request.app.state.storage
+    return storage
+
+
 def get_request_meta(request: Request) -> RequestMeta:
     return RequestMeta(
         request_id=getattr(request.state, "request_id", None),
@@ -45,6 +51,7 @@ def get_request_meta(request: Request) -> RequestMeta:
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 RequestMetaDep = Annotated[RequestMeta, Depends(get_request_meta)]
+StorageDep = Annotated[DocumentStorage, Depends(get_storage)]
 
 
 async def get_current_user(

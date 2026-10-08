@@ -23,7 +23,7 @@ async def test_readiness_reports_database_and_migrations(client: httpx.AsyncClie
     assert body["status"] == "ready"
     assert body["checks"]["database"]["status"] == "ok"
     assert body["checks"]["migrations"]["status"] == "ok"
-    assert head_revisions() == frozenset({"0001"})
+    assert len(head_revisions()) == 1  # linear migration history: exactly one head
 
 
 async def test_readiness_is_503_when_database_is_unreachable() -> None:
