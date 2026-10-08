@@ -117,7 +117,7 @@ describe("system status page", () => {
       "/api/v1/auth/me": () => jsonResponse(CURRENT_USER),
       "/health/ready": () => jsonResponse(READY),
     });
-    renderApp("/");
+    renderApp("/status");
 
     expect(await screen.findByText("Ready")).toBeInTheDocument();
     expect(screen.getByText("database")).toBeInTheDocument();

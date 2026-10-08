@@ -12,7 +12,7 @@ function redirectTarget(state: unknown): string {
       return from;
     }
   }
-  return "/status";
+  return "/documents";
 }
 
 export function LoginPage() {

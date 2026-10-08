@@ -3,7 +3,10 @@ import { NavLink, Outlet } from "react-router";
 import { useAuth } from "../auth/useAuth";
 
 // Only screens that exist are listed; feature screens are added in their phases.
-const NAV_ITEMS = [{ to: "/status", label: "System status" }] as const;
+const NAV_ITEMS = [
+  { to: "/documents", label: "Documents" },
+  { to: "/status", label: "System status" },
+] as const;
 
 export function AppLayout() {
   const { user, logout } = useAuth();

@@ -1,6 +1,8 @@
 import { Navigate, type RouteObject } from "react-router";
 
 import { AppLayout } from "./components/AppLayout";
+import { DocumentDetailPage } from "./documents/DocumentDetailPage";
+import { DocumentsPage } from "./documents/DocumentsPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -14,7 +16,9 @@ export const routes: RouteObject[] = [
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <Navigate to="/status" replace /> },
+          { index: true, element: <Navigate to="/documents" replace /> },
+          { path: "/documents", element: <DocumentsPage /> },
+          { path: "/documents/:documentId", element: <DocumentDetailPage /> },
           { path: "/status", element: <SystemStatusPage /> },
         ],
       },

@@ -10,7 +10,7 @@ architecture decisions are validated by running code immediately.
 | Phase | Scope | Key deliverables | Exit criteria (summary) |
 |---|---|---|---|
 | **0 — Architecture & Foundation** | Requirements, architecture, schema, API, agent, RAG, security, evaluation design; runnable foundation | `docs/`, backend skeleton (config, logging, errors, health, DB, migrations, auth+RBAC, audit, AI provider layer + Gemini), frontend shell, Docker, CI, Makefile | See §1 below |
-| 2 — Document ingestion | Upload, validation, storage abstraction, versions, job queue, worker, synthetic generator v1 | `POST/GET/DELETE /documents`, `LocalStorage` + S3-compatible storage, PG job queue + worker, `make generate-documents` | Valid files stored + job queued atomically; invalid/oversized/spoofed rejected (security tests); worker processes jobs with retries/leases |
+| **2 — Document ingestion** ✅ | Upload, validation, storage abstraction, versions, job queue, worker, synthetic generator v1 | `POST/GET/DELETE /documents`, `LocalStorage` + S3-compatible storage, PG job queue + worker, `make generate-documents` | Valid files stored + job queued atomically; invalid/oversized/spoofed rejected (security tests); worker processes jobs with retries/leases |
 | 3 — OCR & understanding | Per-page inspection, native text, Tesseract OCR, layout blocks, tables, classification, sensitivity gate | `document_pages`, `document_tables`, classifier + LLM fallback, page preview images | Mixed PDFs handled per page; CER/WER measured on synthetic-noisy; classification metrics reported |
 | 4 — Structured extraction | Schemas, extraction, repair, evidence, normalization, confidence, LLM usage tracking, Ollama provider | `document_extractions`, `extracted_fields`, `llm_calls`, `/extraction`, `/evidence` | Field metrics measured; malformed JSON handled; every field has provenance or is flagged |
 | 5 — Comparison & rules | Comparison engine, rule engine, duplicates, versions diff, review queue | `/comparisons`, `/rules`, `/review-tasks`, contract version diff | Discrepancy P/R/F1 on scenarios; rules configurable; CI regression suite |
@@ -56,3 +56,42 @@ Foundation
 - ✅ CI workflow passes `actionlint` (incl. shellcheck); audit/secret-scan commands verified locally (pip-audit: no known vulnerabilities; npm audit: 0; gitleaks: clean for committed files)
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 - ✅ `.env.example` complete; `.env` git-ignored; no secrets committed
+
+## 2. Phase 2 acceptance criteria
+
+Status as of 2026-10-08, same legend as §1. Test files are under `backend/tests/`.
+
+Upload and validation
+- ✅ PDF, PNG, JPEG and TIFF accepted; type taken from magic bytes and required to match the extension and declared MIME type (`unit/test_upload_validation.py`)
+- ✅ Through the API, spoofed (HTML, PNG or executable named `.pdf`/declared as PDF, PDF declared as HTML), corrupt, empty and password-protected files are rejected with 415/422 and **nothing is stored** (`security/test_document_security.py::test_malicious_or_invalid_files_are_rejected_and_nothing_is_stored`); too many pages, too many pixels and decompression-bomb headers are rejected by the validator (`unit/test_upload_validation.py::test_unprocessable_content_is_rejected`)
+- ✅ Oversized bodies rejected with 413 by declared length and while streaming, before multipart parsing (`unit/test_body_limit_middleware.py`, `security/...::test_declared_oversized_body_is_rejected_before_parsing`, `::test_streamed_oversized_body_without_length_is_cut_off`)
+- ✅ Filenames sanitized (NFKC, path, control and bidi characters); they never influence storage keys (`::test_path_traversal_filename_cannot_influence_storage_location`, `unit/test_storage.py::test_document_keys_never_contain_user_text`)
+- ✅ Document, version, job and audit row created in one transaction; the stored file is deleted if the transaction fails (`integration/test_documents_api.py::test_blob_is_removed_when_the_database_write_fails`)
+- ✅ Exact duplicates accepted and flagged, without revealing documents from other departments (`::test_exact_duplicate_is_accepted_and_flagged`, `security/...::test_duplicate_detection_does_not_leak_other_departments`)
+
+Access and API
+- ✅ List (filters, pagination), detail, download, soft delete, reprocess (`integration/test_documents_api.py`, 10 tests)
+- ✅ Department scoping: other departments get 404 on read, download, delete and reprocess; same department and admins can read; viewers cannot upload and the denial is audited (`security/test_document_security.py`, 13 tests)
+- ✅ Downloads are attachments with `nosniff` and `CSP: sandbox` (`::test_download_streams_original_with_safe_headers`)
+
+Storage
+- ✅ Local backend (path confinement, symlink escape blocked, atomic writes) and S3 backend share one contract test suite (`unit/test_storage.py`; S3 runs against moto's S3 server over HTTP)
+- ⏳ S3 against a real provider (AWS S3 / R2 / MinIO): not available in the build environment; the backend is configuration-only (`STORAGE_BACKEND=s3`)
+
+Queue and worker
+- ✅ Claims are exclusive under concurrency (`SKIP LOCKED`); NOTIFY is delivered only after commit and wakes an idle worker faster than its poll interval; expired leases are reclaimed and the stale worker can no longer write; jobs reclaimed too often fail without running; transient errors retry with exponential backoff, permanent errors fail at once; deleted documents' jobs are cancelled (`integration/test_worker.py`)
+- ✅ Worker re-verifies SHA-256 (tampered or missing file → permanent failure) and records per-page inspection: native text vs. needs OCR (`unit/test_inspection.py`, `integration/test_worker.py`)
+- ✅ Docker worker runs as a non-root user with a heartbeat health check and a graceful stop period
+
+Synthetic data
+- ✅ Deterministic generator (same seed → identical bytes) for 12 scenarios with ground truth; recorded defects are verified to be present in the documents; every generated file passes upload validation (`unit/test_synthetic.py`)
+- ✅ End-to-end: generated dataset → API → queue → worker → `COMPLETED` for every document, in-process (`integration/test_ingestion_e2e.py`) and against the Docker stack (`make process API_URL=http://localhost:8080`: 37/37 completed, 2026-10-08)
+
+Frontend and delivery
+- ✅ Documents inbox (upload, filters, paging), detail (file facts, job timings, per-page inspection), download, reprocess and delete, permission-aware (`frontend/src/documents/documents.test.tsx`); checked in headless Chromium against the Docker stack with no console errors
+- ✅ 292 backend tests, ruff, ruff format, mypy --strict; 20 frontend tests, ESLint, `tsc`, production build
+- ✅ `docker compose up --wait` brings db → migrate → api + worker → web to healthy; smoke test passes including an upload processed by the worker
+- ✅ CI updated (worker in the container job, dataset generate + ingest) and passes `actionlint`; pip-audit: no known vulnerabilities; npm audit: 0; gitleaks: clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+
+Not in Phase 2 (by design): OCR, classification, extraction and near-duplicate detection (same invoice number, different file) — Phases 3–5.

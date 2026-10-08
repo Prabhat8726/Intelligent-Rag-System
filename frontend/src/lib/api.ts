@@ -46,7 +46,8 @@ export interface RequestOptions {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (options.body !== undefined) {
+  const isForm = options.body instanceof FormData;
+  if (options.body !== undefined && !isForm) {
     headers["Content-Type"] = "application/json";
   }
   if (options.token) {
@@ -56,7 +57,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const response = await fetch(path, {
     method: options.method ?? "GET",
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    // FormData sets its own multipart boundary header.
+    body: options.body === undefined ? undefined : isForm ? (options.body as FormData) : JSON.stringify(options.body),
     credentials: "same-origin",
     signal: options.signal,
   });
@@ -68,4 +70,45 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw new ApiError(response.status, isProblemDetail(payload) ? payload : null);
   }
   return payload as T;
+}
+
+const BLOB_URL_LIFETIME_MS = 30_000;
+
+/** Download an authenticated file: fetch with the bearer token, then save the blob. */
+export async function downloadFile(path: string, token: string | null, fallbackName: string): Promise<void> {
+  const response = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const payload: unknown = contentType.includes("json") ? await response.json() : null;
+    throw new ApiError(response.status, isProblemDetail(payload) ? payload : null);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filenameFromDisposition(response.headers.get("content-disposition")) ?? fallbackName;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  // Some browsers start the download asynchronously; revoking immediately can cancel it.
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, BLOB_URL_LIFETIME_MS);
+}
+
+export function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded?.[1]) {
+    try {
+      return decodeURIComponent(encoded[1]);
+    } catch {
+      // fall through to the ASCII fallback
+    }
+  }
+  const plain = /filename="([^"]+)"/i.exec(header);
+  return plain?.[1] ?? null;
 }

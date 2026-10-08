@@ -1,14 +1,18 @@
 # Enterprise Document Intelligence Platform - developer commands.  Run `make` for the list.
-# Only targets that work today are defined; later phases add generate-documents, process, evaluate.
+# Only targets that work today are defined; `evaluate` arrives with the evaluation phase.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 COMPOSE ?= docker compose
 # Host-side backend commands read configuration from the root .env file.
 BACKEND := cd backend && uv run --env-file ../.env
+# API used by `make process`: the host API (make dev) by default; use http://localhost:8080 for make up.
+API_URL ?= http://localhost:8000
+DATASET ?= ../synthetic_data/generated
 
-.PHONY: help env require-env setup db-up migrate seed dev dev-api dev-web up down reset-db logs \
-        seed-docker test test-backend test-frontend lint format check-ai smoke clean
+.PHONY: help env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
+        reset-db logs seed-docker generate-documents process worker test test-backend \
+        test-frontend lint format check-ai smoke clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -39,25 +43,37 @@ migrate: db-up ## Apply database migrations
 seed: migrate ## Create demo departments and one user per role (local/test only)
 	$(BACKEND) docintel seed
 
-dev: migrate ## Run API (auto-reload) and Vite dev server on the host -> http://localhost:5173
-	$(MAKE) -j2 dev-api dev-web
+dev: migrate ## Run API (auto-reload), worker and Vite on the host -> http://localhost:5173
+	$(MAKE) -j3 dev-api dev-worker dev-web
 
 dev-api:
 	$(BACKEND) uvicorn docintel.api.app:create_app --factory --reload --port 8000
+
+dev-worker:
+	$(BACKEND) docintel worker
+
+worker: require-env ## Process queued jobs on the host until the queue is empty, then exit
+	$(BACKEND) docintel worker --until-idle
 
 dev-web:
 	cd frontend && npm run dev
 
 up: require-env ## Build and start the full stack in Docker -> http://localhost:8080
-	$(COMPOSE) up -d --build --wait db api web
+	$(COMPOSE) up -d --build --wait db api worker web
 
 seed-docker: ## Seed demo users inside the running Docker stack
 	$(COMPOSE) exec api docintel seed
 
-down: ## Stop the Docker stack (database volume is kept)
+generate-documents: ## Generate synthetic POs, invoices and delivery notes with ground truth
+	cd backend && uv run docintel generate-documents --output $(DATASET)
+
+process: require-env ## Upload the synthetic dataset through the API and wait for processing
+	$(BACKEND) docintel ingest $(DATASET) --api-url $(API_URL)
+
+down: ## Stop the Docker stack (volumes are kept)
 	$(COMPOSE) down
 
-reset-db: ## DESTROY the local database volume
+reset-db: ## DESTROY the local database and document storage volumes
 	$(COMPOSE) down -v
 
 logs: ## Follow Docker stack logs

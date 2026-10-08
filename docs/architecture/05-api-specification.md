@@ -21,7 +21,7 @@ page defines conventions and the full planned surface, marking what exists now.
 
 ## 2. Endpoint surface
 
-Legend: ✅ implemented (Phase 0) · 🔜 planned (phase number)
+Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase number)
 
 ### Infrastructure
 | Method | Path | Auth | Description | Status |
@@ -41,12 +41,12 @@ Legend: ✅ implemented (Phase 0) · 🔜 planned (phase number)
 ### Documents (Modules 1–8, 27–29)
 | Method | Path | Permission | Status |
 |---|---|---|---|
-| POST | `/api/v1/documents` | `documents:upload` | 🔜 2 |
-| GET | `/api/v1/documents` (filters: status, type, owner, vendor, date range, q) | `documents:read` | 🔜 2 |
-| GET | `/api/v1/documents/{id}` | `documents:read` + scope | 🔜 2 |
-| DELETE | `/api/v1/documents/{id}` (soft delete) | `documents:delete` | 🔜 2 |
-| GET | `/api/v1/documents/{id}/file` (attachment, `nosniff`) | `documents:read` | 🔜 2 |
-| POST | `/api/v1/documents/{id}/process` (re-process) | `documents:process` | 🔜 2 |
+| POST | `/api/v1/documents` (multipart: `file`, `sensitivity`, `department_id` admins only) → 201 | `documents:upload` | ✅ 2 |
+| GET | `/api/v1/documents` (filters: `status`, `document_type`, `mine`, `q` filename, `created_from`/`created_to`) | `documents:read` + scope | ✅ 2 (vendor filter 🔜 4) |
+| GET | `/api/v1/documents/{id}` (detail incl. page inspection + latest job) | `documents:read` + scope | ✅ 2 |
+| DELETE | `/api/v1/documents/{id}` (soft delete, cancels queued jobs) → 204 | `documents:delete` + scope | ✅ 2 |
+| GET | `/api/v1/documents/{id}/file` (attachment, `nosniff`, sandbox CSP) | `documents:read` + scope | ✅ 2 |
+| POST | `/api/v1/documents/{id}/process` (re-process) → 202, 409 if already active | `documents:process` + scope | ✅ 2 |
 | GET | `/api/v1/documents/{id}/pages/{n}` · `/pages/{n}/image` | `documents:read` | 🔜 3 |
 | PATCH | `/api/v1/documents/{id}/classification` (human correction) | `documents:review` | 🔜 3 |
 | GET | `/api/v1/documents/{id}/extraction` | `documents:read` | 🔜 4 |
@@ -54,6 +54,22 @@ Legend: ✅ implemented (Phase 0) · 🔜 planned (phase number)
 | PATCH | `/api/v1/documents/{id}/fields/{field_id}` (correction) | `documents:review` | 🔜 4 |
 | POST/GET | `/api/v1/documents/{id}/versions` · `/versions/compare?from=&to=` | `documents:upload` / `read` | 🔜 5 |
 | GET | `/api/v1/documents/{id}/duplicates` | `documents:read` | 🔜 5 |
+
+Upload rules (Phase 2, `docintel/documents/validation.py`):
+
+| Check | Result |
+|---|---|
+| Body larger than `UPLOAD_MAX_BYTES` (+1 MiB multipart overhead), by `Content-Length` or while streaming | 413 before the handler runs |
+| File larger than `UPLOAD_MAX_BYTES` while spooling | 413 |
+| Extension, declared MIME type and magic bytes disagree; unsupported extension or content | 415 |
+| Empty file; corrupt or user-password-protected PDF; undecodable image; more than `UPLOAD_MAX_PAGES` pages; more than `UPLOAD_MAX_IMAGE_PIXELS` pixels; unknown `department_id` | 422 |
+| `department_id` sent by a non-admin | 403 |
+| Same SHA-256 as a document the uploader can see | 201, accepted and flagged with `duplicate_of_id` |
+
+The stored file, document, version, processing job and audit row are created
+in one transaction; if the transaction fails the stored file is deleted.
+Filenames are normalized (NFKC, path, control and bidi characters removed) and
+are display data only: storage keys are `documents/{id}/v{n}/original.{ext}`.
 
 ### Comparison, rules, review
 | Method | Path | Permission | Status |

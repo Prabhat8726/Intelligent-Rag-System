@@ -1,10 +1,12 @@
-# Local / single-host stack:  db → migrate (one-shot) → api → web (nginx on http://localhost:8080)
+# Local / single-host stack:
+#   db -> migrate (one-shot) -> api + worker -> web (nginx on http://localhost:8080)
 # Configuration comes from .env (create it with `make env`).
 
 name: docintel
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-docintel}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-docintel}
+  STORAGE_LOCAL_ROOT: /data/storage
 
 services:
   db:
@@ -45,9 +47,35 @@ services:
       <<: *backend-env
       # Only nginx (inside this private network) reaches the API, so its X-Forwarded-For is trusted.
       FORWARDED_ALLOW_IPS: "*"
+    volumes:
+      - docstore:/data/storage
     depends_on:
       migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    image: docintel-backend:local
+    command: ["docintel", "worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *backend-env
+      WORKER_HEARTBEAT_FILE: /tmp/docintel-worker.heartbeat
+    volumes:
+      - docstore:/data/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "docintel", "worker-health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    # SIGTERM stops claiming new jobs; in-flight jobs get time to finish.
+    stop_grace_period: 60s
     restart: unless-stopped
 
   web:
@@ -64,3 +92,4 @@ services:
 
 volumes:
   pgdata:
+  docstore:

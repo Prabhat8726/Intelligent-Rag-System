@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 WEB_PORT="${WEB_PORT:-$(grep -E '^WEB_PORT=' .env 2>/dev/null | cut -d= -f2 || true)}"
 BASE_URL="http://127.0.0.1:${WEB_PORT:-8080}"
 SEED_PASSWORD="$(grep -E '^SEED_USER_PASSWORD=' .env 2>/dev/null | cut -d= -f2- || true)"
+# Strip optional surrounding quotes (values with spaces must be quoted in .env).
+SEED_PASSWORD="${SEED_PASSWORD%\"}"; SEED_PASSWORD="${SEED_PASSWORD#\"}"
 
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit 1; }
@@ -54,6 +56,22 @@ if [[ -n "${SEED_PASSWORD}" ]]; then
   role="$(curl -s "${BASE_URL}/api/v1/auth/me" -H "Authorization: Bearer ${token}" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin).get("role", ""))')"
   check "/auth/me through nginx returns the analyst role" test "$role" = "ANALYST"
+
+  # Upload a synthetic invoice and wait for the worker to process it.
+  document_id="$(curl -s -X POST "${BASE_URL}/api/v1/documents" -H "Authorization: Bearer ${token}" \
+    -F "file=@scripts/fixtures/smoke-invoice.pdf;type=application/pdf" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id", ""))')"
+  check "document upload accepted" test -n "$document_id"
+  status=""
+  for _ in $(seq 1 60); do
+    detail="$(curl -s "${BASE_URL}/api/v1/documents/${document_id}" -H "Authorization: Bearer ${token}")"
+    status="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' <<<"$detail")"
+    [[ "$status" == "COMPLETED" || "$status" == "FAILED" ]] && break
+    sleep 1
+  done
+  check "worker processed the document (status ${status})" test "$status" = "COMPLETED"
+  kind="$(python3 -c 'import json,sys; print((json.load(sys.stdin)["inspection"] or {}).get("kind"))' <<<"$detail")"
+  check "page inspection recorded (${kind})" test "$kind" = "native_pdf"
 else
   echo "  SKIP login round-trip (SEED_USER_PASSWORD not set in .env)"
 fi

@@ -1,5 +1,5 @@
-# One image, several entrypoints: API (default CMD), migrations (`alembic upgrade head`),
-# management CLI (`docintel ...`), and - from later phases - the worker and MCP server.
+# One image, several entrypoints: API (default CMD), worker (`docintel worker`), migrations
+# (`alembic upgrade head`) and the management CLI (`docintel ...`); MCP server in Phase 7.
 
 ARG PYTHON_VERSION=3.13
 
@@ -17,9 +17,10 @@ RUN pip install "uv==0.11.32"
 WORKDIR /app
 # Dependencies first (cached layer), then the project itself.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# --no-default-groups: runtime dependencies only (no dev tools, no synthetic-data generator).
+RUN uv sync --frozen --no-default-groups --no-install-project
 COPY src ./src
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv sync --frozen --no-default-groups --no-editable
 
 # ---------------------------------------------------------------------------- runtime
 FROM python:${PYTHON_VERSION}-slim AS runtime
@@ -31,7 +32,12 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     LOG_FORMAT=json
 
 RUN groupadd --system --gid 10001 app \
-    && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
+    && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
+    && mkdir -p /data/storage \
+    && chown app:app /data/storage
+
+# Local document storage (mounted as a volume shared by api and worker).
+ENV STORAGE_LOCAL_ROOT=/data/storage
 
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv

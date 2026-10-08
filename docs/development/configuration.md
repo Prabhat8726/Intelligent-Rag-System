@@ -66,6 +66,36 @@ below them.
 | `AUTH_LOCKOUT_MINUTES` | `15` | Lockout duration |
 | `SEED_USER_PASSWORD` | unset | Password for demo users created by `make seed` (min. 12 chars). Seeding is refused in staging/production |
 
+### Uploads and storage
+
+| Variable | Default | Description |
+|---|---|---|
+| `UPLOAD_MAX_BYTES` | `26214400` (25 MiB) | Maximum file size. The request limit for `POST /api/v1/documents` is this plus 1 MiB multipart overhead. If you raise it, raise `client_max_body_size` (26m) in `frontend/nginx/default.conf.template` to match |
+| `API_MAX_BODY_BYTES` | `1048576` (1 MiB) | Request-body limit for every other endpoint |
+| `UPLOAD_MAX_PAGES` | `200` | Maximum pages (PDF) or frames (TIFF) |
+| `UPLOAD_MAX_IMAGE_PIXELS` | `50000000` | Maximum width × height for images (decompression-bomb guard) |
+| `STORAGE_BACKEND` | `local` | `local` (filesystem) or `s3` (AWS S3 or any S3-compatible service: Cloudflare R2, MinIO, …) |
+| `STORAGE_LOCAL_ROOT` | `storage` | Root directory for `local`. Relative paths resolve against the working directory (`backend/` for `make dev`). The Docker image and compose use `/data/storage` on the shared `docstore` volume |
+| `S3_BUCKET` | unset | Required when `STORAGE_BACKEND=s3` (validated at startup) |
+| `S3_ENDPOINT_URL` | unset | Unset = AWS; set for R2/MinIO |
+| `S3_REGION` | unset | Region name (R2 uses `auto`) |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | unset | Static credentials. Unset = boto3's default chain (instance/task role, `AWS_*` variables, shared config) |
+| `S3_KEY_PREFIX` | empty | Prefix for every object key, e.g. `docintel/prod` |
+
+Object keys are `documents/{document_id}/v{n}/original.{ext}`; user-supplied filenames are
+never part of a key (ADR-014).
+
+### Background worker
+
+| Variable | Default | Description |
+|---|---|---|
+| `WORKER_CONCURRENCY` | `1` | Jobs processed concurrently per worker process (1–32). PDF work is serialized per process (ADR-018); add worker processes to scale it |
+| `WORKER_POLL_INTERVAL_SECONDS` | `5` | Fallback polling interval; new jobs normally wake the worker immediately via `LISTEN/NOTIFY` |
+| `JOB_LEASE_SECONDS` | `300` | A claimed job belongs to its worker for this long; the worker renews the lease every third of it. Expired leases (crashed worker) are reclaimed by any worker |
+| `JOB_MAX_ATTEMPTS` | `3` | Attempts per job, including reclaims after a crash, before it is marked `FAILED` |
+| `JOB_RETRY_BASE_SECONDS` | `30` | Retry backoff: base × 2^(attempt−1) plus up to 10 % jitter, capped at 1 hour |
+| `WORKER_HEARTBEAT_FILE` | unset | File the worker touches while alive; `docintel worker-health` fails if it is older than max(60 s, 3 × poll interval, lease / 2). Compose sets `/tmp/docintel-worker.heartbeat` |
+
 ### AI providers
 
 | Variable | Default | Description |

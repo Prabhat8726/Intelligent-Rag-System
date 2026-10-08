@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +12,8 @@ from docintel.auth.passwords import PasswordPolicyError
 from docintel.auth.seed import SEED_USERS, seed_demo_identities
 from docintel.core.errors import ConflictError
 from docintel.db.models import AuditLog, Department, User
+from docintel.tools import ingest as ingest_tool
+from docintel.tools.ingest import IngestItem
 from tests.conftest import PRODUCTION_SECRET, make_settings
 
 pytestmark = pytest.mark.integration
@@ -98,3 +103,58 @@ async def test_cli_check_ai_without_key_fails_cleanly(capsys: pytest.CaptureFixt
     output = capsys.readouterr().out
     assert "GEMINI_API_KEY is not set" in output
     assert "synthetic" in output
+
+
+def test_generate_documents_needs_no_server_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for variable in ("DATABASE_URL", "JWT_SECRET_KEY"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.chdir(tmp_path)  # no .env file to fall back on
+    output = tmp_path / "dataset"
+    assert cli.main(["generate-documents", "--output", str(output), "--seed", "5"]) == cli.EXIT_OK
+    manifest = json.loads((output / "manifest.json").read_text())
+    assert manifest["seed"] == 5
+    assert manifest["document_count"] > 0
+    assert "generated" in capsys.readouterr().out
+
+
+def test_ingest_without_password_fails_cleanly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("SEED_USER_PASSWORD", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert cli.main(["ingest", str(tmp_path)]) == cli.EXIT_USAGE
+    assert "--password-stdin" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("items", "expected"),
+    [
+        ([IngestItem("a.pdf", "A", "id-a", status="COMPLETED")], cli.EXIT_OK),
+        (
+            [
+                IngestItem("a.pdf", "A", "id-a", status="COMPLETED"),
+                IngestItem("b.pdf", "B", "id-b", status="FAILED"),
+                IngestItem("c.pdf", "C", http_status=415, error="unsupported"),
+            ],
+            cli.EXIT_FAILURE,
+        ),
+    ],
+)
+def test_ingest_exit_code_requires_every_document_completed(
+    items: list[IngestItem],
+    expected: int,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def fake_ingest_directory(*_args: object, **_kwargs: object) -> list[IngestItem]:
+        return items
+
+    monkeypatch.setenv("SEED_USER_PASSWORD", "unused-in-this-test")
+    monkeypatch.setattr(ingest_tool, "ingest_directory", fake_ingest_directory)
+    assert cli.main(["ingest", str(tmp_path)]) == expected
+    output = capsys.readouterr().out
+    if expected == cli.EXIT_FAILURE:
+        assert "2 document(s) not completed: b.pdf, c.pdf" in output

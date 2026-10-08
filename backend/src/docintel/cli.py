@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import getpass
 import math
+import os
 import signal
 import sys
 from collections.abc import Sequence
@@ -31,7 +32,7 @@ from docintel.audit.service import SYSTEM_REQUEST
 from docintel.auth.passwords import PasswordPolicyError
 from docintel.auth.seed import seed_demo_identities
 from docintel.auth.service import UserService
-from docintel.core.config import Settings, get_settings
+from docintel.core.config import LogFormat, Settings, get_settings
 from docintel.core.errors import ConflictError
 from docintel.core.logging import configure_logging
 from docintel.db.models import Role
@@ -274,13 +275,14 @@ def _generate_documents(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-async def _ingest(settings: Settings, args: argparse.Namespace) -> int:
+async def _ingest(args: argparse.Namespace) -> int:
+    """HTTP client: needs only the API URL and credentials, not the server's configuration."""
     from docintel.tools.ingest import IngestError, ingest_directory, summarize
 
     if args.password_stdin:
         password = sys.stdin.readline().rstrip("\n")
-    elif settings.seed_user_password is not None:
-        password = settings.seed_user_password.get_secret_value()
+    elif os.environ.get("SEED_USER_PASSWORD"):
+        password = os.environ["SEED_USER_PASSWORD"]
     else:
         _fail("Provide the password with --password-stdin or SEED_USER_PASSWORD.")
         return EXIT_USAGE
@@ -305,6 +307,9 @@ async def _ingest(settings: Settings, args: argparse.Namespace) -> int:
     )
     if unfinished:
         _fail(f"{unfinished} document(s) unfinished after {args.timeout}s; is a worker running?")
+    not_completed = [item.file for item in items if item.status != "COMPLETED"]
+    if not_completed:
+        _fail(f"{len(not_completed)} document(s) not completed: {', '.join(not_completed)}")
         return EXIT_FAILURE
     return EXIT_OK
 
@@ -343,6 +348,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    # Client-side commands work without the server's configuration (database, secrets).
+    if args.command == "generate-documents":
+        configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
+        return _generate_documents(args)
+    if args.command == "ingest":
+        configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
+        return asyncio.run(_ingest(args))
+
     settings = get_settings()
     configure_logging(level="WARNING", log_format=settings.effective_log_format)
     match args.command:
@@ -357,10 +370,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_worker(settings, until_idle=args.until_idle))
         case "worker-health":
             return _worker_health(settings)
-        case "generate-documents":
-            return _generate_documents(args)
-        case "ingest":
-            return asyncio.run(_ingest(settings, args))
         case _:  # argparse enforces the choices
             return EXIT_USAGE
 
