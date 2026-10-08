@@ -29,7 +29,13 @@ from docintel.ai.errors import ProviderError
 from docintel.core.config import Settings
 from docintel.core.logging import get_logger
 from docintel.db.models import JobType
-from docintel.processing.pipeline import DocumentProcessingHandler, PermanentProcessingError
+from docintel.processing.ocr import OCRError
+from docintel.processing.pipeline import (
+    DocumentProcessingHandler,
+    PermanentProcessingError,
+    build_stages,
+)
+from docintel.processing.services import ProcessingServices, build_processing_services
 from docintel.storage import DocumentStorage, StorageError
 from docintel.workers.queue import JOBS_CHANNEL, ClaimedJob, JobQueue
 
@@ -51,6 +57,10 @@ def classify_failure(exc: BaseException, job_id: uuid.UUID) -> tuple[bool, str]:
         if exc.retryable:
             return True, "Temporary storage failure; processing will be retried."
         return False, "The stored file could not be read."
+    if isinstance(exc, OCRError):
+        if exc.retryable:
+            return True, "Text recognition timed out; processing will be retried."
+        return False, "Text recognition failed."
     if isinstance(exc, ProviderError):
         if exc.retryable:
             return True, "The AI provider is temporarily unavailable; processing will be retried."
@@ -72,15 +82,21 @@ class Worker:
         sessionmaker: async_sessionmaker[AsyncSession],
         storage: DocumentStorage,
         worker_id: str | None = None,
+        services: ProcessingServices | None = None,
     ) -> None:
         self._settings = settings
+        self.services = services or build_processing_services(settings)
         self._sessionmaker = sessionmaker
         self._queue = JobQueue(
             worker_id=worker_id or default_worker_id(),
             lease_seconds=settings.job_lease_seconds,
             retry_base_seconds=settings.job_retry_base_seconds,
         )
-        self._handlers = {JobType.DOCUMENT_PROCESSING: DocumentProcessingHandler(storage)}
+        self._handlers = {
+            JobType.DOCUMENT_PROCESSING: DocumentProcessingHandler(
+                storage, build_stages(storage, self.services)
+            )
+        }
         self._wakeup = asyncio.Event()
         self._heartbeat_file = settings.worker_heartbeat_file
 

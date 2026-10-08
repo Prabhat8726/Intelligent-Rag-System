@@ -129,22 +129,41 @@ def test_ingest_without_password_fails_cleanly(
 
 
 @pytest.mark.parametrize(
-    ("items", "expected"),
+    ("items", "flags", "expected", "message"),
     [
-        ([IngestItem("a.pdf", "A", "id-a", status="COMPLETED")], cli.EXIT_OK),
+        ([IngestItem("a.pdf", "A", "id-a", status="COMPLETED")], [], cli.EXIT_OK, None),
+        (
+            [
+                IngestItem("a.pdf", "A", "id-a", status="COMPLETED"),
+                IngestItem("r.pdf", "R", "id-r", status="REVIEW_REQUIRED"),
+            ],
+            [],
+            cli.EXIT_OK,
+            None,
+        ),
+        (
+            [IngestItem("r.pdf", "R", "id-r", status="REVIEW_REQUIRED")],
+            ["--require-completed"],
+            cli.EXIT_FAILURE,
+            "1 document(s) not COMPLETED: r.pdf",
+        ),
         (
             [
                 IngestItem("a.pdf", "A", "id-a", status="COMPLETED"),
                 IngestItem("b.pdf", "B", "id-b", status="FAILED"),
                 IngestItem("c.pdf", "C", http_status=415, error="unsupported"),
             ],
+            [],
             cli.EXIT_FAILURE,
+            "2 document(s) not COMPLETED/REVIEW_REQUIRED: b.pdf, c.pdf",
         ),
     ],
 )
-def test_ingest_exit_code_requires_every_document_completed(
+def test_ingest_exit_code_reflects_document_outcomes(
     items: list[IngestItem],
+    flags: list[str],
     expected: int,
+    message: str | None,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -154,7 +173,6 @@ def test_ingest_exit_code_requires_every_document_completed(
 
     monkeypatch.setenv("SEED_USER_PASSWORD", "unused-in-this-test")
     monkeypatch.setattr(ingest_tool, "ingest_directory", fake_ingest_directory)
-    assert cli.main(["ingest", str(tmp_path)]) == expected
-    output = capsys.readouterr().out
-    if expected == cli.EXIT_FAILURE:
-        assert "2 document(s) not completed: b.pdf, c.pdf" in output
+    assert cli.main(["ingest", str(tmp_path), *flags]) == expected
+    if message is not None:
+        assert message in capsys.readouterr().out

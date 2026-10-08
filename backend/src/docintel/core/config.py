@@ -129,6 +129,27 @@ class Settings(BaseSettings):
     # Touched by the worker on every loop; the container health check reads its age.
     worker_heartbeat_file: Path | None = None
 
+    # ---------------------------------------------------------------- OCR & understanding
+    tesseract_cmd: str = "tesseract"
+    # Tesseract language codes joined with "+", e.g. "eng" or "eng+deu" (data must be installed).
+    ocr_languages: str = Field(default="eng", pattern=r"^[A-Za-z_]+(\+[A-Za-z_]+)*$")
+    ocr_dpi: int = Field(default=300, ge=150, le=600)
+    # Images below this DPI are upscaled (max 2x) before OCR; 0 disables upscaling.
+    ocr_upscale_below_dpi: int = Field(default=250, ge=0, le=600)
+    ocr_page_timeout_seconds: float = Field(default=120.0, gt=0, le=1800)
+    ocr_concurrency: int = Field(default=2, ge=1, le=16)
+    ocr_remove_ruling_lines: bool = False
+    # Pages whose mean OCR confidence is below this send the document to review.
+    ocr_review_below_confidence: float = Field(default=50.0, ge=0, le=100)
+    page_preview_width: int = Field(default=1000, ge=200, le=3000)
+    classification_min_confidence: float = Field(default=0.7, ge=0, le=1)
+    classification_llm_fallback: bool = True
+    classification_corpus_per_class: int = Field(default=200, ge=20, le=2000)
+    # Highest sensitivity whose content may be sent to an external AI provider (C1, ADR-007).
+    ai_external_max_sensitivity: Literal["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"] = (
+        "INTERNAL"
+    )
+
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None
 

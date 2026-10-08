@@ -47,6 +47,9 @@ class IngestItem:
     pages_needing_ocr: list[int] | None = None
     duplicate_of_id: str | None = None
     processing_ms: int | None = None
+    document_type: str | None = None
+    type_confidence: str | None = None
+    review_reasons: list[str] | None = None
 
 
 def _discover(directory: Path) -> list[IngestItem]:
@@ -95,6 +98,9 @@ async def _refresh(client: httpx.AsyncClient, item: IngestItem) -> None:
     body = response.json()
     item.status = body["status"]
     item.duplicate_of_id = body["duplicate_of_id"]
+    item.document_type = body.get("document_type")
+    item.type_confidence = body.get("type_confidence")
+    item.review_reasons = body.get("review_reasons") or []
     if body.get("inspection"):
         item.inspection_kind = body["inspection"]["kind"]
         item.pages_needing_ocr = body["inspection"]["pages_needing_ocr"]

@@ -83,3 +83,78 @@ def mixed_pdf_bytes(page_texts: list[str | None]) -> bytes:
         pdf.showPage()
     pdf.save()
     return buffer.getvalue()
+
+
+def text_pdf_bytes(lines: list[str], *, font_size: float = 14, rotation: int = 0) -> bytes:
+    """A one-page native PDF with one string per line (optionally a /Rotate'd page)."""
+    import pypdfium2 as pdfium
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4, invariant=1)
+    pdf.setFont("Helvetica", font_size)
+    for index, line in enumerate(lines):
+        pdf.drawString(72, 760 - index * font_size * 1.6, line)
+    pdf.showPage()
+    pdf.save()
+    if rotation == 0:
+        return buffer.getvalue()
+    document = pdfium.PdfDocument(buffer.getvalue())
+    document[0].set_rotation(rotation)
+    rotated = io.BytesIO()
+    document.save(rotated)
+    document.close()
+    return rotated.getvalue()
+
+
+def text_image(lines: list[str], *, dpi: int = 200, font_size: float = 14) -> Image.Image:
+    """A grayscale 'scan' of a page with the given lines (rendered, no text layer)."""
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(text_pdf_bytes(lines, font_size=font_size))
+    try:
+        image: Image.Image = document[0].render(scale=dpi / 72).to_pil().convert("L")
+        return image
+    finally:
+        document.close()
+
+
+def scanned_pdf_bytes(pages: list[Image.Image], *, dpi: int = 200) -> bytes:
+    """Image-only PDF (no text layer) from page images."""
+    buffer = io.BytesIO()
+    pages[0].save(buffer, format="PDF", save_all=True, append_images=pages[1:], resolution=dpi)
+    return buffer.getvalue()
+
+
+def image_file_bytes(image: Image.Image, fmt: str = "PNG", *, dpi: int | None = None) -> bytes:
+    buffer = io.BytesIO()
+    if dpi is None:
+        image.save(buffer, format=fmt)
+    else:
+        image.save(buffer, format=fmt, dpi=(dpi, dpi))
+    return buffer.getvalue()
+
+
+INVOICE_LINES = [
+    "INVOICE",
+    "Kestrel Industrial Supply Inc.",
+    "Invoice No.  INV-1001",
+    "Invoice Date  2026-03-01",
+    "Bill To  Meridian Manufacturing Co.",
+    "Description   Qty   Unit Price   Amount",
+    "Hex bolt M10x40 zinc   5   14.31   71.55",
+    "Total Due  71.55 USD",
+    "Please remit payment within 30 days quoting the invoice number.",
+]
+
+
+def invoice_pdf_bytes(pages: int = 1) -> bytes:
+    """A realistic (short) invoice with a text layer that the classifier recognizes confidently."""
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4, invariant=1)
+    for number in range(pages):
+        pdf.setFont("Helvetica", 11)
+        for index, line in enumerate([*INVOICE_LINES, f"Page {number + 1} of {pages}"]):
+            pdf.drawString(72, 760 - index * 18, line)
+        pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()

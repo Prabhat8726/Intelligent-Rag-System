@@ -32,6 +32,7 @@ class AuditAction(StrEnum):
     DOCUMENT_REPROCESS_REQUESTED = "document.reprocess_requested"
     DOCUMENT_PROCESSING_COMPLETED = "document.processing.completed"
     DOCUMENT_PROCESSING_FAILED = "document.processing.failed"
+    DOCUMENT_CLASSIFICATION_CORRECTED = "document.classification.corrected"
 
 
 @dataclass(frozen=True, slots=True)

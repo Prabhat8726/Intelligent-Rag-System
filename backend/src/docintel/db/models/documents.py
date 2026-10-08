@@ -126,6 +126,10 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     duplicate_reason: Mapped[str | None] = mapped_column(String(50))
     processing_error: Mapped[str | None] = mapped_column(String(500))
+    # ReviewReason codes explaining REVIEW_REQUIRED (Phase 5 turns them into review tasks).
+    review_reasons: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
     last_processed_at: Mapped[datetime | None]
     deleted_at: Mapped[datetime | None]
     deleted_by_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -166,6 +170,8 @@ class DocumentVersion(UUIDPrimaryKeyMixin, Base):
     page_count: Mapped[int]
     # Written by the worker's inspection stage: per-page text-layer / OCR-need analysis.
     inspection: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Content findings (card numbers, ...) and the sensitivity they imply (external-AI gate).
+    sensitivity_assessment: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     uploaded_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 

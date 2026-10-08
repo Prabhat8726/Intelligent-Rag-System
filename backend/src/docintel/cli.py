@@ -3,6 +3,7 @@
 docintel seed                      demo departments + one user per role (not in staging/prod)
 docintel create-user --email ...   create a user (password prompted or read from stdin)
 docintel check-ai                  verify the configured AI provider end-to-end
+docintel check-ocr                 verify the OCR engine and languages with a sample image
 docintel worker [--until-idle]     run the background job worker
 docintel worker-health             exit 0 if the worker heartbeat is fresh (container probe)
 docintel generate-documents        synthetic POs/invoices/delivery notes with ground truth
@@ -34,11 +35,15 @@ from docintel.auth.seed import seed_demo_identities
 from docintel.auth.service import UserService
 from docintel.core.config import LogFormat, Settings, get_settings
 from docintel.core.errors import ConflictError
-from docintel.core.logging import configure_logging
+from docintel.core.logging import configure_logging, get_logger
 from docintel.db.models import Role
 from docintel.db.session import create_engine, create_sessionmaker
+from docintel.processing.ocr import OCRUnavailableError, TesseractOCRProvider
+from docintel.processing.services import build_processing_services, load_corrections
 from docintel.storage import build_storage
 from docintel.workers.runner import Worker, heartbeat_age_seconds
+
+logger = get_logger(__name__)
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -221,13 +226,57 @@ async def _check_ai(settings: Settings) -> int:
 
 
 # ---------------------------------------------------------------------------- worker
-async def _worker(settings: Settings, *, until_idle: bool) -> int:
-    engine = create_engine(settings)
+def _ocr_provider(settings: Settings) -> TesseractOCRProvider:
+    return TesseractOCRProvider(
+        command=settings.tesseract_cmd,
+        languages=settings.ocr_languages,
+        timeout_seconds=settings.ocr_page_timeout_seconds,
+    )
+
+
+async def _check_ocr(settings: Settings) -> int:
+    """Verify the OCR engine and languages, then read a rendered sample line."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    provider = _ocr_provider(settings)
     try:
+        version = await provider.verify()
+    except OCRUnavailableError as exc:
+        _fail(str(exc))
+        return EXIT_FAILURE
+    _ok(f"{version}, languages: {settings.ocr_languages}")
+    image = Image.new("L", (1400, 140), 255)
+    ImageDraw.Draw(image).text(
+        (40, 30), "Invoice 1001 Total 250.00", fill=0, font=ImageFont.load_default(size=56)
+    )
+    result = await provider.recognize(image, dpi=300)
+    text = " ".join(word.text for word in result.words)
+    if "1001" not in text:
+        _fail(f"OCR sample read as {text!r}")
+        return EXIT_FAILURE
+    _ok(f"sample read as {text!r} in {result.latency_ms:.0f} ms")
+    return EXIT_OK
+
+
+async def _worker(settings: Settings, *, until_idle: bool) -> int:
+    try:
+        version = await _ocr_provider(settings).verify()
+    except OCRUnavailableError as exc:
+        _fail(f"{exc}. The worker needs Tesseract to process scanned documents.")
+        return EXIT_FAILURE
+    engine = create_engine(settings)
+    sessionmaker = create_sessionmaker(engine)
+    services = None
+    try:
+        async with sessionmaker() as session:
+            corrections = await load_corrections(session)
+        services = build_processing_services(settings, corrections=corrections)
+        logger.info("worker.ocr_ready", engine=version, languages=settings.ocr_languages)
         worker = Worker(
             settings=settings,
-            sessionmaker=create_sessionmaker(engine),
+            sessionmaker=sessionmaker,
             storage=build_storage(settings),
+            services=services,
         )
         if until_idle:
             processed = await worker.run_until_idle()
@@ -240,6 +289,8 @@ async def _worker(settings: Settings, *, until_idle: bool) -> int:
         await worker.run(stop)
         return EXIT_OK
     finally:
+        if services is not None:
+            await services.aclose()
         await engine.dispose()
 
 
@@ -298,7 +349,15 @@ async def _ingest(args: argparse.Namespace) -> int:
         _fail(str(exc))
         return EXIT_FAILURE
     for item in items:
-        detail = item.inspection_kind or item.error or ""
+        detail = item.error or " ".join(
+            part
+            for part in (
+                item.inspection_kind,
+                item.document_type,
+                ",".join(item.review_reasons or []),
+            )
+            if part
+        )
         print(f"  {item.status or item.http_status!s:<16} {item.file:<40} {detail}")
     summary = summarize(items)
     _ok(f"summary: {summary} (report: {Path(args.directory) / 'ingest-report.json'})")
@@ -307,9 +366,13 @@ async def _ingest(args: argparse.Namespace) -> int:
     )
     if unfinished:
         _fail(f"{unfinished} document(s) unfinished after {args.timeout}s; is a worker running?")
-    not_completed = [item.file for item in items if item.status != "COMPLETED"]
-    if not_completed:
-        _fail(f"{len(not_completed)} document(s) not completed: {', '.join(not_completed)}")
+    # REVIEW_REQUIRED is a successful outcome (a person decides), unless --require-completed.
+    accepted = {"COMPLETED"} if args.require_completed else {"COMPLETED", "REVIEW_REQUIRED"}
+    not_done = [item.file for item in items if item.status not in accepted]
+    if not_done:
+        _fail(
+            f"{len(not_done)} document(s) not {'/'.join(sorted(accepted))}: {', '.join(not_done)}"
+        )
         return EXIT_FAILURE
     return EXIT_OK
 
@@ -328,6 +391,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--password-stdin", action="store_true", help="read the password from stdin"
     )
     commands.add_parser("check-ai", help="verify AI provider credentials and models")
+    commands.add_parser("check-ocr", help="verify the OCR engine and configured languages")
     worker = commands.add_parser("worker", help="run the background job worker")
     worker.add_argument(
         "--until-idle", action="store_true", help="process runnable jobs, then exit"
@@ -343,6 +407,11 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--email", default="analyst@docintel.local")
     ingest.add_argument("--password-stdin", action="store_true")
     ingest.add_argument("--timeout", type=float, default=300.0)
+    ingest.add_argument(
+        "--require-completed",
+        action="store_true",
+        help="fail unless every document is COMPLETED (REVIEW_REQUIRED counts as a failure)",
+    )
     return parser
 
 
@@ -365,6 +434,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_create_user(settings, args))
         case "check-ai":
             return asyncio.run(_check_ai(settings))
+        case "check-ocr":
+            return asyncio.run(_check_ocr(settings))
         case "worker":
             configure_logging(level=settings.log_level, log_format=settings.effective_log_format)
             return asyncio.run(_worker(settings, until_idle=args.until_idle))

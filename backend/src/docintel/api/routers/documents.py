@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 
 from docintel.api.deps import (
@@ -19,13 +19,19 @@ from docintel.api.deps import (
 )
 from docintel.api.schemas.common import PROBLEM_RESPONSES, ProblemDetail
 from docintel.api.schemas.documents import (
+    ClassificationCorrection,
+    ClassificationRead,
     DocumentDetail,
     DocumentPage,
     DocumentRead,
+    PageDetail,
+    PageSummary,
     ProcessingJobRead,
+    TableRead,
 )
 from docintel.auth.permissions import Permission
 from docintel.db.models import DocumentStatus, DocumentType, Sensitivity, User
+from docintel.documents.content import DocumentContentService
 from docintel.documents.service import DocumentFilters, DocumentService
 from docintel.documents.validation import SUPPORTED_EXTENSIONS
 
@@ -42,6 +48,8 @@ Reader = Annotated[User, Depends(require_permission(Permission.DOCUMENTS_READ))]
 Uploader = Annotated[User, Depends(require_permission(Permission.DOCUMENTS_UPLOAD))]
 Processor = Annotated[User, Depends(require_permission(Permission.DOCUMENTS_PROCESS))]
 Deleter = Annotated[User, Depends(require_permission(Permission.DOCUMENTS_DELETE))]
+Reviewer = Annotated[User, Depends(require_permission(Permission.DOCUMENTS_REVIEW))]
+PageNumber = Annotated[int, Path(ge=1, le=100_000)]
 
 
 def _content_disposition(filename: str) -> str:
@@ -125,11 +133,104 @@ async def get_document(
 ) -> DocumentDetail:
     service = DocumentService(session, storage, settings)
     document = await service.get(user, document_id)
+    content = DocumentContentService(session, storage)
     job = await service.latest_job(document.id)
+    history = [
+        ClassificationRead.model_validate(record)
+        for record in await content.classifications(document)
+    ]
     detail = DocumentDetail.model_validate(document)
-    detail.inspection = document.current_version.inspection if document.current_version else None
+    version = document.current_version
+    detail.inspection = version.inspection if version else None
+    detail.sensitivity_assessment = version.sensitivity_assessment if version else None
     detail.latest_job = ProcessingJobRead.model_validate(job) if job else None
+    detail.classification = next((c for c in history if c.is_current), None)
+    detail.classification_history = history
+    detail.pages = [PageSummary.model_validate(page) for page in await content.pages(document)]
     return detail
+
+
+@router.get(
+    "/{document_id}/pages/{page_number}",
+    response_model=PageDetail,
+    summary="Text, words with boxes and layout of one page",
+)
+async def get_page(
+    document_id: uuid.UUID,
+    page_number: PageNumber,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+) -> PageDetail:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    page = await DocumentContentService(session, storage).page(document, page_number)
+    return PageDetail.model_validate(page)
+
+
+@router.get(
+    "/{document_id}/pages/{page_number}/image",
+    summary="Rendered page preview (PNG)",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"image/png": {}}}},
+)
+async def get_page_image(
+    document_id: uuid.UUID,
+    page_number: PageNumber,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+) -> StreamingResponse:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    chunks = await DocumentContentService(session, storage).open_page_image(document, page_number)
+    return StreamingResponse(
+        chunks,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, max-age=300",
+            "Content-Security-Policy": "sandbox; default-src 'none'",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get(
+    "/{document_id}/tables",
+    response_model=list[TableRead],
+    summary="Tables detected in the current version (multi-page tables stitched)",
+)
+async def get_tables(
+    document_id: uuid.UUID,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+) -> list[TableRead]:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    tables = await DocumentContentService(session, storage).tables(document)
+    return [TableRead.model_validate(table) for table in tables]
+
+
+@router.patch(
+    "/{document_id}/classification",
+    response_model=ClassificationRead,
+    summary="Correct the document type (human label; becomes training data)",
+)
+async def correct_classification(
+    document_id: uuid.UUID,
+    body: ClassificationCorrection,
+    user: Reviewer,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    meta: RequestMetaDep,
+) -> ClassificationRead:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    record = await DocumentContentService(session, storage).correct_classification(
+        user, document, body.document_type, body.note, meta
+    )
+    return ClassificationRead.model_validate(record)
 
 
 @router.get(

@@ -26,7 +26,9 @@ from docintel.db.models import (
     AuditLog,
     Department,
     Document,
+    DocumentPage,
     DocumentStatus,
+    DocumentType,
     DocumentVersion,
     JobStatus,
     JobType,
@@ -40,7 +42,13 @@ from docintel.storage import LocalStorage, StorageUnavailableError
 from docintel.workers.queue import JOBS_CHANNEL, JobQueue, backoff_seconds
 from docintel.workers.runner import Worker, classify_failure
 from tests.conftest import make_settings
-from tests.factories.files import image_bytes, image_only_pdf_bytes, mixed_pdf_bytes, pdf_bytes
+from tests.factories.files import (
+    image_bytes,
+    image_only_pdf_bytes,
+    invoice_pdf_bytes,
+    mixed_pdf_bytes,
+    pdf_bytes,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -146,12 +154,16 @@ async def test_native_pdf_is_inspected_and_completed(
     worker_settings: Settings,
     uploader: User,
 ) -> None:
-    document_id = await ingest(maker, storage, worker_settings, uploader, pdf_bytes(pages=2))
+    document_id = await ingest(
+        maker, storage, worker_settings, uploader, invoice_pdf_bytes(pages=2)
+    )
 
     assert await make_worker(worker_settings, maker, storage).run_until_idle() == 1
 
     document, version, jobs = await load(maker, document_id)
     assert document.status == DocumentStatus.COMPLETED
+    assert document.review_reasons == []
+    assert document.document_type == DocumentType.INVOICE
     assert document.last_processed_at is not None
     assert document.processing_error is None
     assert version.inspection is not None
@@ -163,7 +175,7 @@ async def test_native_pdf_is_inspected_and_completed(
     (job,) = jobs
     assert job.status == JobStatus.COMPLETED
     assert job.attempts == 1
-    assert set(job.stage_timings) == {"integrity", "inspect"}
+    assert set(job.stage_timings) == {"integrity", "inspect", "extract", "previews", "classify"}
     assert job.locked_by is None
     assert job.finished_at is not None
     async with maker() as session:
@@ -206,10 +218,21 @@ async def test_pages_needing_ocr_are_identified_per_page(
     )
     await make_worker(worker_settings, maker, storage).run_until_idle()
     document, version, _ = await load(maker, document_id)
-    assert document.status == DocumentStatus.COMPLETED
     assert version.inspection is not None
     assert version.inspection["kind"] == kind
     assert version.inspection["pages_needing_ocr"] == ocr_pages
+    async with maker() as session:
+        pages = list(
+            await session.scalars(
+                select(DocumentPage)
+                .where(DocumentPage.document_version_id == version.id)
+                .order_by(DocumentPage.page_number)
+            )
+        )
+    assert [page.page_number for page in pages if page.extraction_method == "OCR"] == ocr_pages
+    if kind != "mixed_pdf":  # blank test images: nothing to read
+        assert document.status == DocumentStatus.REVIEW_REQUIRED
+        assert document.review_reasons == ["NO_TEXT_FOUND"]
 
 
 # ------------------------------------------------------------------------------ failures
@@ -280,7 +303,7 @@ async def test_transient_failure_is_retried_then_succeeds(
     uploader: User,
 ) -> None:
     flaky = FlakyStorage(storage_root, failures=1)
-    document_id = await ingest(maker, flaky, worker_settings, uploader, pdf_bytes())
+    document_id = await ingest(maker, flaky, worker_settings, uploader, invoice_pdf_bytes())
     worker = make_worker(worker_settings, maker, flaky)
 
     assert await worker.run_once()
@@ -408,7 +431,7 @@ async def test_expired_lease_is_reclaimed_and_stale_worker_cannot_complete(
     worker_settings: Settings,
     uploader: User,
 ) -> None:
-    document_id = await ingest(maker, storage, worker_settings, uploader, pdf_bytes())
+    document_id = await ingest(maker, storage, worker_settings, uploader, invoice_pdf_bytes())
     crashed = JobQueue(worker_id="crashed", lease_seconds=60, retry_base_seconds=0)
     async with maker() as session, session.begin():
         claimed = await crashed.claim(session, [JobType.DOCUMENT_PROCESSING])
@@ -487,7 +510,7 @@ async def test_running_worker_is_woken_by_notify_not_polling(
     task = asyncio.create_task(worker.run(stop))
     try:
         await asyncio.sleep(0.5)  # let the loop go idle and the listener subscribe
-        document_id = await ingest(maker, storage, settings, uploader, pdf_bytes())
+        document_id = await ingest(maker, storage, settings, uploader, invoice_pdf_bytes())
         async with asyncio.timeout(10):
             while (await load(maker, document_id))[0].status != DocumentStatus.COMPLETED:  # noqa: ASYNC110 (polling DB state)
                 await asyncio.sleep(0.1)

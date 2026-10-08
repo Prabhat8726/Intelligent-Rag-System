@@ -228,3 +228,21 @@ async def login(client: httpx.AsyncClient, email: str, password: str = TEST_PASS
     assert response.status_code == 200, response.text
     token: str = response.json()["access_token"]
     return token
+
+
+# ------------------------------------------------------------------------------ OCR
+@pytest.fixture(scope="session")
+async def tesseract() -> Any:
+    """The real Tesseract engine. Missing engine = failure with an install hint, never a skip."""
+    from docintel.processing.ocr import OCRUnavailableError, TesseractOCRProvider
+
+    provider = TesseractOCRProvider(languages="eng", timeout_seconds=60)
+    try:
+        await provider.verify()
+    except OCRUnavailableError as exc:
+        pytest.fail(
+            f"{exc}. OCR tests need Tesseract 5 with English and OSD data: "
+            "apt install tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd "
+            "(or brew install tesseract)"
+        )
+    return provider
