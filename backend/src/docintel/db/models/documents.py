@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     BigInteger,
@@ -26,6 +26,9 @@ from docintel.core.config import StorageBackendName
 from docintel.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from docintel.db.models.identity import Department, User
 from docintel.db.models.types import str_enum
+
+if TYPE_CHECKING:
+    from docintel.db.models.extraction import Vendor
 
 
 class DocumentStatus(StrEnum):
@@ -88,6 +91,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_documents_owner_id", "owner_id"),
         Index("ix_documents_document_type", "document_type"),
         Index("ix_documents_duplicate_of_id", "duplicate_of_id"),
+        Index("ix_documents_vendor_id", "vendor_id"),
         CheckConstraint(
             "type_confidence IS NULL OR (type_confidence >= 0 AND type_confidence <= 1)",
             name="type_confidence_range",
@@ -125,6 +129,10 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("documents.id", ondelete="SET NULL")
     )
     duplicate_reason: Mapped[str | None] = mapped_column(String(50))
+    # Vendor master entry the extracted vendor name resolved to (Phase 4).
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="SET NULL")
+    )
     processing_error: Mapped[str | None] = mapped_column(String(500))
     # ReviewReason codes explaining REVIEW_REQUIRED (Phase 5 turns them into review tasks).
     review_reasons: Mapped[list[str]] = mapped_column(
@@ -141,6 +149,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_version: Mapped[DocumentVersion | None] = relationship(
         foreign_keys=[current_version_id], post_update=True, lazy="joined"
     )
+    vendor: Mapped[Vendor | None] = relationship(lazy="joined")
 
 
 class DocumentVersion(UUIDPrimaryKeyMixin, Base):

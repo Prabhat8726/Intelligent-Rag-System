@@ -33,6 +33,9 @@ class AuditAction(StrEnum):
     DOCUMENT_PROCESSING_COMPLETED = "document.processing.completed"
     DOCUMENT_PROCESSING_FAILED = "document.processing.failed"
     DOCUMENT_CLASSIFICATION_CORRECTED = "document.classification.corrected"
+    DOCUMENT_FIELD_CORRECTED = "document.extraction.field_corrected"
+    VENDOR_CREATED = "vendor.created"
+    VENDOR_UPDATED = "vendor.updated"
 
 
 @dataclass(frozen=True, slots=True)

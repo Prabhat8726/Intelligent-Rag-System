@@ -5,10 +5,12 @@ the access policy is applied before anything here runs.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import AsyncIterator
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from docintel.audit.service import AuditAction, RequestMeta, record_audit_event
@@ -19,16 +21,29 @@ from docintel.db.models import (
     ClassificationMethod,
     Document,
     DocumentClassification,
+    DocumentExtraction,
     DocumentPage,
     DocumentStatus,
     DocumentTable,
     DocumentType,
+    JobType,
     ReviewReason,
     User,
 )
+from docintel.fields.schemas import schema_for
 from docintel.storage import DocumentStorage, StorageError
+from docintel.workers.queue import enqueue_job
 
 logger = get_logger(__name__)
+
+EXTRACTION_REASONS = frozenset(
+    {
+        ReviewReason.EXTRACTION_FAILED.value,
+        ReviewReason.MISSING_REQUIRED_FIELDS.value,
+        ReviewReason.EXTRACTION_UNCERTAIN.value,
+        ReviewReason.EXTRACTION_INCONSISTENT.value,
+    }
+)
 
 PAGE_NOT_FOUND = "Page not found."
 HISTORY_LIMIT = 20
@@ -108,8 +123,14 @@ class DocumentContentService:
         label: DocumentType,
         note: str | None,
         meta: RequestMeta,
+        *,
+        max_attempts: int = 3,
     ) -> DocumentClassification:
-        """Record a human label as the current classification (worker results never override it)."""
+        """Record a human label as the current classification (worker results never override it).
+
+        If the label changes the extraction schema, the version is queued for re-extraction with
+        the new schema; a label without a schema (OTHER) retires the current extraction.
+        """
         if document.current_version_id is None:
             raise NotFoundError("Document not found.")
         # Serialize with the worker's result transaction, which locks the same row.
@@ -155,6 +176,7 @@ class DocumentContentService:
             for reason in locked.review_reasons
             if reason != ReviewReason.CLASSIFICATION_UNCERTAIN.value
         ]
+        reextract = await self._follow_schema(actor, locked, label, max_attempts)
         if locked.status == DocumentStatus.REVIEW_REQUIRED and not locked.review_reasons:
             locked.status = DocumentStatus.COMPLETED
         record_audit_event(
@@ -165,8 +187,55 @@ class DocumentContentService:
             actor=actor,
             entity_type="document",
             entity_id=locked.id,
-            details={"from": previous, "to": label.value, "note": bool(note)},
+            details={
+                "from": previous,
+                "to": label.value,
+                "note": bool(note),
+                "reextraction_job_id": str(reextract) if reextract else None,
+            },
         )
         await self._session.commit()
         await self._session.refresh(record)
         return record
+
+    async def _follow_schema(
+        self, actor: User, document: Document, label: DocumentType, max_attempts: int
+    ) -> uuid.UUID | None:
+        """Keep the extraction in line with the human label. Returns a queued job id, if any."""
+        current = await self._session.scalar(
+            select(DocumentExtraction).where(
+                DocumentExtraction.document_id == document.id,
+                DocumentExtraction.is_current.is_(True),
+            )
+        )
+        schema = schema_for(label)
+        if current is not None and schema is not None and current.schema_name == schema.name:
+            return None
+        document.review_reasons = [
+            reason for reason in document.review_reasons if reason not in EXTRACTION_REASONS
+        ]
+        if schema is None:
+            if current is not None:
+                current.is_current = False
+            document.vendor_id = None
+            return None
+        if document.current_version_id is None or document.status in (
+            DocumentStatus.PENDING,
+            DocumentStatus.PROCESSING,
+        ):
+            return None  # the pending run will use the human label
+        try:
+            async with self._session.begin_nested():
+                job = await enqueue_job(
+                    self._session,
+                    job_type=JobType.DOCUMENT_PROCESSING,
+                    max_attempts=max_attempts,
+                    document_id=document.id,
+                    document_version_id=document.current_version_id,
+                    requested_by_id=actor.id,
+                    payload={"reason": "classification corrected"},
+                )
+        except IntegrityError:
+            return None  # already queued; that run will use the human label
+        document.status = DocumentStatus.PENDING
+        return job.id

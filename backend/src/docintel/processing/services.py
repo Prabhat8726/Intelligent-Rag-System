@@ -13,10 +13,11 @@ from functools import lru_cache
 
 from sqlalchemy import Text, func, literal, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from docintel.ai.accounting import AccountedLLMProvider, DatabaseLLMCallLog
 from docintel.ai.base import LLMProvider
-from docintel.ai.registry import build_llm_provider
+from docintel.ai.registry import build_llm_provider, model_prices
 from docintel.ai.routing import ExternalAIGate
 from docintel.classification.corpus import LabelledText, generate_corpus
 from docintel.classification.model import LocalClassifier
@@ -30,6 +31,10 @@ from docintel.db.models import (
     DocumentPage,
     Sensitivity,
 )
+from docintel.fields.llm import ExtractionCache
+from docintel.fields.service import FieldExtractionService, policy_from_settings
+from docintel.fields.store import DatabaseExtractionCache
+from docintel.fields.vendors import DatabaseVendorDirectory, StaticVendorDirectory, VendorDirectory
 from docintel.processing.extraction import ExtractionOptions
 from docintel.processing.ocr import OCRProvider, TesseractOCRProvider
 
@@ -80,6 +85,7 @@ class ProcessingServices:
     classifier: DocumentClassifier
     extraction: ExtractionOptions
     ocr_review_below_confidence: float
+    fields: FieldExtractionService
     llm: LLMProvider | None = None
 
     async def aclose(self) -> None:
@@ -90,12 +96,22 @@ class ProcessingServices:
 def build_processing_services(
     settings: Settings,
     *,
+    sessionmaker: async_sessionmaker[AsyncSession] | None = None,
     corrections: Sequence[LabelledText] = (),
     ocr: OCRProvider | None = None,
     llm: LLMProvider | None = None,
 ) -> ProcessingServices:
-    if llm is None and settings.gemini_api_key is not None and settings.classification_llm_fallback:
+    """Engines for the pipeline. With a sessionmaker, LLM calls are accounted in `llm_calls`
+    (and the daily budget enforced), vendors resolve against the database and identical model
+    inputs reuse stored outputs."""
+    wants_llm = settings.classification_llm_fallback or settings.extraction_llm_mode != "never"
+    if llm is None and settings.llm_configured and wants_llm:
         llm = build_llm_provider(settings)
+    if llm is not None and sessionmaker is not None:
+        log = DatabaseLLMCallLog(
+            sessionmaker, daily_request_budget=settings.llm_daily_request_budget
+        )
+        llm = AccountedLLMProvider(llm, log, model_prices(settings))
     local = train_classifier(settings.classification_corpus_per_class, corrections)
     logger.info(
         "classifier.ready",
@@ -107,7 +123,15 @@ def build_processing_services(
     gate = ExternalAIGate(
         max_sensitivity=Sensitivity(settings.ai_external_max_sensitivity),
         provider_configured=llm is not None,
+        provider_local=llm.local if llm is not None else False,
     )
+    vendors: VendorDirectory
+    cache: ExtractionCache | None
+    if sessionmaker is not None:
+        vendors = DatabaseVendorDirectory(sessionmaker, settings.vendor_match_min_score)
+        cache = DatabaseExtractionCache(sessionmaker)
+    else:
+        vendors, cache = StaticVendorDirectory(), None
     classifier = DocumentClassifier(
         local=local,
         gate=gate,
@@ -131,5 +155,15 @@ def build_processing_services(
             remove_ruling_lines=settings.ocr_remove_ruling_lines,
         ),
         ocr_review_below_confidence=settings.ocr_review_below_confidence,
+        fields=FieldExtractionService(
+            policy=policy_from_settings(settings),
+            llm=llm,
+            gate=gate,
+            vendors=vendors,
+            cache=cache,
+            max_prompt_chars=settings.extraction_max_prompt_chars,
+            max_output_tokens=settings.extraction_max_output_tokens,
+            max_images=settings.extraction_max_images,
+        ),
         llm=llm,
     )

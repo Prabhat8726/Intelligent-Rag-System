@@ -50,6 +50,11 @@ class IngestItem:
     document_type: str | None = None
     type_confidence: str | None = None
     review_reasons: list[str] | None = None
+    variant: str | None = None  # native | scanned (from the dataset manifest)
+    extraction_status: str | None = None
+    extraction_confidence: str | None = None
+    review_level: str | None = None
+    vendor: str | None = None
 
 
 def _discover(directory: Path) -> list[IngestItem]:
@@ -57,7 +62,8 @@ def _discover(directory: Path) -> list[IngestItem]:
     if manifest.is_file():
         data = json.loads(manifest.read_text(encoding="utf-8"))
         return [
-            IngestItem(file=entry["file"], doc_id=entry["doc_id"]) for entry in data["documents"]
+            IngestItem(file=entry["file"], doc_id=entry["doc_id"], variant=entry.get("variant"))
+            for entry in data["documents"]
         ]
     return [
         IngestItem(file=str(path.relative_to(directory)), doc_id=None)
@@ -104,11 +110,19 @@ async def _refresh(client: httpx.AsyncClient, item: IngestItem) -> None:
     if body.get("inspection"):
         item.inspection_kind = body["inspection"]["kind"]
         item.pages_needing_ocr = body["inspection"]["pages_needing_ocr"]
+    item.vendor = (body.get("vendor") or {}).get("canonical_name")
     job = body.get("latest_job")
     if job:
         item.processing_ms = job.get("duration_ms")
         if item.status == "FAILED":
             item.error = body.get("processing_error") or job.get("last_error")
+    if item.status in ("COMPLETED", "REVIEW_REQUIRED"):
+        extraction = await client.get(f"/api/v1/documents/{item.document_id}/extraction")
+        if extraction.status_code == httpx.codes.OK:
+            data = extraction.json()
+            item.extraction_status = data["status"]
+            item.extraction_confidence = data["overall_confidence"]
+            item.review_level = data["review_level"]
 
 
 async def ingest_directory(

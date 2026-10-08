@@ -10,6 +10,7 @@ fails, the document goes to human review - classification never fails the proces
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -218,8 +219,16 @@ class DocumentClassifier:
         return self.local.fingerprint
 
     async def classify(
-        self, text: str, *, declared: Sensitivity, assessment: SensitivityAssessment
+        self,
+        text: str,
+        *,
+        declared: Sensitivity,
+        assessment: SensitivityAssessment,
+        document_id: uuid.UUID | None = None,
+        allow_llm: bool = True,
     ) -> ClassificationOutcome:
+        """`allow_llm=False` when a reviewer already labelled the document: the machine opinion
+        is still recorded, but not worth an external call."""
         if not has_enough_text(text):
             return ClassificationOutcome(
                 None,
@@ -260,6 +269,9 @@ class DocumentClassifier:
             ReviewReason.CLASSIFICATION_UNCERTAIN,
             self.model_version,
         )
+        if not allow_llm:
+            signals["llm"] = {"used": False, "reason": "document has a human label"}
+            return uncertain
         if self._llm is None or not decision.allowed:
             reason = decision.reason if not decision.allowed else "LLM fallback disabled"
             signals["llm"] = {"used": False, "reason": reason}
@@ -272,6 +284,8 @@ class DocumentClassifier:
                     tier=ModelTier.FAST,
                     max_output_tokens=200,
                     purpose="classification",
+                    document_id=document_id,
+                    prompt_version=PROMPT_VERSION,
                 ),
                 LLMClassification,
             )

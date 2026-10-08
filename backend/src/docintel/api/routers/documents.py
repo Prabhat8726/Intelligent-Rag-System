@@ -29,9 +29,17 @@ from docintel.api.schemas.documents import (
     ProcessingJobRead,
     TableRead,
 )
+from docintel.api.schemas.extraction import (
+    ExtractedFieldRead,
+    ExtractionRead,
+    FieldCorrection,
+    FieldEvidence,
+)
+from docintel.api.schemas.vendors import VendorSummary
 from docintel.auth.permissions import Permission
 from docintel.db.models import DocumentStatus, DocumentType, Sensitivity, User
 from docintel.documents.content import DocumentContentService
+from docintel.documents.extraction import ExtractionService
 from docintel.documents.service import DocumentFilters, DocumentService
 from docintel.documents.validation import SUPPORTED_EXTENSIONS
 
@@ -101,6 +109,9 @@ async def list_documents(
     q: Annotated[str | None, Query(max_length=200, description="Filename contains")] = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    vendor_id: Annotated[
+        uuid.UUID | None, Query(description="Documents resolved to this vendor")
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
 ) -> DocumentPage:
@@ -111,6 +122,7 @@ async def list_documents(
         filename_contains=q,
         created_from=created_from,
         created_to=created_to,
+        vendor_id=vendor_id,
     )
     items, total = await DocumentService(session, storage, settings).list(
         user, filters, limit=limit, offset=offset
@@ -228,9 +240,91 @@ async def correct_classification(
 ) -> ClassificationRead:
     document = await DocumentService(session, storage, settings).get(user, document_id)
     record = await DocumentContentService(session, storage).correct_classification(
-        user, document, body.document_type, body.note, meta
+        user, document, body.document_type, body.note, meta, max_attempts=settings.job_max_attempts
     )
     return ClassificationRead.model_validate(record)
+
+
+@router.get(
+    "/{document_id}/extraction",
+    response_model=ExtractionRead,
+    summary="Structured fields with provenance, confidence and consistency checks",
+    responses={404: {"model": ProblemDetail, "description": "Not found or not extracted"}},
+)
+async def get_extraction(
+    document_id: uuid.UUID,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+) -> ExtractionRead:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    service = ExtractionService(session, settings)
+    record = await service.require_current(document)
+    result = ExtractionRead.model_validate(record)
+    vendor = await service.vendor(document)
+    result.vendor = VendorSummary.model_validate(vendor) if vendor else None
+    return result
+
+
+@router.get(
+    "/{document_id}/evidence",
+    response_model=list[FieldEvidence],
+    summary="Where each extracted value was read: page, quote and box (Module 7)",
+    responses={404: {"model": ProblemDetail, "description": "Not found or not extracted"}},
+)
+async def get_evidence(
+    document_id: uuid.UUID,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    field_path: Annotated[
+        str | None, Query(max_length=120, description="Only this field, e.g. 'total'")
+    ] = None,
+) -> list[FieldEvidence]:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    record = await ExtractionService(session, settings).require_current(document)
+    return [
+        FieldEvidence(
+            id=row.id,
+            field_path=row.field_path,
+            value=row.corrected_value if row.corrected_value is not None else row.original_value,
+            page_number=row.page_number,
+            source_text=row.source_text,
+            bbox=row.bbox,
+            evidence_status=row.evidence_status,
+            origin=row.origin,
+            confidence=row.confidence,
+            corrected=row.corrected_value is not None,
+        )
+        for row in record.fields
+        if (row.original_value is not None or row.corrected_value is not None)
+        and (field_path is None or row.field_path == field_path)
+    ]
+
+
+@router.patch(
+    "/{document_id}/extraction/fields/{field_id}",
+    response_model=ExtractedFieldRead,
+    summary="Correct or confirm an extracted value (audited; re-scores the extraction)",
+    responses={422: {"model": ProblemDetail, "description": "Value does not fit the field type"}},
+)
+async def correct_field(
+    document_id: uuid.UUID,
+    field_id: uuid.UUID,
+    body: FieldCorrection,
+    user: Reviewer,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    meta: RequestMetaDep,
+) -> ExtractedFieldRead:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    row = await ExtractionService(session, settings).correct_field(
+        user, document, field_id, body.value, body.note, meta
+    )
+    return ExtractedFieldRead.model_validate(row)
 
 
 @router.get(

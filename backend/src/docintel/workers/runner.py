@@ -85,7 +85,7 @@ class Worker:
         services: ProcessingServices | None = None,
     ) -> None:
         self._settings = settings
-        self.services = services or build_processing_services(settings)
+        self.services = services or build_processing_services(settings, sessionmaker=sessionmaker)
         self._sessionmaker = sessionmaker
         self._queue = JobQueue(
             worker_id=worker_id or default_worker_id(),
@@ -94,7 +94,7 @@ class Worker:
         )
         self._handlers = {
             JobType.DOCUMENT_PROCESSING: DocumentProcessingHandler(
-                storage, build_stages(storage, self.services)
+                storage, build_stages(storage, self.services), self.services
             )
         }
         self._wakeup = asyncio.Event()

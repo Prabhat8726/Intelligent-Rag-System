@@ -44,6 +44,7 @@ from docintel.ai.errors import (
     StructuredOutputError,
 )
 from docintel.ai.rate_limit import AsyncRateLimiter
+from docintel.ai.schema import json_schema_for, strip_code_fence
 from docintel.core.logging import get_logger
 
 PROVIDER_NAME = "gemini"
@@ -86,14 +87,6 @@ def l2_normalize(values: Sequence[float]) -> list[float]:
         msg = "cannot normalize a zero vector"
         raise ValueError(msg)
     return [v / norm for v in values]
-
-
-def _strip_code_fence(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else ""
-        stripped = stripped.removesuffix("```").strip()
-    return stripped
 
 
 class _GeminiClient:
@@ -188,6 +181,14 @@ class GeminiLLMProvider(_GeminiClient):
     def model_for(self, tier: ModelTier) -> str:
         return self._models[tier]
 
+    @property
+    def supports_images(self) -> bool:
+        return True
+
+    @property
+    def local(self) -> bool:
+        return False
+
     def _config(
         self, request: LLMRequest, json_schema: dict[str, Any] | None
     ) -> types.GenerateContentConfig:
@@ -211,10 +212,15 @@ class GeminiLLMProvider(_GeminiClient):
         self, request: LLMRequest, json_schema: dict[str, Any] | None
     ) -> tuple[str, LLMUsage, str | None]:
         model = self.model_for(request.tier)
+        contents: list[types.PartUnion] = [
+            types.Part.from_bytes(data=image.data, mime_type=image.mime_type)
+            for image in request.images
+        ]
+        contents.append(request.prompt)
         call = functools.partial(
             self._client.aio.models.generate_content,
             model=model,
-            contents=request.prompt,
+            contents=contents if request.images else request.prompt,
             config=self._config(request, json_schema),
         )
         started = time.perf_counter()
@@ -281,10 +287,10 @@ class GeminiLLMProvider(_GeminiClient):
         self, request: LLMRequest, schema: type[T]
     ) -> StructuredLLMResponse[T]:
         text, usage, finish_reason = await self._generate(
-            request, json_schema=schema.model_json_schema()
+            request, json_schema=json_schema_for(schema)
         )
         try:
-            data = schema.model_validate_json(_strip_code_fence(text))
+            data = schema.model_validate_json(strip_code_fence(text))
         except ValidationError as exc:
             errors = [
                 f"{'.'.join(str(part) for part in error['loc']) or '<root>'}: {error['msg']}"

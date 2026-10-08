@@ -31,6 +31,7 @@ from docintel.auth.tokens import create_access_token
 from docintel.core.config import Settings
 from docintel.db import migrations_runner
 from docintel.db.models import Department, Role, User
+from docintel.vendors.seed import seed_demo_vendors
 
 TEST_JWT_SECRET = "test-only-jwt-signing-key-0123456789abcdefghijklmnop"
 TEST_PASSWORD = "correct horse battery staple"
@@ -97,6 +98,9 @@ def database_url() -> Iterator[str]:
 @pytest.fixture(scope="session")
 async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
     engine = create_async_engine(database_url)
+    # Vendor master data, as after `docintel seed`: extraction resolves vendors against it.
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        await seed_demo_vendors(session)
     yield engine
     await engine.dispose()
 

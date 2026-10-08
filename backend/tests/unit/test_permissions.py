@@ -31,6 +31,7 @@ EXPECTED: dict[Permission, set[Role]] = {
     Permission.AUDIT_READ: {A, M},
     Permission.DASHBOARD_READ: {A, M, AN, R, V},
     Permission.EVALUATIONS_READ: {A, M, AN},
+    Permission.VENDORS_MANAGE: {A, M},
     Permission.USERS_MANAGE: {A},
 }
 

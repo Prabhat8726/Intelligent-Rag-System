@@ -175,7 +175,14 @@ async def test_native_pdf_is_inspected_and_completed(
     (job,) = jobs
     assert job.status == JobStatus.COMPLETED
     assert job.attempts == 1
-    assert set(job.stage_timings) == {"integrity", "inspect", "extract", "previews", "classify"}
+    assert set(job.stage_timings) == {
+        "integrity",
+        "inspect",
+        "extract",
+        "previews",
+        "classify",
+        "fields",
+    }
     assert job.locked_by is None
     assert job.finished_at is not None
     async with maker() as session:

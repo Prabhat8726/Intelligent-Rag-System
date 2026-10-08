@@ -6,6 +6,7 @@ later phases) are selected by configuration in `docintel.ai.registry`.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -32,6 +33,14 @@ class EmbeddingTask(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ImageInput:
+    """An image sent with a prompt (page previews for vision-capable models)."""
+
+    data: bytes
+    mime_type: str = "image/png"
+
+
+@dataclass(frozen=True, slots=True)
 class LLMRequest:
     prompt: str
     system_instruction: str | None = None
@@ -39,6 +48,11 @@ class LLMRequest:
     max_output_tokens: int | None = None
     # Free-form label for usage accounting and logs, e.g. "extraction.invoice".
     purpose: str = "general"
+    # Sent only to providers that support images (`supports_images`); others ignore them.
+    images: tuple[ImageInput, ...] = ()
+    # Accounting context (llm_calls): never sent to the provider.
+    document_id: uuid.UUID | None = None
+    prompt_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +92,15 @@ class EmbeddingResult:
 class LLMProvider(Protocol):
     @property
     def name(self) -> str: ...
+
+    @property
+    def supports_images(self) -> bool: ...
+
+    @property
+    def local(self) -> bool:
+        """True if content stays inside the deployment (e.g. a self-hosted model server); the
+        external-AI sensitivity gate does not apply then."""
+        ...
 
     def model_for(self, tier: ModelTier) -> str: ...
 

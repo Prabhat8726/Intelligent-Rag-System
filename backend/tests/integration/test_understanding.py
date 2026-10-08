@@ -9,37 +9,25 @@ from __future__ import annotations
 import io
 import json
 import uuid
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-import httpx
 import pytest
 from PIL import Image
 from pydantic import BaseModel
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy import select
 
 from docintel.ai.base import LLMRequest, LLMResponse, LLMUsage, ModelTier, StructuredLLMResponse
-from docintel.api.app import create_app
-from docintel.core.config import Settings
 from docintel.db.models import (
     AuditLog,
-    Department,
     DocumentClassification,
     DocumentType,
-    ProcessingJob,
-    Role,
-    User,
 )
 from docintel.processing.ocr import OCRResult, OCRWord, Orientation
 from docintel.processing.services import build_processing_services, load_corrections
-from docintel.storage import LocalStorage
 from docintel.synthetic.generator import generate_dataset
 from docintel.synthetic.scenarios import Scenario
 from docintel.workers.runner import Worker
-from tests.conftest import auth_headers, make_settings
+from tests.conftest import auth_headers
 from tests.factories.files import (
     INVOICE_LINES,
     invoice_pdf_bytes,
@@ -47,106 +35,34 @@ from tests.factories.files import (
     scanned_pdf_bytes,
     text_image,
 )
+from tests.integration.conftest import Env
 
 pytestmark = pytest.mark.integration
 
 
-@dataclass
-class Env:
-    settings: Settings
-    maker: async_sessionmaker[AsyncSession]
-    storage: LocalStorage
-    client: httpx.AsyncClient
-    analyst: User
-    reviewer: User
-    viewer: User
-    outsider: User
-
-    def worker(self) -> Worker:
-        return Worker(settings=self.settings, sessionmaker=self.maker, storage=self.storage)
-
-    async def upload(
-        self,
-        content: bytes,
-        filename: str = "doc.pdf",
-        content_type: str = "application/pdf",
-        sensitivity: str = "INTERNAL",
-    ) -> str:
-        response = await self.client.post(
-            "/api/v1/documents",
-            headers=auth_headers(self.analyst),
-            files={"file": (filename, content, content_type)},
-            data={"sensitivity": sensitivity},
-        )
-        assert response.status_code == 201, response.text
-        document_id: str = response.json()["id"]
-        return document_id
-
-    async def detail(self, document_id: str, user: User | None = None) -> dict[str, Any]:
-        response = await self.client.get(
-            f"/api/v1/documents/{document_id}", headers=auth_headers(user or self.analyst)
-        )
-        assert response.status_code == 200, response.text
-        data: dict[str, Any] = response.json()
-        return data
-
-
-@pytest.fixture
-async def env(engine: AsyncEngine, database_url: str, tmp_path: Path) -> AsyncIterator[Env]:
-    storage_root = tmp_path / "storage"
-    settings = make_settings(
-        database_url=database_url,
-        storage_local_root=storage_root,
-        job_retry_base_seconds=0,
-        page_preview_width=300,
-    )
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session, session.begin():
-        await session.execute(delete(ProcessingJob))  # nothing left over from other tests
-        finance = Department(id=uuid.uuid4(), name=f"Finance-{uuid.uuid4().hex[:6]}")
-        legal = Department(id=uuid.uuid4(), name=f"Legal-{uuid.uuid4().hex[:6]}")
-        users = {
-            role_name: User(
-                id=uuid.uuid4(),
-                email=f"{role_name}-{uuid.uuid4().hex[:8]}@example.test",
-                full_name=f"Test {role_name}",
-                password_hash="not-used",
-                role=role,
-                department_id=(legal if role_name == "outsider" else finance).id,
-            )
-            for role_name, role in (
-                ("analyst", Role.ANALYST),
-                ("reviewer", Role.REVIEWER),
-                ("viewer", Role.VIEWER),
-                ("outsider", Role.REVIEWER),
-            )
-        }
-        session.add_all([finance, legal, *users.values()])
-    app = create_app(settings)
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app, client=("203.0.113.10", 51000))
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            yield Env(
-                settings,
-                maker,
-                LocalStorage(storage_root),
-                client,
-                users["analyst"],
-                users["reviewer"],
-                users["viewer"],
-                users["outsider"],
-            )
-
-
 class FakeLLM:
+    """Answers classification requests; extraction requests get an empty (all-null) result."""
+
     def __init__(self, label: DocumentType, quote: str) -> None:
         self.label = label
         self.quote = quote
-        self.calls = 0
+        self.purposes: list[str] = []
+
+    @property
+    def calls(self) -> int:
+        return self.purposes.count("classification")
 
     @property
     def name(self) -> str:
         return "fake"
+
+    @property
+    def supports_images(self) -> bool:
+        return False
+
+    @property
+    def local(self) -> bool:
+        return False
 
     def model_for(self, tier: ModelTier) -> str:
         return "fake-fast"
@@ -157,7 +73,13 @@ class FakeLLM:
     async def generate_structured[T: BaseModel](
         self, request: LLMRequest, schema: type[T]
     ) -> StructuredLLMResponse[T]:
-        self.calls += 1
+        self.purposes.append(request.purpose)
+        if request.purpose != "classification":
+            return StructuredLLMResponse(
+                data=schema.model_validate({}),
+                raw_text="{}",
+                usage=LLMUsage(provider="fake", model="fake", latency_ms=5),
+            )
         data = schema.model_validate({"document_type": self.label, "evidence_quote": self.quote})
         return StructuredLLMResponse(
             data=data,
@@ -265,9 +187,16 @@ async def test_uncertain_document_is_corrected_and_correction_survives_reprocess
     await env.worker().run_until_idle()
     detail = await env.detail(document_id)
     assert detail["status"] == "REVIEW_REQUIRED"
-    assert detail["review_reasons"] == ["CLASSIFICATION_UNCERTAIN"]
+    # Uncertain type, and the one-line "invoice" lacks most invoice fields.
+    assert detail["review_reasons"] == ["CLASSIFICATION_UNCERTAIN", "MISSING_REQUIRED_FIELDS"]
     machine = detail["classification"]
     assert machine["signals"]["llm"]["used"] is False
+    extraction = (
+        await env.client.get(
+            f"/api/v1/documents/{document_id}/extraction", headers=auth_headers(env.analyst)
+        )
+    ).json()
+    assert extraction["schema_name"] == "invoice"
 
     url = f"/api/v1/documents/{document_id}/classification"
     body = {"document_type": "RECEIPT", "note": "till receipt, not a bill"}
@@ -284,24 +213,31 @@ async def test_uncertain_document_is_corrected_and_correction_survives_reprocess
     assert corrected["created_by"]["id"] == str(env.reviewer.id)
     assert corrected["signals"]["previous"]["method"] == "LOCAL_MODEL"
 
+    # A different type means a different schema: the version is queued for re-extraction.
     detail = await env.detail(document_id)
-    assert detail["status"] == "COMPLETED"
+    assert detail["status"] == "PENDING"
     assert detail["review_reasons"] == []
     assert detail["document_type"] == "RECEIPT"
-    assert [c["method"] for c in detail["classification_history"]] == ["HUMAN", "LOCAL_MODEL"]
-
-    # Reprocessing records a new machine opinion but the human label stays current.
-    reprocess = await env.client.post(
-        f"/api/v1/documents/{document_id}/process", headers=auth_headers(env.analyst)
-    )
-    assert reprocess.status_code == 202
+    assert detail["latest_job"]["status"] == "QUEUED"
     await env.worker().run_until_idle()
+
     detail = await env.detail(document_id)
-    assert detail["status"] == "COMPLETED"
     assert detail["document_type"] == "RECEIPT"
     assert detail["classification"]["method"] == "HUMAN"
-    assert [c["is_current"] for c in detail["classification_history"]] == [False, True, False]
+    assert "CLASSIFICATION_UNCERTAIN" not in detail["review_reasons"]
+    history = detail["classification_history"]
+    assert [c["method"] for c in history] == ["LOCAL_MODEL", "HUMAN", "LOCAL_MODEL"]
+    assert [c["is_current"] for c in history] == [False, True, False]
+    # The machine opinion is still recorded, but a labelled document is not worth an LLM call.
+    if "llm" in history[0]["signals"]:
+        assert history[0]["signals"]["llm"]["reason"] == "document has a human label"
     assert len(detail["pages"]) == 1  # results replaced, not duplicated
+    extraction = (
+        await env.client.get(
+            f"/api/v1/documents/{document_id}/extraction", headers=auth_headers(env.analyst)
+        )
+    ).json()
+    assert extraction["schema_name"] == "receipt"
 
     async with env.maker() as session:
         audit = await session.scalar(
@@ -312,6 +248,7 @@ async def test_uncertain_document_is_corrected_and_correction_survives_reprocess
         )
         assert audit is not None
         assert audit.details["to"] == "RECEIPT"
+        assert audit.details["reextraction_job_id"] is not None
         corrections = await load_corrections(session)
     assert any(
         sample.label == DocumentType.RECEIPT and "INV-1001" in sample.text for sample in corrections
@@ -339,7 +276,7 @@ async def test_llm_fallback_confirms_an_uncertain_label(env: Env) -> None:
         settings=env.settings,
         sessionmaker=env.maker,
         storage=env.storage,
-        services=build_processing_services(strict, llm=llm),
+        services=build_processing_services(strict, sessionmaker=env.maker, llm=llm),
     )
     document_id = await env.upload(invoice_pdf_bytes(), "inv.pdf")
     await worker.run_until_idle()
@@ -360,7 +297,7 @@ async def test_confidential_documents_never_reach_the_llm(env: Env) -> None:
         settings=env.settings,
         sessionmaker=env.maker,
         storage=env.storage,
-        services=build_processing_services(strict, llm=llm),
+        services=build_processing_services(strict, sessionmaker=env.maker, llm=llm),
     )
     document_id = await env.upload(invoice_pdf_bytes(), "inv.pdf", sensitivity="CONFIDENTIAL")
     await worker.run_until_idle()
@@ -382,7 +319,9 @@ async def test_low_ocr_confidence_sends_the_document_to_review(env: Env) -> None
         settings=env.settings,
         sessionmaker=env.maker,
         storage=env.storage,
-        services=build_processing_services(env.settings, ocr=LowConfidenceOCR()),
+        services=build_processing_services(
+            env.settings, sessionmaker=env.maker, ocr=LowConfidenceOCR()
+        ),
     )
     blank_scan = scanned_pdf_bytes([Image.new("L", (600, 800), 255)], dpi=100)
     document_id = await env.upload(blank_scan, "faint.pdf")

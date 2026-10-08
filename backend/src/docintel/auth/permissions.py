@@ -34,6 +34,7 @@ class Permission(StrEnum):
     AUDIT_READ = "audit:read"
     DASHBOARD_READ = "dashboard:read"
     EVALUATIONS_READ = "evaluations:read"
+    VENDORS_MANAGE = "vendors:manage"
     USERS_MANAGE = "users:manage"
 
 
@@ -79,6 +80,7 @@ _MANAGER = (
         P.DOCUMENTS_DELETE,
         P.KNOWLEDGE_MANAGE,
         P.AUDIT_READ,
+        P.VENDORS_MANAGE,
     }
 )
 

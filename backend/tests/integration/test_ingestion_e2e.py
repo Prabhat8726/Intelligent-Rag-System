@@ -80,8 +80,16 @@ async def test_generated_documents_flow_through_api_queue_and_worker(
             stop.set()
             await asyncio.wait_for(worker_task, timeout=10)
 
-    assert summarize(items) == {"COMPLETED": manifest["document_count"]}
+    # Every document is processed; scans may be routed to review by extraction confidence.
     by_doc = {item.doc_id: item for item in items}
+    assert sum(summarize(items).values()) == manifest["document_count"]
+    assert set(summarize(items)) <= {"COMPLETED", "REVIEW_REQUIRED"}
+    for item in items:
+        if item.status == "REVIEW_REQUIRED":
+            assert item.variant == "scanned", (item.doc_id, item.review_reasons)
+            assert set(item.review_reasons or []) <= {"EXTRACTION_UNCERTAIN", "LOW_OCR_CONFIDENCE"}
+    native = [item for item in items if item.variant == "native"]
+    assert {item.status for item in native} == {"COMPLETED"}
     assert by_doc["B0001-INV"].inspection_kind == "native_pdf"
     assert by_doc["B0001-INV"].pages_needing_ocr == []
     assert by_doc["B0002-INV"].inspection_kind == "scanned_pdf"

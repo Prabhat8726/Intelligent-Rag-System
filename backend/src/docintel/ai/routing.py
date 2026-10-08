@@ -46,9 +46,17 @@ class GateDecision:
 
 
 class ExternalAIGate:
-    def __init__(self, *, max_sensitivity: Sensitivity, provider_configured: bool) -> None:
+    def __init__(
+        self,
+        *,
+        max_sensitivity: Sensitivity,
+        provider_configured: bool,
+        provider_local: bool = False,
+    ) -> None:
         self._max = max_sensitivity
         self._configured = provider_configured
+        # A self-hosted model (Ollama) keeps content inside the deployment (ADR-029).
+        self._local = provider_local
 
     @property
     def max_sensitivity(self) -> Sensitivity:
@@ -58,6 +66,8 @@ class ExternalAIGate:
         effective = max_sensitivity(*levels)
         if not self._configured:
             return GateDecision(False, effective, "no external AI provider configured")
+        if self._local:
+            return GateDecision(True, effective, "local model: content stays in the deployment")
         if sensitivity_rank(effective) > sensitivity_rank(self._max):
             return GateDecision(
                 False,

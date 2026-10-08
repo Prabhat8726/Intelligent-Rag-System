@@ -6,12 +6,13 @@ Every tunable lives here so that behaviour is configured, not hard-coded. Secret
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -29,6 +30,7 @@ class LogFormat(StrEnum):
 
 class LLMProviderName(StrEnum):
     GEMINI = "gemini"
+    OLLAMA = "ollama"
 
 
 class EmbeddingProviderName(StrEnum):
@@ -41,6 +43,15 @@ class StorageBackendName(StrEnum):
 
 
 ThinkingLevel = Literal["MINIMAL", "LOW", "MEDIUM", "HIGH"]
+ExtractionLLMMode = Literal["auto", "always", "never"]
+
+
+class ModelPriceSetting(BaseModel):
+    """List price in USD per million tokens (LLM_PRICING), used for cost estimates only."""
+
+    input_per_mtok: Decimal = Field(ge=0)
+    output_per_mtok: Decimal = Field(ge=0)
+
 
 JWT_SECRET_MIN_LENGTH = 32
 _PLACEHOLDER_MARKERS = ("change", "replace", "example", "placeholder", "secret-key")
@@ -97,6 +108,17 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=3, ge=0, le=10)
     llm_requests_per_minute: int = Field(default=10, ge=1, le=10_000)
+    # Requests per UTC day across all workers (llm_calls); 0 = no limit. Free tier: set it to
+    # the model's requests-per-day quota so processing degrades to local results, not 429s.
+    llm_daily_request_budget: int = Field(default=0, ge=0, le=10_000_000)
+    # {"model-id": {"input_per_mtok": 0.3, "output_per_mtok": 2.5}}; empty = cost not estimated.
+    llm_pricing: dict[str, ModelPriceSetting] = Field(default_factory=dict)
+    # Ollama (LLM_PROVIDER=ollama): a model server inside the deployment.
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str | None = None
+    ollama_fast_model: str | None = None
+    ollama_vision: bool = False  # the model accepts images (e.g. a vision-language model)
+    ollama_keep_alive: str | None = None
     embedding_requests_per_minute: int = Field(default=60, ge=1, le=10_000)
     embedding_batch_size: int = Field(default=100, ge=1, le=100)
 
@@ -150,6 +172,20 @@ class Settings(BaseSettings):
         "INTERNAL"
     )
 
+    # ---------------------------------------------------------------- structured extraction
+    # auto: call the LLM only when the layout extractor is not confident; always; never.
+    extraction_llm_mode: ExtractionLLMMode = "auto"
+    extraction_confidence_high: float = Field(default=0.85, ge=0, le=1)
+    extraction_confidence_medium: float = Field(default=0.6, ge=0, le=1)
+    extraction_arithmetic_tolerance: Decimal = Field(default=Decimal("0.01"), ge=0, le=1000)
+    extraction_max_prompt_chars: int = Field(default=60_000, ge=1000, le=1_000_000)
+    extraction_max_output_tokens: int = Field(default=8192, ge=256, le=65_536)
+    # OCR pages below this mean confidence are sent as images to vision-capable models.
+    extraction_vision_below_ocr_confidence: float = Field(default=70.0, ge=0, le=100)
+    extraction_max_images: int = Field(default=2, ge=0, le=20)
+    evidence_fuzzy_threshold: float = Field(default=85.0, ge=50, le=100)
+    vendor_match_min_score: float = Field(default=85.0, ge=50, le=100)
+
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None
 
@@ -193,6 +229,9 @@ class Settings(BaseSettings):
         if self.storage_backend == StorageBackendName.S3 and not self.s3_bucket:
             msg = "S3_BUCKET is required when STORAGE_BACKEND=s3"
             raise ValueError(msg)
+        if self.extraction_confidence_medium > self.extraction_confidence_high:
+            msg = "EXTRACTION_CONFIDENCE_MEDIUM must not exceed EXTRACTION_CONFIDENCE_HIGH"
+            raise ValueError(msg)
         return self
 
     # ---------------------------------------------------------------- derived values
@@ -216,6 +255,13 @@ class Settings(BaseSettings):
     @property
     def hsts_enabled(self) -> bool:
         return self.is_deployed
+
+    @property
+    def llm_configured(self) -> bool:
+        """True if the selected LLM provider has what it needs to be called."""
+        if self.llm_provider == LLMProviderName.OLLAMA:
+            return bool(self.ollama_model)
+        return self.gemini_api_key is not None
 
 
 @lru_cache(maxsize=1)

@@ -64,6 +64,7 @@ class DocumentFilters:
     filename_contains: str | None = None
     created_from: datetime | None = None
     created_to: datetime | None = None
+    vendor_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,6 +283,8 @@ class DocumentService:
             statement = statement.where(Document.created_at >= filters.created_from)
         if filters.created_to is not None:
             statement = statement.where(Document.created_at < filters.created_to)
+        if filters.vendor_id is not None:
+            statement = statement.where(Document.vendor_id == filters.vendor_id)
 
         total = await self._session.scalar(
             select(func.count()).select_from(statement.order_by(None).subquery())

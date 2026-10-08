@@ -107,6 +107,14 @@ class FakeLLM:
     def name(self) -> str:
         return "fake"
 
+    @property
+    def supports_images(self) -> bool:
+        return False
+
+    @property
+    def local(self) -> bool:
+        return False
+
     def model_for(self, tier: ModelTier) -> str:
         return f"fake-{tier.value}"
 

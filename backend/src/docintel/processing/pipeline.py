@@ -5,9 +5,10 @@ handler:
   prepare  -> document PROCESSING (or skip if deleted)
   stages   -> integrity (re-hash the stored blob), inspect (per-page native vs OCR),
               extract (text layer / OCR, layout, tables), previews (page images to storage),
-              classify (local model, gated LLM fallback, sensitivity assessment)
-  success  -> pages, tables, classification, review reasons, document status, job COMPLETED and
-              audit, in ONE transaction
+              classify (local model, gated LLM fallback, sensitivity assessment),
+              fields (structured extraction with evidence, normalization and confidence)
+  success  -> pages, tables, classification, extraction, review reasons, document status, job
+              COMPLETED and audit, in ONE transaction
   failure  -> job retried or FAILED, document PENDING or FAILED + audit, in ONE transaction
 Every stage is idempotent (results are replaced per document version), so a retried job simply
 runs again.
@@ -20,6 +21,7 @@ import hashlib
 import shutil
 import tempfile
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -38,9 +40,11 @@ from docintel.db.models import (
     ClassificationMethod,
     Document,
     DocumentClassification,
+    DocumentExtraction,
     DocumentPage,
     DocumentStatus,
     DocumentTable,
+    DocumentType,
     DocumentVersion,
     ExtractionMethod,
     JobStatus,
@@ -50,6 +54,8 @@ from docintel.db.models import (
     TableRow,
 )
 from docintel.documents.validation import FileKind
+from docintel.fields.service import ExtractionOutcome, ExtractionRequest
+from docintel.fields.store import carry_over_corrections, extraction_record
 from docintel.processing.content import DocumentTable as ExtractedTable
 from docintel.processing.content import PageContent
 from docintel.processing.extraction import extract_document
@@ -97,6 +103,9 @@ class ProcessingContext:
     tables: list[ExtractedTable] = field(default_factory=list)
     assessment: SensitivityAssessment | None = None
     classification: ClassificationOutcome | None = None
+    # A reviewer's label wins over the classifier (and picks the extraction schema).
+    human_label: DocumentType | None = None
+    extraction: ExtractionOutcome | None = None
     review_reasons: list[ReviewReason] = field(default_factory=list)
     stage_timings: dict[str, float] = field(default_factory=dict)
 
@@ -230,12 +239,46 @@ class ClassifyStage:
         assessment = assess_pages((page.page_number, page.text) for page in context.pages)
         text = "\n\n".join(page.text for page in context.pages)
         outcome = await self._services.classifier.classify(
-            text, declared=context.sensitivity, assessment=assessment
+            text,
+            declared=context.sensitivity,
+            assessment=assessment,
+            document_id=context.document_id,
+            allow_llm=context.human_label is None,
         )
         context.classification = outcome
         context.assessment = assessment.with_type(outcome.label)
         if outcome.review_reason is not None:
             context.review_reasons.append(outcome.review_reason)
+
+
+class FieldsStage:
+    """Structured extraction for the document's type (the reviewer's label if there is one)."""
+
+    name = "fields"
+
+    def __init__(self, services: ProcessingServices) -> None:
+        self._services = services
+
+    async def run(self, context: ProcessingContext) -> None:
+        classification = context.classification
+        label = context.human_label or (classification.label if classification else None)
+        uncertain = context.human_label is None and (
+            classification is None or classification.review_reason is not None
+        )
+        outcome = await self._services.fields.extract(
+            ExtractionRequest(
+                document_type=label,
+                pages=context.pages,
+                tables=context.tables,
+                declared=context.sensitivity,
+                detected=context.assessment.detected if context.assessment else None,
+                document_id=context.document_id,
+                classification_uncertain=uncertain,
+            )
+        )
+        context.extraction = outcome
+        if outcome is not None:
+            context.review_reasons.extend(outcome.scoring.reasons)
 
 
 def _sha256_file(path: Path) -> str:
@@ -264,6 +307,7 @@ def build_stages(storage: DocumentStorage, services: ProcessingServices) -> list
         ExtractStage(services),
         PreviewStage(storage),
         ClassifyStage(services),
+        FieldsStage(services),
     ]
 
 
@@ -314,8 +358,11 @@ def _table_row(version_id: Any, index: int, table: ExtractedTable) -> DocumentTa
 class DocumentProcessingHandler:
     """Job handler for JobType.DOCUMENT_PROCESSING."""
 
-    def __init__(self, storage: DocumentStorage, stages: list[Stage]) -> None:
+    def __init__(
+        self, storage: DocumentStorage, stages: list[Stage], services: ProcessingServices
+    ) -> None:
         self._stages = stages
+        self._services = services
 
     async def prepare(self, session: AsyncSession, job: ClaimedJob) -> ProcessingContext | None:
         """Load the target and mark the document PROCESSING. None = nothing to do (deleted)."""
@@ -333,6 +380,13 @@ class DocumentProcessingHandler:
         if document.deleted_at is not None:
             return None
         document.status = DocumentStatus.PROCESSING
+        human_label = await session.scalar(
+            select(DocumentClassification.label).where(
+                DocumentClassification.document_id == document.id,
+                DocumentClassification.is_current.is_(True),
+                DocumentClassification.method == ClassificationMethod.HUMAN,
+            )
+        )
         return ProcessingContext(
             job=job,
             document_id=document.id,
@@ -344,6 +398,7 @@ class DocumentProcessingHandler:
             page_count=version.page_count,
             sensitivity=document.sensitivity,
             workdir=Path(tempfile.mkdtemp(prefix="docintel-job-")),
+            human_label=human_label,
         )
 
     async def execute(self, context: ProcessingContext, on_stage: Any) -> None:
@@ -395,6 +450,61 @@ class DocumentProcessingHandler:
         document.type_confidence = record.confidence
         return record
 
+    async def _store_extraction(
+        self, session: AsyncSession, document: Document, context: ProcessingContext
+    ) -> DocumentExtraction | None:
+        """Make this run's extraction current; corrections of the same version carry over."""
+        previous = await session.scalar(
+            select(DocumentExtraction).where(
+                DocumentExtraction.document_id == document.id,
+                DocumentExtraction.is_current.is_(True),
+            )
+        )
+        if previous is not None:
+            previous.is_current = False
+            await session.flush()  # free the "one current row" index before inserting
+        outcome = context.extraction
+        if outcome is None:
+            document.vendor_id = None
+            return None
+        same_version = previous is not None and previous.document_version_id == context.version_id
+        corrections = carry_over_corrections(
+            previous if same_version else None, outcome, self._services.fields.policy
+        )
+        if corrections:
+            # Corrections may settle what made the run uncertain: use the rescored reasons.
+            stale = {
+                ReviewReason.EXTRACTION_FAILED,
+                ReviewReason.MISSING_REQUIRED_FIELDS,
+                ReviewReason.EXTRACTION_UNCERTAIN,
+                ReviewReason.EXTRACTION_INCONSISTENT,
+            }
+            context.review_reasons = [r for r in context.review_reasons if r not in stale]
+            context.review_reasons.extend(outcome.scoring.reasons)
+        record = extraction_record(
+            document_id=document.id,
+            version_id=context.version_id,
+            outcome=outcome,
+            corrections=corrections,
+        )
+        session.add(record)
+        vendor_field = next(
+            (item for item in outcome.fields if item.name == "vendor_name" and item.group is None),
+            None,
+        )
+        corrected_vendor = (
+            vendor_field.corrected_normalized.get("vendor")
+            if vendor_field is not None
+            and vendor_field.corrected
+            and vendor_field.corrected_normalized
+            else None
+        )
+        if corrected_vendor:
+            document.vendor_id = uuid.UUID(str(corrected_vendor["vendor_id"]))
+        else:
+            document.vendor_id = outcome.vendor.vendor_id if outcome.vendor else None
+        return record
+
     async def on_success(
         self, session: AsyncSession, context: ProcessingContext, finished_at: datetime
     ) -> None:
@@ -420,6 +530,7 @@ class DocumentProcessingHandler:
             for index, table in enumerate(context.tables)
         )
         current = await self._store_classification(session, document, context)
+        extraction = await self._store_extraction(session, document, context)
 
         reasons = list(dict.fromkeys(reason.value for reason in context.review_reasons))
         # Deleted while processing: keep the results, don't resurrect the document's status.
@@ -450,6 +561,18 @@ class DocumentProcessingHandler:
                 "document_type": current.label.value if current else None,
                 "classification_method": current.method.value if current else None,
                 "llm_used": bool(outcome and outcome.signals.get("llm", {}).get("used")),
+                "extraction": None
+                if extraction is None
+                else {
+                    "schema": extraction.schema_name,
+                    "status": extraction.status.value,
+                    "method": extraction.method.value,
+                    "confidence": str(extraction.overall_confidence),
+                    "review_level": extraction.review_level.value,
+                    "llm_used": bool(
+                        context.extraction and context.extraction.signals.get("llm", {}).get("used")
+                    ),
+                },
                 "review_reasons": reasons,
             },
         )

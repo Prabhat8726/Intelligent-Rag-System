@@ -11,6 +11,7 @@ from pydantic import Field, computed_field
 
 from docintel.api.schemas.auth import DepartmentRead
 from docintel.api.schemas.common import RequestModel, ResponseModel
+from docintel.api.schemas.vendors import VendorSummary
 from docintel.db.models import (
     ClassificationMethod,
     DocumentSource,
@@ -81,6 +82,9 @@ class DocumentRead(ResponseModel):
     created_at: datetime
     updated_at: datetime
     current_version: DocumentVersionRead | None
+    vendor: VendorSummary | None = Field(
+        default=None, description="Vendor master entry the extracted vendor resolved to"
+    )
 
 
 class ClassificationRead(ResponseModel):

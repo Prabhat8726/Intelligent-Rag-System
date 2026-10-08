@@ -42,6 +42,7 @@ from docintel.db.session import create_engine, create_sessionmaker
 from docintel.processing.ocr import OCRUnavailableError, TesseractOCRProvider
 from docintel.processing.services import build_processing_services, load_corrections
 from docintel.storage import build_storage
+from docintel.vendors.seed import seed_demo_vendors
 from docintel.workers.runner import Worker, heartbeat_age_seconds
 
 logger = get_logger(__name__)
@@ -73,6 +74,7 @@ async def _seed(settings: Settings) -> int:
             report = await seed_demo_identities(
                 session, password=settings.seed_user_password.get_secret_value()
             )
+            vendors_created, _ = await seed_demo_vendors(session)
     except PasswordPolicyError as exc:
         _fail(f"SEED_USER_PASSWORD rejected: {exc}")
         return EXIT_USAGE
@@ -82,6 +84,8 @@ async def _seed(settings: Settings) -> int:
         _ok(f"created {email}")
     for email in report.existing_users:
         print(f"[SKIP] {email} already exists")
+    for name in vendors_created:
+        _ok(f"created vendor {name}")
     print("Demo users share the password in SEED_USER_PASSWORD.")
     return EXIT_OK
 
@@ -271,7 +275,9 @@ async def _worker(settings: Settings, *, until_idle: bool) -> int:
     try:
         async with sessionmaker() as session:
             corrections = await load_corrections(session)
-        services = build_processing_services(settings, corrections=corrections)
+        services = build_processing_services(
+            settings, sessionmaker=sessionmaker, corrections=corrections
+        )
         logger.info("worker.ocr_ready", engine=version, languages=settings.ocr_languages)
         worker = Worker(
             settings=settings,
