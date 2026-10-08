@@ -1,0 +1,547 @@
+{
+  "suite": "ocr",
+  "title": "OCR evaluation (synthetic-noisy)",
+  "created_at": "2026-10-08T13:25:57+00:00",
+  "git_revision": "f85f34217fc7",
+  "environment": {
+    "python": "3.13.16",
+    "pypdfium2": "5.14.0",
+    "pillow": "12.3.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "rapidfuzz": "3.14.6",
+    "reportlab": "5.0.1",
+    "tesseract": "tesseract 5.3.4"
+  },
+  "dataset": {
+    "name": "synthetic-noisy",
+    "source": "synthetic-core generator, first page of each native document",
+    "seed": 7,
+    "documents": 35,
+    "degradations": {
+      "clean_300dpi": "rendered at 300 DPI, no noise",
+      "light_scan_150dpi": "150 DPI, rotation <=0.8 deg, blur 0.4, noise 4%, JPEG q80 (dataset 'light' scans)",
+      "heavy_scan_150dpi": "150 DPI, rotation <=2 deg, blur 1.0, noise 10%, JPEG q45",
+      "low_res_100dpi": "rendered at 100 DPI, no noise",
+      "skew_3deg": "200 DPI rotated by 3 degrees",
+      "sideways_90deg": "light scan turned 90 degrees (orientation detection)"
+    }
+  },
+  "config": {
+    "engine": "tesseract 5.3.4",
+    "languages": "eng",
+    "extraction": {
+      "ocr_dpi": 300,
+      "upscale_below_dpi": 250,
+      "remove_ruling_lines": false,
+      "retry_orientation_below": 60.0,
+      "deskew": true
+    },
+    "quick": false
+  },
+  "metrics": {
+    "clean_300dpi": {
+      "default": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0121,
+          "median": 0.0015,
+          "min": 0.0,
+          "max": 0.0398,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0149,
+          "median": 0.0098,
+          "min": 0.0,
+          "max": 0.0877,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9888,
+          "median": 0.9921,
+          "min": 0.9426,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 94.79,
+        "seconds_per_page": 1.795,
+        "orientation_corrected_share": 0.0
+      }
+    },
+    "light_scan_150dpi": {
+      "default": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0227,
+          "median": 0.0147,
+          "min": 0.0,
+          "max": 0.1173,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.032,
+          "median": 0.0296,
+          "min": 0.0,
+          "max": 0.1253,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9797,
+          "median": 0.9806,
+          "min": 0.8973,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.89,
+        "seconds_per_page": 2.335,
+        "orientation_corrected_share": 0.0
+      },
+      "no_upscale": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0315,
+          "median": 0.0305,
+          "min": 0.0013,
+          "max": 0.0979,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0533,
+          "median": 0.051,
+          "min": 0.0079,
+          "max": 0.1988,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9649,
+          "median": 0.97,
+          "min": 0.8712,
+          "max": 0.9952,
+          "n": 35
+        },
+        "mean_ocr_confidence": 92.33,
+        "seconds_per_page": 1.298,
+        "orientation_corrected_share": 0.0
+      },
+      "no_deskew": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0221,
+          "median": 0.0072,
+          "min": 0.0,
+          "max": 0.1173,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0336,
+          "median": 0.0286,
+          "min": 0.0,
+          "max": 0.1253,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9785,
+          "median": 0.9811,
+          "min": 0.8973,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 94.01,
+        "seconds_per_page": 2.136,
+        "orientation_corrected_share": 0.0
+      },
+      "remove_ruling_lines": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0238,
+          "median": 0.0148,
+          "min": 0.0,
+          "max": 0.0928,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0354,
+          "median": 0.036,
+          "min": 0.0,
+          "max": 0.1253,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9758,
+          "median": 0.9785,
+          "min": 0.8973,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.43,
+        "seconds_per_page": 3.494,
+        "orientation_corrected_share": 0.0
+      }
+    },
+    "heavy_scan_150dpi": {
+      "default": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.104,
+          "median": 0.0796,
+          "min": 0.0148,
+          "max": 0.3846,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.1493,
+          "median": 0.1339,
+          "min": 0.0556,
+          "max": 0.4138,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.8907,
+          "median": 0.9091,
+          "min": 0.7183,
+          "max": 0.958,
+          "n": 35
+        },
+        "mean_ocr_confidence": 89.25,
+        "seconds_per_page": 2.548,
+        "orientation_corrected_share": 0.0
+      },
+      "no_upscale": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0868,
+          "median": 0.0749,
+          "min": 0.0103,
+          "max": 0.1837,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.1537,
+          "median": 0.1553,
+          "min": 0.0647,
+          "max": 0.2656,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.8817,
+          "median": 0.8846,
+          "min": 0.8083,
+          "max": 0.9383,
+          "n": 35
+        },
+        "mean_ocr_confidence": 88.32,
+        "seconds_per_page": 1.34,
+        "orientation_corrected_share": 0.0
+      },
+      "no_deskew": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.1131,
+          "median": 0.102,
+          "min": 0.0089,
+          "max": 0.3787,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.1598,
+          "median": 0.1466,
+          "min": 0.0451,
+          "max": 0.5294,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.884,
+          "median": 0.8936,
+          "min": 0.5814,
+          "max": 0.9585,
+          "n": 35
+        },
+        "mean_ocr_confidence": 89.34,
+        "seconds_per_page": 2.11,
+        "orientation_corrected_share": 0.0
+      },
+      "remove_ruling_lines": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.149,
+          "median": 0.0927,
+          "min": 0.0166,
+          "max": 0.4991,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.2015,
+          "median": 0.1607,
+          "min": 0.0648,
+          "max": 0.5696,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.8531,
+          "median": 0.8723,
+          "min": 0.5812,
+          "max": 0.9484,
+          "n": 35
+        },
+        "mean_ocr_confidence": 87.83,
+        "seconds_per_page": 3.357,
+        "orientation_corrected_share": 0.0
+      }
+    },
+    "low_res_100dpi": {
+      "default": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0182,
+          "median": 0.0054,
+          "min": 0.0011,
+          "max": 0.0796,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0345,
+          "median": 0.0259,
+          "min": 0.0069,
+          "max": 0.1491,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9722,
+          "median": 0.9784,
+          "min": 0.8968,
+          "max": 0.9942,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.75,
+        "seconds_per_page": 1.267,
+        "orientation_corrected_share": 0.0
+      },
+      "no_upscale": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0708,
+          "median": 0.0712,
+          "min": 0.0216,
+          "max": 0.1321,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.1874,
+          "median": 0.1875,
+          "min": 0.1154,
+          "max": 0.307,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.8433,
+          "median": 0.8485,
+          "min": 0.7504,
+          "max": 0.9079,
+          "n": 35
+        },
+        "mean_ocr_confidence": 78.94,
+        "seconds_per_page": 0.683,
+        "orientation_corrected_share": 0.0
+      },
+      "no_deskew": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0182,
+          "median": 0.0054,
+          "min": 0.0011,
+          "max": 0.0801,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0345,
+          "median": 0.0259,
+          "min": 0.0069,
+          "max": 0.1491,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9722,
+          "median": 0.9784,
+          "min": 0.8968,
+          "max": 0.9942,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.75,
+        "seconds_per_page": 1.187,
+        "orientation_corrected_share": 0.0
+      },
+      "remove_ruling_lines": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0207,
+          "median": 0.0144,
+          "min": 0.0,
+          "max": 0.0796,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0389,
+          "median": 0.0306,
+          "min": 0.0,
+          "max": 0.1491,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9697,
+          "median": 0.9744,
+          "min": 0.8968,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.34,
+        "seconds_per_page": 1.445,
+        "orientation_corrected_share": 0.0
+      }
+    },
+    "skew_3deg": {
+      "default": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0204,
+          "median": 0.006,
+          "min": 0.0,
+          "max": 0.1426,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0319,
+          "median": 0.0204,
+          "min": 0.0,
+          "max": 0.2072,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9767,
+          "median": 0.9837,
+          "min": 0.8585,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.52,
+        "seconds_per_page": 2.489,
+        "orientation_corrected_share": 0.0
+      },
+      "no_upscale": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0191,
+          "median": 0.0067,
+          "min": 0.0,
+          "max": 0.1064,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0302,
+          "median": 0.0204,
+          "min": 0.0,
+          "max": 0.1748,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9766,
+          "median": 0.9877,
+          "min": 0.8683,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.44,
+        "seconds_per_page": 1.443,
+        "orientation_corrected_share": 0.0
+      },
+      "no_deskew": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0366,
+          "median": 0.0354,
+          "min": 0.0048,
+          "max": 0.1256,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0981,
+          "median": 0.0667,
+          "min": 0.0226,
+          "max": 0.291,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9263,
+          "median": 0.9458,
+          "min": 0.7927,
+          "max": 0.9811,
+          "n": 35
+        },
+        "mean_ocr_confidence": 90.62,
+        "seconds_per_page": 1.9,
+        "orientation_corrected_share": 0.0
+      },
+      "remove_ruling_lines": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.0204,
+          "median": 0.006,
+          "min": 0.0,
+          "max": 0.1426,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0319,
+          "median": 0.0204,
+          "min": 0.0,
+          "max": 0.2072,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9767,
+          "median": 0.9837,
+          "min": 0.8585,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.52,
+        "seconds_per_page": 3.187,
+        "orientation_corrected_share": 0.0
+      }
+    },
+    "sideways_90deg": {
+      "default": {
+        "pages": 35,
+        "cer": {
+          "mean": 0.027,
+          "median": 0.0253,
+          "min": 0.0,
+          "max": 0.1313,
+          "n": 35
+        },
+        "wer": {
+          "mean": 0.0351,
+          "median": 0.036,
+          "min": 0.0,
+          "max": 0.1379,
+          "n": 35
+        },
+        "word_f1": {
+          "mean": 0.9803,
+          "median": 0.9806,
+          "min": 0.9461,
+          "max": 1.0,
+          "n": 35
+        },
+        "mean_ocr_confidence": 93.7,
+        "seconds_per_page": 6.134,
+        "orientation_corrected_share": 1.0
+      }
+    }
+  },
+  "notes": [
+    "Reference text is the PDF text layer of the same page; reference and OCR output are serialized by the same line builder (top-to-bottom, left-to-right).",
+    "CER/WER are edit distances divided by reference length; word F1 is order-insensitive.",
+    "Synthetic pages are cleaner than real scans (fonts, layout, no handwriting, no stamps): these numbers overstate real-world accuracy."
+  ]
+}

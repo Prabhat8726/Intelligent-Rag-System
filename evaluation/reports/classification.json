@@ -1,0 +1,1401 @@
+{
+  "suite": "classification",
+  "title": "Document classification",
+  "created_at": "2026-10-08T13:26:41+00:00",
+  "git_revision": "f85f34217fc7",
+  "environment": {
+    "python": "3.13.16",
+    "pypdfium2": "5.14.0",
+    "pillow": "12.3.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "rapidfuzz": "3.14.6",
+    "reportlab": "5.0.1",
+    "tesseract": "tesseract 5.3.4"
+  },
+  "dataset": {
+    "training": {
+      "corpus_seed": 1,
+      "per_class": 200
+    },
+    "text_held_out": {
+      "seed": 1001,
+      "documents": 900
+    },
+    "rendered": {
+      "seed": 2002,
+      "documents": 90,
+      "scanned_share": 0.5
+    },
+    "business": {
+      "seed": 42,
+      "documents": 37
+    }
+  },
+  "config": {
+    "model_version": "tfidf-lr-v1:33c72e7df5fbff30",
+    "threshold": 0.7,
+    "engine": "tesseract 5.3.4",
+    "languages": "eng",
+    "quick": false
+  },
+  "metrics": {
+    "text/as_generated": {
+      "n": 900,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "PURCHASE_ORDER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "CONTRACT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "RECEIPT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "RESUME": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "BANK_STATEMENT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "POLICY": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "OTHER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 100,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 100,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 100,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 100,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 100,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 100,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 100,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 100,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 100
+        }
+      },
+      "ece": 0.0202,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 1.0,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.0
+      }
+    },
+    "text/heavy_ocr_noise": {
+      "n": 900,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "PURCHASE_ORDER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "CONTRACT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "RECEIPT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "RESUME": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "BANK_STATEMENT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "POLICY": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "OTHER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 100,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 100,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 100,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 100,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 100,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 100,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 100,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 100,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 100
+        }
+      },
+      "ece": 0.0227,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 1.0,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.0
+      }
+    },
+    "text/first_300_chars": {
+      "n": 900,
+      "accuracy": 0.9967,
+      "macro_f1": 0.9967,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "PURCHASE_ORDER": {
+          "precision": 1.0,
+          "recall": 0.97,
+          "f1": 0.9848,
+          "support": 100
+        },
+        "CONTRACT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "RECEIPT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "RESUME": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "BANK_STATEMENT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "POLICY": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 100
+        },
+        "OTHER": {
+          "precision": 0.9709,
+          "recall": 1.0,
+          "f1": 0.9852,
+          "support": 100
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 100,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 97,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 3
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 100,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 100,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 100,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 100,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 100,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 100,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 100
+        }
+      },
+      "ece": 0.0591,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 0.97,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.03
+      }
+    },
+    "rendered/native": {
+      "n": 45,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 3
+        },
+        "PURCHASE_ORDER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 7
+        },
+        "CONTRACT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 7
+        },
+        "RECEIPT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 5
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 3
+        },
+        "RESUME": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 9
+        },
+        "BANK_STATEMENT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 4
+        },
+        "POLICY": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 2
+        },
+        "OTHER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 5
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 3,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 7,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 7,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 5,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 3,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 9,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 4,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 2,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 5
+        }
+      },
+      "ece": 0.0182,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 1.0,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.0
+      }
+    },
+    "rendered/scanned": {
+      "n": 45,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 7
+        },
+        "PURCHASE_ORDER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 3
+        },
+        "CONTRACT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 3
+        },
+        "RECEIPT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 5
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 7
+        },
+        "RESUME": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "BANK_STATEMENT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 6
+        },
+        "POLICY": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 8
+        },
+        "OTHER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 5
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 7,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 3,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 3,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 5,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 7,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 1,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 6,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 8,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 5
+        }
+      },
+      "ece": 0.0144,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 1.0,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.0
+      }
+    },
+    "business/native": {
+      "n": 35,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 12
+        },
+        "PURCHASE_ORDER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 12
+        },
+        "CONTRACT": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "RECEIPT": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 11
+        },
+        "RESUME": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "BANK_STATEMENT": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "POLICY": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "OTHER": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 12,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 12,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 11,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        }
+      },
+      "ece": 0.0812,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 1.0,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.0
+      }
+    },
+    "business/scanned": {
+      "n": 2,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "PURCHASE_ORDER": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "CONTRACT": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "RECEIPT": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "RESUME": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "BANK_STATEMENT": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "POLICY": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "OTHER": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 1,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 1,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        }
+      },
+      "ece": 0.0724,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 1.0,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.0
+      }
+    },
+    "rendered/all": {
+      "n": 90,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "INVOICE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "PURCHASE_ORDER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "CONTRACT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "RECEIPT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "DELIVERY_NOTE": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "RESUME": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "BANK_STATEMENT": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "POLICY": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "OTHER": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        }
+      },
+      "confusion_matrix": {
+        "INVOICE": {
+          "INVOICE": 10,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "PURCHASE_ORDER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 10,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "CONTRACT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 10,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RECEIPT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 10,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "DELIVERY_NOTE": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 10,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "RESUME": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 10,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "BANK_STATEMENT": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 10,
+          "POLICY": 0,
+          "OTHER": 0
+        },
+        "POLICY": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 10,
+          "OTHER": 0
+        },
+        "OTHER": {
+          "INVOICE": 0,
+          "PURCHASE_ORDER": 0,
+          "CONTRACT": 0,
+          "RECEIPT": 0,
+          "DELIVERY_NOTE": 0,
+          "RESUME": 0,
+          "BANK_STATEMENT": 0,
+          "POLICY": 0,
+          "OTHER": 10
+        }
+      },
+      "ece": 0.0163,
+      "routing": {
+        "threshold": 0.7,
+        "auto_accepted_share": 1.0,
+        "error_rate_in_auto_bucket": 0.0,
+        "review_share": 0.0
+      }
+    }
+  },
+  "notes": [
+    "Training and evaluation data are synthetic and come from related generators: near-perfect scores here do NOT predict accuracy on real documents. The business dataset uses a different generator than the training corpus but is still synthetic.",
+    "Auto-accepted = local confidence >= threshold (no review); 'error in auto bucket' is the share of those that are wrong - the number that matters operationally.",
+    "LLM fallback: not measured - no GEMINI_API_KEY in the build environment. Its logic is covered by tests with a fake provider."
+  ]
+}

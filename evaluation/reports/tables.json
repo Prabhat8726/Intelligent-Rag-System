@@ -1,0 +1,239 @@
+{
+  "suite": "tables",
+  "title": "Line-item table extraction",
+  "created_at": "2026-10-08T13:27:40+00:00",
+  "git_revision": "f85f34217fc7",
+  "environment": {
+    "python": "3.13.16",
+    "pypdfium2": "5.14.0",
+    "pillow": "12.3.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "rapidfuzz": "3.14.6",
+    "reportlab": "5.0.1",
+    "tesseract": "tesseract 5.3.4"
+  },
+  "dataset": {
+    "name": "synthetic-core",
+    "seed": 11,
+    "documents": 74,
+    "bundles_per_scenario": 2,
+    "scanned_rerender": "light scan profile at 150 DPI"
+  },
+  "config": {
+    "engine": "tesseract 5.3.4",
+    "languages": "eng",
+    "quick": false
+  },
+  "metrics": {
+    "by_method": {
+      "native": {
+        "documents": 70,
+        "table_found_rate": 1.0,
+        "row_count_exact_rate": 1.0,
+        "row_precision": 1.0,
+        "row_recall": 1.0,
+        "row_f1": 1.0,
+        "cell_accuracy": 1.0,
+        "cell_accuracy_by_column": {
+          "number": 1.0,
+          "sku": 1.0,
+          "description": 1.0,
+          "quantity": 1.0,
+          "unit": 1.0,
+          "unit_price": 1.0,
+          "amount": 1.0
+        }
+      },
+      "scanned (dataset)": {
+        "documents": 4,
+        "table_found_rate": 0.75,
+        "row_count_exact_rate": 0.75,
+        "row_precision": 0.2857,
+        "row_recall": 0.2,
+        "row_f1": 0.2353,
+        "cell_accuracy": 1.0,
+        "cell_accuracy_by_column": {
+          "number": 1.0,
+          "sku": 1.0,
+          "description": 1.0,
+          "quantity": 1.0,
+          "unit": 1.0,
+          "unit_price": 1.0,
+          "amount": 1.0
+        }
+      },
+      "scanned (re-rendered)": {
+        "documents": 70,
+        "table_found_rate": 0.9429,
+        "row_count_exact_rate": 0.8857,
+        "row_precision": 0.956,
+        "row_recall": 0.8939,
+        "row_f1": 0.9239,
+        "cell_accuracy": 0.8377,
+        "cell_accuracy_by_column": {
+          "number": 0.7288,
+          "sku": 0.7821,
+          "description": 0.9056,
+          "quantity": 0.8232,
+          "unit": 0.8814,
+          "unit_price": 0.8826,
+          "amount": 0.8859
+        }
+      }
+    },
+    "by_method_and_template": {
+      "native / classic": {
+        "documents": 20,
+        "table_found_rate": 1.0,
+        "row_count_exact_rate": 1.0,
+        "row_precision": 1.0,
+        "row_recall": 1.0,
+        "row_f1": 1.0,
+        "cell_accuracy": 1.0,
+        "cell_accuracy_by_column": {
+          "number": 1.0,
+          "sku": 1.0,
+          "description": 1.0,
+          "quantity": 1.0,
+          "unit": 1.0,
+          "unit_price": 1.0,
+          "amount": 1.0
+        }
+      },
+      "native / compact": {
+        "documents": 27,
+        "table_found_rate": 1.0,
+        "row_count_exact_rate": 1.0,
+        "row_precision": 1.0,
+        "row_recall": 1.0,
+        "row_f1": 1.0,
+        "cell_accuracy": 1.0,
+        "cell_accuracy_by_column": {
+          "number": 1.0,
+          "sku": 1.0,
+          "description": 1.0,
+          "quantity": 1.0,
+          "unit": 1.0,
+          "unit_price": 1.0,
+          "amount": 1.0
+        }
+      },
+      "native / modern": {
+        "documents": 23,
+        "table_found_rate": 1.0,
+        "row_count_exact_rate": 1.0,
+        "row_precision": 1.0,
+        "row_recall": 1.0,
+        "row_f1": 1.0,
+        "cell_accuracy": 1.0,
+        "cell_accuracy_by_column": {
+          "number": 1.0,
+          "sku": 1.0,
+          "description": 1.0,
+          "quantity": 1.0,
+          "unit": 1.0,
+          "unit_price": 1.0,
+          "amount": 1.0
+        }
+      },
+      "scanned (dataset) / classic": {
+        "documents": 1,
+        "table_found_rate": 1.0,
+        "row_count_exact_rate": 1.0,
+        "row_precision": 0.0,
+        "row_recall": 0.0,
+        "row_f1": 0.0,
+        "cell_accuracy": 0.0,
+        "cell_accuracy_by_column": {}
+      },
+      "scanned (dataset) / compact": {
+        "documents": 2,
+        "table_found_rate": 0.5,
+        "row_count_exact_rate": 0.5,
+        "row_precision": 1.0,
+        "row_recall": 0.4,
+        "row_f1": 0.5714,
+        "cell_accuracy": 1.0,
+        "cell_accuracy_by_column": {
+          "number": 1.0,
+          "sku": 1.0,
+          "description": 1.0,
+          "quantity": 1.0,
+          "unit": 1.0,
+          "unit_price": 1.0,
+          "amount": 1.0
+        }
+      },
+      "scanned (dataset) / modern": {
+        "documents": 1,
+        "table_found_rate": 1.0,
+        "row_count_exact_rate": 1.0,
+        "row_precision": 0.0,
+        "row_recall": 0.0,
+        "row_f1": 0.0,
+        "cell_accuracy": 0.0,
+        "cell_accuracy_by_column": {}
+      },
+      "scanned (re-rendered) / classic": {
+        "documents": 20,
+        "table_found_rate": 0.85,
+        "row_count_exact_rate": 0.7,
+        "row_precision": 0.88,
+        "row_recall": 0.7458,
+        "row_f1": 0.8073,
+        "cell_accuracy": 0.8592,
+        "cell_accuracy_by_column": {
+          "number": 0.8636,
+          "sku": 0.9545,
+          "description": 0.9318,
+          "quantity": 0.8409,
+          "unit": 0.7045,
+          "unit_price": 0.8438,
+          "amount": 0.875
+        }
+      },
+      "scanned (re-rendered) / compact": {
+        "documents": 27,
+        "table_found_rate": 0.963,
+        "row_count_exact_rate": 0.9259,
+        "row_precision": 0.97,
+        "row_recall": 0.8898,
+        "row_f1": 0.9281,
+        "cell_accuracy": 0.8213,
+        "cell_accuracy_by_column": {
+          "number": 0.6681,
+          "sku": 0.7832,
+          "description": 0.9071,
+          "quantity": 0.8097,
+          "unit": 0.8451,
+          "unit_price": 0.8951,
+          "amount": 0.8951
+        }
+      },
+      "scanned (re-rendered) / modern": {
+        "documents": 23,
+        "table_found_rate": 1.0,
+        "row_count_exact_rate": 1.0,
+        "row_precision": 0.9597,
+        "row_recall": 0.9597,
+        "row_f1": 0.9597,
+        "cell_accuracy": 0.8554,
+        "cell_accuracy_by_column": {
+          "number": 0.7832,
+          "sku": 0.7273,
+          "description": 0.8951,
+          "quantity": 0.8392,
+          "unit": 0.993,
+          "unit_price": 0.878,
+          "amount": 0.878
+        }
+      }
+    }
+  },
+  "notes": [
+    "Rows are paired with ground truth by SKU similarity (ratio >= 75); cell accuracy is exact match after whitespace/case normalization, on paired rows.",
+    "Templates: classic (grid lines), modern (header rule, banded rows), compact (row rules, stacked header).",
+    "Synthetic layouts are regular; real-world tables (merged cells, rotated headers, handwriting) will score lower."
+  ]
+}
