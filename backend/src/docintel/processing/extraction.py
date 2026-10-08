@@ -13,6 +13,7 @@ Pages are processed concurrently (OCR bounded by a semaphore); PDFium calls stay
 from __future__ import annotations
 
 import asyncio
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,6 +34,11 @@ from docintel.processing.preprocess import clean_ocr_words, deskew, remove_rulin
 
 # Assumed page width when an image carries no DPI metadata (A4 portrait, inches).
 _ASSUMED_PAGE_WIDTH_INCHES = 8.27
+# Pixel budgets for anything rendered or upscaled. The upload validator limits page count and
+# image pixels but not the size of a PDF page (up to 200 x 200 inches), so a single page could
+# otherwise render to gigapixels. A4 at 600 DPI is ~35 MP.
+MAX_RENDER_PIXELS = 40_000_000
+MAX_PREVIEW_PIXELS = 4_000_000
 _MIN_DPI, _MAX_DPI = 72, 1200
 
 
@@ -60,6 +66,14 @@ class _OCRPage:
     image: Image.Image
 
 
+def bounded_scale(width: float, height: float, scale: float, max_pixels: int) -> float:
+    """`scale`, reduced if needed so that the scaled width x height stays within the budget."""
+    pixels = width * height * scale * scale
+    if pixels <= max_pixels or pixels <= 0:
+        return scale
+    return scale * math.sqrt(max_pixels / pixels)
+
+
 def _save_preview(image: Image.Image, width: int, path: Path) -> tuple[int, int]:
     if image.width > width:
         height = max(1, round(image.height * width / image.width))
@@ -75,7 +89,10 @@ def _native_page(
         page = document[index]
         try:
             words, width, height = extract_native_words(page)
-            bitmap = page.render(scale=preview_width / width if width else 1.0)
+            scale = bounded_scale(
+                width, height, preview_width / width if width else 1.0, MAX_PREVIEW_PIXELS
+            )
+            bitmap = page.render(scale=scale)
             image = bitmap.to_pil().convert("RGB")
         finally:
             page.close()
@@ -83,12 +100,15 @@ def _native_page(
     return words, width, height, _save_preview(image, preview_width, preview_path), ratio
 
 
-def _render_pdf_page(path: Path, index: int, dpi: int) -> Image.Image:
+def _render_pdf_page(path: Path, index: int, dpi: int) -> tuple[Image.Image, float]:
+    """Render for OCR at `dpi` (less for oversized pages); returns the image and its DPI."""
     with open_pdf(path) as document:
         page = document[index]
         try:
-            image: Image.Image = page.render(scale=dpi / 72).to_pil().convert("L")
-            return image
+            width, height = page.get_size()
+            scale = bounded_scale(width, height, dpi / 72, MAX_RENDER_PIXELS)
+            image: Image.Image = page.render(scale=scale).to_pil().convert("L")
+            return image, scale * 72
         finally:
             page.close()
 
@@ -167,13 +187,15 @@ async def _ocr_page(
 ) -> tuple[PageContent, float]:
     index = info.page_number - 1
     if kind == FileKind.PDF:
-        image = await asyncio.to_thread(_render_pdf_page, path, index, options.ocr_dpi)
-        dpi, to_units, unit = options.ocr_dpi, 72 / options.ocr_dpi, "pt"
+        image, render_dpi = await asyncio.to_thread(_render_pdf_page, path, index, options.ocr_dpi)
+        dpi, to_units, unit = round(render_dpi), 72 / render_dpi, "pt"
     else:
         image, source_dpi = await asyncio.to_thread(_image_frame, path, index)
         factor = 1.0
         if source_dpi < options.upscale_below_dpi:
-            factor = min(2.0, options.ocr_dpi / source_dpi)
+            wanted = min(2.0, options.ocr_dpi / source_dpi)
+            factor = max(1.0, bounded_scale(image.width, image.height, wanted, MAX_RENDER_PIXELS))
+        if factor > 1.0:
             size = (round(image.width * factor), round(image.height * factor))
             image = await asyncio.to_thread(image.resize, size, Image.Resampling.LANCZOS)
         dpi, to_units, unit = round(source_dpi * factor), 1 / factor, "px"

@@ -4,9 +4,9 @@ Multimodal AI for document understanding, verification, RAG, agentic reasoning a
 human-in-the-loop workflow automation — built as a compact, enterprise-grade platform rather
 than an OCR demo or LLM wrapper.
 
-> **Status: Phase 2 complete — architecture, foundation and document ingestion.**
-> OCR, extraction, comparison, RAG, the agent and workflows are designed
-> (see [`docs/`](docs/README.md)) and are implemented in Phases 3–11. Nothing below claims a
+> **Status: Phase 3 complete — ingestion, OCR, layout, tables and classification.**
+> Field extraction, comparison, RAG, the agent and workflows are designed
+> (see [`docs/`](docs/README.md)) and are implemented in Phases 4–11. Nothing below claims a
 > capability that has not been built and tested.
 
 ## What the platform will do
@@ -32,7 +32,7 @@ LLM self-assessment; the agent can only *propose* high-impact actions; PostgreSQ
 single stateful service (no Redis, no external vector DB); every AI provider sits behind an
 interface; sensitive documents are never sent to free-tier external AI.
 
-## What works today (Phases 0–2, verified by tests)
+## What works today (Phases 0–3, verified by tests)
 
 | Area | Implemented |
 |---|---|
@@ -45,9 +45,13 @@ interface; sensitive documents are never sent to free-tier external AI.
 | Document access | List with filters and pagination, detail, download (attachment, `nosniff`, sandbox CSP), soft delete, reprocess. Department-scoped access as SQL predicates, so documents outside your scope return 404 |
 | Storage | `DocumentStorage` interface with local filesystem (path confinement, atomic writes) and S3-compatible (AWS S3, R2, MinIO) backends |
 | Job queue & worker | PostgreSQL queue (`SKIP LOCKED`, leases + heartbeats, retries with backoff, `LISTEN/NOTIFY` wake-up); worker re-verifies the file's SHA-256 and inspects every page: native text vs. needs OCR, size, rotation, images. Crash recovery and lease ownership are tested |
+| Text extraction & OCR | Per page: the PDF text layer (word boxes in the displayed orientation) or Tesseract 5 OCR with upscaling of low-DPI images, projection-profile deskew, orientation correction, token clean-up; page preview images |
+| Layout & tables | Lines, column segments, reading-order blocks, label/value grids; geometry-based tables for native and scanned pages, stitched across pages |
+| Classification | Nine document types: local calibrated TF-IDF + logistic-regression model (trained at worker start from a synthetic corpus plus human corrections), LLM fallback with agreement-based confidence, human correction that later processing never overrides |
+| AI safety gate | Content findings (card numbers, SSNs) and type minimums raise the effective sensitivity; above `AI_EXTERNAL_MAX_SENSITIVITY` no text reaches an external model; uncertain or unreadable documents go to review with a reason |
 | Synthetic data | Seeded generator for linked purchase orders, delivery notes and invoices (12 scenarios, incl. price/quantity/tax/vendor defects, duplicates, multi-page and scanned documents) with JSON ground truth; `make process` ingests a dataset through the API |
-| CLI | `docintel seed`, `create-user`, `check-ai` (real end-to-end key verification), `worker`, `worker-health`, `generate-documents`, `ingest` |
-| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, filters and paging, document detail with processing timings and per-page inspection, download, reprocess, delete; system status page |
+| CLI | `docintel seed`, `create-user`, `check-ai` (real end-to-end key verification), `check-ocr`, `worker`, `worker-health`, `generate-documents`, `ingest`, `evaluate` |
+| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, type/status filters and paging, document detail with review reasons, classification evidence and correction, page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; system status page |
 | Delivery | Non-root multi-stage images, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, dependency audits, secret scan, container smoke test, synthetic dataset ingest) |
 
 Test suites: 292 backend tests (unit, integration against real PostgreSQL, security) and 20
@@ -55,7 +59,9 @@ frontend tests.
 
 ## Quick start
 
-Prerequisites: Docker, [uv](https://docs.astral.sh/uv/), Node.js 22, make.
+Prerequisites: Docker, [uv](https://docs.astral.sh/uv/), Node.js 22, make, and Tesseract 5 for
+running the worker or tests on the host (`apt install tesseract-ocr` / `brew install tesseract`;
+the Docker image includes it).
 
 ```bash
 make env        # .env with a generated JWT secret
@@ -94,8 +100,8 @@ See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 |---|---|---|
 | 0 | Architecture & foundation (includes the master prompt's Phase 1) | **Complete** |
 | 2 | Document ingestion: upload validation, storage abstraction, Postgres job queue, worker, synthetic generator | **Complete** |
-| 3 | OCR & understanding: native text + Tesseract OCR on the pages that need it, layout, tables, classification, sensitivity gate | Next |
-| 4 | Structured extraction: schemas, evidence verification, normalization, confidence | Planned |
+| 3 | OCR & understanding: native text + Tesseract OCR on the pages that need it, layout, tables, classification, sensitivity gate | **Complete** |
+| 4 | Structured extraction: schemas, evidence verification, normalization, confidence, vision for low-confidence pages | Next |
 | 5 | Comparison & rule engine, duplicates, review queue | Planned |
 | 6 | Knowledge base & hybrid RAG with citations | Planned |
 | 7 | LangGraph agent, controlled tools, MCP server | Planned |

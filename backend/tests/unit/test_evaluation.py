@@ -100,8 +100,11 @@ def test_table_scoring_matches_rows_by_sku() -> None:
     score = score_table(detected, expected)
     assert (score["matched"], score["detected_rows"], score["expected_rows"]) == (2, 2, 2)
     assert score["cells"]["quantity"] == [True, False]
-    missing = score_table(_table([["1", "SKV-1", "Bolt", "5", "pcs"]]), expected)
-    assert missing["matched"] == 0
+    misread = score_table(_table([["1", "SKV-1", "Bolt", "5", "pcs"]]), expected)
+    assert misread["matched"] == 1  # one misread character is a cell error, not a lost row
+    assert misread["cells"]["sku"] == [False]
+    unrelated = score_table(_table([["1", "XYZ-9", "Bolt", "5", "pcs"]]), expected)
+    assert unrelated["matched"] == 0
     assert score_table(None, expected)["found"] is False
 
 

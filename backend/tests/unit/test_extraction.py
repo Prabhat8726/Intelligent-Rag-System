@@ -200,3 +200,36 @@ async def test_a_failing_page_does_not_fail_the_document(tmp_path: Path) -> None
     assert second.words == []
     assert second.preview_file is not None
     assert second.preview_file.is_file()
+
+
+async def test_oversized_pdf_page_is_rendered_within_the_pixel_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io as _io
+
+    from reportlab.pdfgen import canvas
+
+    buffer = _io.BytesIO()
+    huge = canvas.Canvas(buffer, pagesize=(14400, 14400), invariant=1)  # 200 x 200 inches
+    huge.showPage()
+    huge.save()
+    path = write(tmp_path, "huge.pdf", buffer.getvalue())
+    seen: list[int] = []
+
+    class SizeRecorder(FakeOCR):
+        async def recognize(self, image: Image.Image, *, dpi: int) -> OCRResult:
+            seen.append(image.width * image.height)
+            return await super().recognize(image, dpi=dpi)
+
+    monkeypatch.setattr(extraction, "MAX_RENDER_PIXELS", 2_000_000)
+    (page,) = await run(path, FileKind.PDF, SizeRecorder(), tmp_path)
+    assert seen
+    assert max(seen) <= 2_000_000 * 1.01
+    assert page.width == pytest.approx(14400, rel=0.01)  # still reported in page points
+    assert page.preview_size is not None
+    assert page.preview_size[0] * page.preview_size[1] <= extraction.MAX_PREVIEW_PIXELS * 1.01
+
+
+def test_bounded_scale() -> None:
+    assert extraction.bounded_scale(1000, 1000, 2.0, 10_000_000) == 2.0
+    assert extraction.bounded_scale(1000, 1000, 2.0, 1_000_000) == pytest.approx(1.0)
