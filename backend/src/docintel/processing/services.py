@@ -8,7 +8,7 @@ cached per process, so tests and `--until-idle` runs pay for it once.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from sqlalchemy import Text, func, literal, select
@@ -35,6 +35,8 @@ from docintel.fields.llm import ExtractionCache
 from docintel.fields.service import FieldExtractionService, policy_from_settings
 from docintel.fields.store import DatabaseExtractionCache
 from docintel.fields.vendors import DatabaseVendorDirectory, StaticVendorDirectory, VendorDirectory
+from docintel.knowledge.chunking import ChunkingOptions
+from docintel.knowledge.embedding import ChunkEmbedder, build_chunk_embedder
 from docintel.processing.extraction import ExtractionOptions
 from docintel.processing.ocr import OCRProvider, TesseractOCRProvider
 
@@ -88,10 +90,15 @@ class ProcessingServices:
     fields: FieldExtractionService
     settings: Settings  # matching and review (thresholds, SLAs) run in the result transaction
     llm: LLMProvider | None = None
+    # Search index of business and knowledge documents (Modules 12, 28).
+    embedder: ChunkEmbedder | None = None
+    chunking: ChunkingOptions = field(default_factory=ChunkingOptions)
 
     async def aclose(self) -> None:
         if self.llm is not None:
             await self.llm.aclose()
+        if self.embedder is not None:
+            await self.embedder.aclose()
 
 
 def build_processing_services(
@@ -101,6 +108,7 @@ def build_processing_services(
     corrections: Sequence[LabelledText] = (),
     ocr: OCRProvider | None = None,
     llm: LLMProvider | None = None,
+    embedder: ChunkEmbedder | None = None,
 ) -> ProcessingServices:
     """Engines for the pipeline. With a sessionmaker, LLM calls are accounted in `llm_calls`
     (and the daily budget enforced), vendors resolve against the database and identical model
@@ -168,4 +176,14 @@ def build_processing_services(
             max_images=settings.extraction_max_images,
         ),
         llm=llm,
+        embedder=embedder or build_chunk_embedder(settings),
+        chunking=chunking_options(settings),
+    )
+
+
+def chunking_options(settings: Settings) -> ChunkingOptions:
+    return ChunkingOptions(
+        target_tokens=settings.knowledge_chunk_target_tokens,
+        max_tokens=settings.knowledge_chunk_max_tokens,
+        overlap_tokens=settings.knowledge_chunk_overlap_tokens,
     )

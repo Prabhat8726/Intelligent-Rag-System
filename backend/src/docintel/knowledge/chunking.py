@@ -66,12 +66,14 @@ class Chunk:
         return PATH_SEPARATOR.join(self.section_path)
 
     @property
+    def context_prefix(self) -> str:
+        """Title and breadcrumb (stored separately from the content)."""
+        return f"{self.title}\n{self.breadcrumb}" if self.section_path else self.title
+
+    @property
     def context_text(self) -> str:
         """Embedded and indexed text: title and breadcrumb in front of the content."""
-        lines = [self.title]
-        if self.section_path:
-            lines.append(self.breadcrumb)
-        return "\n".join(lines) + "\n\n" + self.content
+        return f"{self.context_prefix}\n\n{self.content}"
 
     @property
     def token_count(self) -> int:

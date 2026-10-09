@@ -48,8 +48,8 @@ _CLAIM_SQL = text(
         FOR UPDATE SKIP LOCKED
         LIMIT 1
     )
-    RETURNING j.id, j.job_type, j.document_id, j.document_version_id, j.payload,
-              j.attempts, j.max_attempts, j.requested_by_id
+    RETURNING j.id, j.job_type, j.document_id, j.document_version_id, j.knowledge_document_id,
+              j.payload, j.attempts, j.max_attempts, j.requested_by_id
     """
 )
 
@@ -64,6 +64,7 @@ class ClaimedJob:
     attempts: int
     max_attempts: int
     requested_by_id: uuid.UUID | None
+    knowledge_document_id: uuid.UUID | None = None
 
 
 def backoff_seconds(attempt: int, base_seconds: float) -> float:
@@ -80,17 +81,19 @@ async def enqueue_job(
     document_id: uuid.UUID | None = None,
     document_version_id: uuid.UUID | None = None,
     requested_by_id: uuid.UUID | None = None,
+    knowledge_document_id: uuid.UUID | None = None,
     payload: dict[str, Any] | None = None,
     priority: int = 0,
 ) -> ProcessingJob:
     """Add a job inside the caller's transaction. Raises IntegrityError if an active job for
-    the same (job_type, document_version) already exists."""
+    the same (job_type, document_version) or knowledge document already exists."""
     job = ProcessingJob(
         id=uuid.uuid4(),
         job_type=job_type,
         status=JobStatus.QUEUED,
         document_id=document_id,
         document_version_id=document_version_id,
+        knowledge_document_id=knowledge_document_id,
         requested_by_id=requested_by_id,
         payload=payload or {},
         priority=priority,
@@ -105,10 +108,23 @@ async def enqueue_job(
     return job
 
 
-async def cancel_queued_jobs(session: AsyncSession, *, document_id: uuid.UUID) -> int:
+async def cancel_queued_jobs(
+    session: AsyncSession,
+    *,
+    document_id: uuid.UUID | None = None,
+    knowledge_document_id: uuid.UUID | None = None,
+) -> int:
+    if (document_id is None) == (knowledge_document_id is None):
+        msg = "pass exactly one of document_id and knowledge_document_id"
+        raise ValueError(msg)
+    target = (
+        ProcessingJob.document_id == document_id
+        if document_id is not None
+        else ProcessingJob.knowledge_document_id == knowledge_document_id
+    )
     result = await session.execute(
         update(ProcessingJob)
-        .where(ProcessingJob.document_id == document_id, ProcessingJob.status == JobStatus.QUEUED)
+        .where(target, ProcessingJob.status == JobStatus.QUEUED)
         .values(status=JobStatus.CANCELLED, finished_at=func.now(), last_error="cancelled")
         .returning(ProcessingJob.id)
     )
@@ -149,6 +165,7 @@ class JobQueue:
             attempts=row["attempts"],
             max_attempts=row["max_attempts"],
             requested_by_id=row["requested_by_id"],
+            knowledge_document_id=row["knowledge_document_id"],
         )
 
     async def cancel(self, session: AsyncSession, job_id: uuid.UUID, *, reason: str) -> bool:

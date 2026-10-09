@@ -50,12 +50,23 @@ def validate_key(key: str) -> str:
     return key
 
 
-def document_object_key(document_id: uuid.UUID, version_number: int, extension: str) -> str:
-    """Canonical key for an uploaded file: never contains user-controlled text."""
+def _check_extension(extension: str) -> str:
     if not re.fullmatch(r"[a-z0-9]{1,8}", extension):
         msg = f"invalid extension for storage key: {extension!r}"
         raise StorageKeyError(msg)
+    return extension
+
+
+def document_object_key(document_id: uuid.UUID, version_number: int, extension: str) -> str:
+    """Canonical key for an uploaded file: never contains user-controlled text."""
+    _check_extension(extension)
     return validate_key(f"documents/{document_id}/v{version_number}/original.{extension}")
+
+
+def knowledge_object_key(knowledge_document_id: uuid.UUID, extension: str) -> str:
+    """Key of a knowledge base file (each version is its own knowledge document)."""
+    _check_extension(extension)
+    return validate_key(f"knowledge/{knowledge_document_id}/original.{extension}")
 
 
 def page_preview_key(document_id: uuid.UUID, version_number: int, page_number: int) -> str:

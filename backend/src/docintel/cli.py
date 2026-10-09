@@ -289,6 +289,33 @@ async def _match(settings: Settings) -> int:
         await engine.dispose()
 
 
+async def _reembed(settings: Settings, *, force: bool) -> int:
+    """Embed chunks without vectors of the configured model (knowledge and business documents)."""
+    from docintel.ai.errors import ProviderError
+    from docintel.knowledge.embedding import build_chunk_embedder
+    from docintel.knowledge.reembed import reembed
+
+    if not settings.embedding_configured:
+        _fail("No embedding provider is configured (EMBEDDING_PROVIDER / GEMINI_API_KEY).")
+        return EXIT_FAILURE
+    engine = create_engine(settings)
+    embedder = build_chunk_embedder(settings)
+    try:
+        summary = await reembed(create_sessionmaker(engine), embedder, force=force)
+    except ProviderError as exc:
+        _fail(f"embedding provider error ({type(exc).__name__}); rerun to continue: {exc}")
+        return EXIT_FAILURE
+    finally:
+        await embedder.aclose()
+        await engine.dispose()
+    _ok(
+        f"model {embedder.model}: {summary.knowledge_documents} knowledge and "
+        f"{summary.business_documents} business document(s); {summary.chunks_embedded} chunk(s) "
+        f"embedded, {summary.chunks_blocked} kept full-text only by the sensitivity gate"
+    )
+    return EXIT_OK
+
+
 async def _llm_usage(settings: Settings, days: int) -> int:
     """Calls, tokens and estimated cost per day, provider, model and purpose (llm_calls)."""
     since = datetime.now(UTC) - timedelta(days=days)
@@ -559,6 +586,12 @@ def _build_parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "match", help="Re-run matching, rules and review tasks for all processed documents"
     )
+    reembed = commands.add_parser(
+        "reembed", help="add vectors of the configured embedding model to indexed chunks"
+    )
+    reembed.add_argument(
+        "--force", action="store_true", help="re-embed every chunk, not only stale ones"
+    )
     usage = commands.add_parser("llm-usage", help="LLM calls, tokens and estimated cost")
     usage.add_argument("--days", type=int, default=7, help="look back this many days (default 7)")
     commands.add_parser("check-ocr", help="verify the OCR engine and configured languages")
@@ -620,6 +653,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_llm_usage(settings, args.days))
         case "match":
             return asyncio.run(_match(settings))
+        case "reembed":
+            return asyncio.run(_reembed(settings, force=args.force))
         case "check-ocr":
             return asyncio.run(_check_ocr(settings))
         case "worker":

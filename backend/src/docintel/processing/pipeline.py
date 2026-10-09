@@ -6,9 +6,10 @@ handler:
   stages   -> integrity (re-hash the stored blob), inspect (per-page native vs OCR),
               extract (text layer / OCR, layout, tables), previews (page images to storage),
               classify (local model, gated LLM fallback, sensitivity assessment),
-              fields (structured extraction with evidence, normalization and confidence)
-  success  -> pages, tables, classification, extraction, review reasons, document status, job
-              COMPLETED and audit, in ONE transaction
+              fields (structured extraction with evidence, normalization and confidence),
+              index (search chunks and, behind the sensitivity gate, their embeddings)
+  success  -> pages, tables, classification, extraction, search chunks, review reasons,
+              document status, job COMPLETED and audit, in ONE transaction
   failure  -> job retried or FAILED, document PENDING or FAILED + audit, in ONE transaction
 Every stage is idempotent (results are replaced per document version), so a retried job simply
 runs again.
@@ -31,6 +32,8 @@ from typing import Any, Protocol
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from docintel.ai.errors import ProviderError
+from docintel.ai.routing import max_sensitivity
 from docintel.audit.service import SYSTEM_REQUEST, AuditAction, record_audit_event
 from docintel.classification.service import ClassificationOutcome
 from docintel.core.logging import get_logger
@@ -40,6 +43,7 @@ from docintel.db.models import (
     AuditOutcome,
     ClassificationMethod,
     Document,
+    DocumentChunk,
     DocumentClassification,
     DocumentExtraction,
     DocumentPage,
@@ -60,6 +64,9 @@ from docintel.db.models import (
 from docintel.documents.validation import FileKind
 from docintel.fields.service import ExtractionOutcome, ExtractionRequest
 from docintel.fields.store import carry_over_corrections, extraction_record
+from docintel.knowledge.chunking import Chunk, chunk_source
+from docintel.knowledge.embedding import EmbeddedTexts
+from docintel.knowledge.sources import parse_pages
 from docintel.matching.service import MatchingService
 from docintel.matching.store import lock_department
 from docintel.processing.content import DocumentTable as ExtractedTable
@@ -113,7 +120,15 @@ class ProcessingContext:
     human_label: DocumentType | None = None
     extraction: ExtractionOutcome | None = None
     review_reasons: list[ReviewReason] = field(default_factory=list)
+    title: str = ""
+    chunks: list[Chunk] = field(default_factory=list)
+    embedded: EmbeddedTexts | None = None
     stage_timings: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def effective_sensitivity(self) -> Sensitivity:
+        detected = self.assessment.detected if self.assessment else None
+        return max_sensitivity(self.sensitivity, detected)
 
 
 class Stage(Protocol):
@@ -132,22 +147,26 @@ class IntegrityStage:
 
     async def run(self, context: ProcessingContext) -> None:
         destination = context.workdir / f"original.{context.file_kind.value}"
-        try:
-            await self._storage.download_to(context.storage_key, destination)
-        except ObjectNotFoundError as exc:
-            msg = "The stored file is missing."
-            raise PermanentProcessingError(msg) from exc
-        digest = await asyncio.to_thread(_sha256_file, destination)
-        if digest != context.sha256:
-            logger.error(
-                "processing.integrity_mismatch",
-                document_id=str(context.document_id),
-                expected=context.sha256,
-                actual=digest,
-            )
-            msg = "The stored file failed its integrity check."
-            raise PermanentProcessingError(msg)
+        await download_verified(self._storage, context.storage_key, context.sha256, destination)
         context.local_file = destination
+
+
+async def download_verified(
+    storage: DocumentStorage, key: str, sha256: str, destination: Path
+) -> None:
+    """Download a stored file and check it is byte-identical to what was uploaded."""
+    try:
+        await storage.download_to(key, destination)
+    except ObjectNotFoundError as exc:
+        msg = "The stored file is missing."
+        raise PermanentProcessingError(msg) from exc
+    digest = await asyncio.to_thread(_sha256_file, destination)
+    if digest != sha256:
+        logger.error(
+            "processing.integrity_mismatch", storage_key=key, expected=sha256, actual=digest
+        )
+        msg = "The stored file failed its integrity check."
+        raise PermanentProcessingError(msg)
 
 
 class InspectStage:
@@ -287,6 +306,41 @@ class FieldsStage:
             context.review_reasons.extend(outcome.scoring.reasons)
 
 
+class IndexStage:
+    """Search index of the text (Module 28): section-aware chunks, with vectors when the
+    embedder and the sensitivity gate allow. An embedding failure leaves the chunks full-text
+    only (`docintel reembed` adds vectors later) instead of failing the document."""
+
+    name = "index"
+
+    def __init__(self, services: ProcessingServices) -> None:
+        self._services = services
+
+    async def run(self, context: ProcessingContext) -> None:
+        classification = context.classification
+        label = context.human_label or (classification.label if classification else None)
+        title = context.title
+        if label is not None:
+            title = f"{label.value.replace('_', ' ').title()}: {context.title}"
+        context.chunks = chunk_source(
+            parse_pages(context.pages), self._services.chunking, title=title
+        )
+        if not context.chunks or self._services.embedder is None:
+            return
+        texts = [chunk.context_text for chunk in context.chunks]
+        try:
+            context.embedded = await self._services.embedder.embed_documents(
+                texts, context.effective_sensitivity
+            )
+        except (ProviderError, ValueError) as exc:
+            logger.warning(
+                "processing.embedding_failed",
+                document_id=str(context.document_id),
+                error_type=type(exc).__name__,
+            )
+            context.embedded = None
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -334,6 +388,7 @@ def build_stages(storage: DocumentStorage, services: ProcessingServices) -> list
         PreviewStage(storage),
         ClassifyStage(services),
         FieldsStage(services),
+        IndexStage(services),
     ]
 
 
@@ -425,6 +480,7 @@ class DocumentProcessingHandler:
             sensitivity=document.sensitivity,
             workdir=Path(tempfile.mkdtemp(prefix="docintel-job-")),
             human_label=human_label,
+            title=document.display_filename,
         )
 
     async def execute(self, context: ProcessingContext, on_stage: Any) -> None:
@@ -531,6 +587,37 @@ class DocumentProcessingHandler:
             document.vendor_id = outcome.vendor.vendor_id if outcome.vendor else None
         return record
 
+    async def _store_index(
+        self, session: AsyncSession, document: Document, context: ProcessingContext
+    ) -> dict[str, Any]:
+        """Replace the document's search chunks with those of this version."""
+        await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+        embedded = context.embedded
+        vectors = embedded.vectors if embedded is not None else None
+        model = embedded.model if embedded is not None and vectors is not None else None
+        if document.deleted_at is None:
+            session.add_all(
+                DocumentChunk(
+                    document_id=document.id,
+                    document_version_id=context.version_id,
+                    chunk_index=chunk.index,
+                    context_prefix=chunk.context_prefix,
+                    content=chunk.content,
+                    page_start=chunk.page_start,
+                    page_end=chunk.page_end,
+                    token_count=chunk.token_count,
+                    content_hash=chunk.content_hash,
+                    embedding=vectors[index] if vectors is not None else None,
+                    embedding_model=model,
+                )
+                for index, chunk in enumerate(context.chunks)
+            )
+        return {
+            "chunks": len(context.chunks),
+            "embedding_model": model,
+            "embedding_note": embedded.note if embedded is not None else None,
+        }
+
     async def on_success(
         self, session: AsyncSession, context: ProcessingContext, finished_at: datetime
     ) -> None:
@@ -562,6 +649,7 @@ class DocumentProcessingHandler:
         )
         current = await self._store_classification(session, document, context)
         extraction = await self._store_extraction(session, document, context)
+        indexed = await self._store_index(session, document, context)
 
         reasons = list(dict.fromkeys(reason.value for reason in context.review_reasons))
         review: dict[str, Any] | None = None
@@ -608,6 +696,7 @@ class DocumentProcessingHandler:
                 },
                 "review_reasons": document.review_reasons,
                 "review": review,
+                "index": indexed,
             },
         )
 

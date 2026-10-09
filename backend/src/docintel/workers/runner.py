@@ -18,7 +18,7 @@ import socket
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import psycopg
 from sqlalchemy.engine import make_url
@@ -29,6 +29,7 @@ from docintel.ai.errors import ProviderError
 from docintel.core.config import Settings
 from docintel.core.logging import get_logger
 from docintel.db.models import JobType
+from docintel.knowledge.processing import KnowledgeProcessingHandler
 from docintel.processing.ocr import OCRError
 from docintel.processing.pipeline import (
     DocumentProcessingHandler,
@@ -47,6 +48,18 @@ _LOOP_ERROR_BACKOFF_SECONDS = 2.0
 
 class LeaseLostError(Exception):
     """Another worker reclaimed this job; stop working on it."""
+
+
+class JobHandler(Protocol):
+    async def prepare(self, session: AsyncSession, job: ClaimedJob) -> Any: ...
+
+    async def execute(self, context: Any, on_stage: Any) -> None: ...
+
+    async def on_success(self, session: AsyncSession, context: Any, finished_at: Any) -> None: ...
+
+    async def on_failure(
+        self, session: AsyncSession, job: ClaimedJob, *, new_status: Any, user_message: str
+    ) -> None: ...
 
 
 def classify_failure(exc: BaseException, job_id: uuid.UUID) -> tuple[bool, str]:
@@ -92,10 +105,13 @@ class Worker:
             lease_seconds=settings.job_lease_seconds,
             retry_base_seconds=settings.job_retry_base_seconds,
         )
-        self._handlers = {
+        self._handlers: dict[JobType, JobHandler] = {
             JobType.DOCUMENT_PROCESSING: DocumentProcessingHandler(
                 storage, build_stages(storage, self.services), self.services
-            )
+            ),
+            JobType.KNOWLEDGE_PROCESSING: KnowledgeProcessingHandler(
+                storage, self.services, self.services.embedder, self.services.chunking
+            ),
         }
         self._wakeup = asyncio.Event()
         self._heartbeat_file = settings.worker_heartbeat_file

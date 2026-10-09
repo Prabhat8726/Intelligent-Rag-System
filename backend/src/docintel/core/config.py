@@ -210,6 +210,8 @@ class Settings(BaseSettings):
     )
 
     # ---------------------------------------------------------------- knowledge & RAG
+    # Markdown / plain-text knowledge files (PDFs and images use UPLOAD_MAX_BYTES).
+    knowledge_text_max_bytes: int = Field(default=2 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
     knowledge_chunk_target_tokens: int = Field(default=500, ge=50, le=4000)
     knowledge_chunk_max_tokens: int = Field(default=800, ge=50, le=8000)
     knowledge_chunk_overlap_tokens: int = Field(default=75, ge=0, le=1000)

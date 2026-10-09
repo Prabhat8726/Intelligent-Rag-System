@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import UploadFile
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +36,7 @@ from docintel.db.models import (
     AuditOutcome,
     Department,
     Document,
+    DocumentChunk,
     DocumentSource,
     DocumentStatus,
     DocumentType,
@@ -77,7 +78,20 @@ class DocumentDownload:
     chunks: AsyncIterator[bytes]
 
 
-def _escape_like(value: str) -> str:
+async def spool_upload(upload: UploadFile, destination: Path, *, max_bytes: int) -> None:
+    """Copy the multipart part to a private file, enforcing the size cap while copying."""
+    written = 0
+    with destination.open("wb") as handle:
+        while chunk := await upload.read(_SPOOL_CHUNK):
+            written += len(chunk)
+            if written > max_bytes:
+                limit_mb = max_bytes // (1024 * 1024)
+                msg = f"The file exceeds the maximum upload size of {limit_mb} MB."
+                raise PayloadTooLargeError(msg)
+            handle.write(chunk)
+
+
+def escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
@@ -97,16 +111,7 @@ class DocumentService:
 
     # ------------------------------------------------------------------------ upload
     async def _spool(self, upload: UploadFile, destination: Path) -> None:
-        """Copy the multipart part to a private file, enforcing the size cap while copying."""
-        written = 0
-        with destination.open("wb") as handle:
-            while chunk := await upload.read(_SPOOL_CHUNK):
-                written += len(chunk)
-                if written > self._limits.max_bytes:
-                    limit_mb = self._limits.max_bytes // (1024 * 1024)
-                    msg = f"The file exceeds the maximum upload size of {limit_mb} MB."
-                    raise PayloadTooLargeError(msg)
-                handle.write(chunk)
+        await spool_upload(upload, destination, max_bytes=self._limits.max_bytes)
 
     async def _resolve_department(
         self, actor: User, requested: uuid.UUID | None
@@ -402,7 +407,7 @@ class DocumentService:
         if filters.owned_by_me:
             statement = statement.where(Document.owner_id == actor.id)
         if filters.filename_contains:
-            pattern = f"%{_escape_like(filters.filename_contains)}%"
+            pattern = f"%{escape_like(filters.filename_contains)}%"
             statement = statement.where(Document.display_filename.ilike(pattern, escape="\\"))
         if filters.created_from is not None:
             statement = statement.where(Document.created_at >= filters.created_from)
@@ -474,6 +479,10 @@ class DocumentService:
         document.deleted_by_id = actor.id
         cancelled = await cancel_queued_jobs(self._session, document_id=document_id)
         await cancel_open_task(self._session, document, "The document was deleted.")
+        # Its text leaves the search index (the stored file and results stay for the audit trail).
+        await self._session.execute(
+            delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
+        )
         # Documents compared with it, or flagged as its duplicates, are re-evaluated without it.
         await MatchingService(self._session, self._settings).refresh(document, actor=actor)
         record_audit_event(

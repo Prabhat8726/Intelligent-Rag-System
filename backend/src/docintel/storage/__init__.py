@@ -13,6 +13,7 @@ from docintel.storage.base import (
     StorageUnavailableError,
     StoredObject,
     document_object_key,
+    knowledge_object_key,
     page_preview_key,
 )
 from docintel.storage.local import LocalStorage
@@ -29,6 +30,7 @@ __all__ = [
     "StoredObject",
     "build_storage",
     "document_object_key",
+    "knowledge_object_key",
     "page_preview_key",
 ]
 

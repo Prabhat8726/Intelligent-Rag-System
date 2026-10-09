@@ -197,6 +197,7 @@ async def test_native_pdf_is_inspected_and_completed(
         "previews",
         "classify",
         "fields",
+        "index",
     }
     assert job.locked_by is None
     assert job.finished_at is not None

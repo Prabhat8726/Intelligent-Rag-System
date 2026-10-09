@@ -25,6 +25,14 @@ from docintel.db.models.extraction import (
     Vendor,
 )
 from docintel.db.models.identity import Department, Role, User
+from docintel.db.models.knowledge import (
+    DocumentChunk,
+    KnowledgeCategory,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    KnowledgeFormat,
+    KnowledgeStatus,
+)
 from docintel.db.models.matching import (
     HUMAN_RESOLUTIONS,
     OPEN_TASK_STATUSES,
@@ -75,6 +83,7 @@ __all__ = [
     "ComparisonType",
     "Department",
     "Document",
+    "DocumentChunk",
     "DocumentClassification",
     "DocumentExtraction",
     "DocumentPage",
@@ -91,6 +100,11 @@ __all__ = [
     "FieldOrigin",
     "JobStatus",
     "JobType",
+    "KnowledgeCategory",
+    "KnowledgeChunk",
+    "KnowledgeDocument",
+    "KnowledgeFormat",
+    "KnowledgeStatus",
     "LLMCall",
     "LLMCallStatus",
     "ProcessingJob",

@@ -69,6 +69,7 @@ class DocumentSource(StrEnum):
 
 class JobType(StrEnum):
     DOCUMENT_PROCESSING = "DOCUMENT_PROCESSING"
+    KNOWLEDGE_PROCESSING = "KNOWLEDGE_PROCESSING"
 
 
 class JobStatus(StrEnum):
@@ -243,6 +244,12 @@ class ProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             unique=True,
             postgresql_where=text("status IN ('QUEUED', 'PROCESSING')"),
         ),
+        Index(
+            "uq_processing_jobs_active_knowledge",
+            "knowledge_document_id",
+            unique=True,
+            postgresql_where=text("status IN ('QUEUED', 'PROCESSING')"),
+        ),
         CheckConstraint("attempts >= 0", name="attempts_non_negative"),
         CheckConstraint("max_attempts >= 1", name="max_attempts_positive"),
     )
@@ -256,6 +263,9 @@ class ProcessingJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     document_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("document_versions.id", ondelete="CASCADE")
+    )
+    knowledge_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("knowledge_documents.id", ondelete="CASCADE")
     )
     requested_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT")

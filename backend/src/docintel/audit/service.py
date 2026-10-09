@@ -43,6 +43,12 @@ class AuditAction(StrEnum):
     REVIEW_TASK_CLAIMED = "review_task.claimed"
     REVIEW_TASK_RELEASED = "review_task.released"
     REVIEW_TASK_RESOLVED = "review_task.resolved"
+    KNOWLEDGE_UPLOADED = "knowledge.uploaded"
+    KNOWLEDGE_PROCESSING_COMPLETED = "knowledge.processing.completed"
+    KNOWLEDGE_PROCESSING_FAILED = "knowledge.processing.failed"
+    KNOWLEDGE_ARCHIVED = "knowledge.archived"
+    KNOWLEDGE_QUERIED = "knowledge.queried"
+    SEARCH_PERFORMED = "search.performed"
 
 
 @dataclass(frozen=True, slots=True)

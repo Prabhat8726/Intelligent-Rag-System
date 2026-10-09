@@ -111,6 +111,8 @@ async def test_phase5_migration_opens_tasks_for_documents_waiting_for_review(
     assert rules == 19
 
 
+# Alembic cannot compare generated-column expressions; it warns and skips them.
+@pytest.mark.filterwarnings("ignore:Computed default on .* cannot be modified:UserWarning")
 def test_models_match_migrations(database_url: str) -> None:
     """Equivalent of `alembic check`: autogenerate finds nothing to change."""
     engine = create_engine(database_url)

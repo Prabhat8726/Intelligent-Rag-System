@@ -1,7 +1,8 @@
 """Knowledge sources to structured text units (headings, paragraphs, tables) with page numbers.
 
-Markdown (and plain text) is parsed directly: `#` headings, `|` tables, blank-line paragraphs, an
-optional front-matter block of `key: value` lines between `---` fences. PDFs and images go
+Markdown is parsed directly: `#` headings, `|` tables, blank-line paragraphs, an optional
+front-matter block of `key: value` lines between `---` fences. Plain text has paragraphs and
+numbered headings on lines of their own. PDFs and images go
 through the same extraction as business documents; their units come from the layout blocks:
 large single-line blocks and numbered headings ("4.", "4.2 Tolerance", "Article 3") become
 headings, detected tables stay tables.
@@ -19,6 +20,7 @@ from docintel.versions.clauses import parse_heading
 
 _MD_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 _FRONT_MATTER_KEY = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$")
+_MAX_TITLE_WORDS = 12
 _TABLE_SEPARATOR = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
 
 
@@ -106,6 +108,36 @@ def _heading_level(number: str | None) -> int:
     return 2 if number is None else number.count(".") + 2
 
 
+def _numbered_heading(text: str, page: int | None = None) -> Unit | None:
+    numbered = parse_heading(text)
+    if numbered is None:
+        return None
+    number, title = numbered
+    label = f"{number}. {title}" if "." not in number else f"{number} {title}"
+    return Unit(UnitKind.HEADING, label, level=_heading_level(number), page=page)
+
+
+def parse_text(text: str) -> ParsedSource:
+    """Plain text: blank-line paragraphs; a paragraph that is a single numbered line
+    ("4.2 Tolerance", "Article 3 Term") is a heading, and a short first line without a full
+    stop is the title."""
+    metadata, body = split_front_matter(text)
+    units: list[Unit] = []
+    for block in re.split(r"\n\s*\n", body):
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        if not lines:
+            continue
+        heading = _numbered_heading(lines[0]) if len(lines) == 1 else None
+        if heading is None and not units and len(lines) == 1 and _looks_like_title(lines[0]):
+            heading = Unit(UnitKind.HEADING, lines[0], level=1)
+        units.append(heading or Unit(UnitKind.TEXT, "\n".join(lines)))
+    return ParsedSource(metadata, units)
+
+
+def _looks_like_title(line: str) -> bool:
+    return len(line.split()) <= _MAX_TITLE_WORDS and not line.endswith((".", ":", ";", ","))
+
+
 def parse_pages(pages: Sequence[PageContent]) -> ParsedSource:
     """Units from extracted pages, in reading order, with their page numbers."""
     units: list[Unit] = []
@@ -129,22 +161,14 @@ def parse_pages(pages: Sequence[PageContent]) -> ParsedSource:
                 continue
             paragraph: list[str] = []
             for text in texts:
-                numbered = parse_heading(text)
-                if numbered is not None:
+                heading = _numbered_heading(text, page.page_number)
+                if heading is not None:
                     if paragraph:
                         units.append(
                             Unit(UnitKind.TEXT, " ".join(paragraph), page=page.page_number)
                         )
                         paragraph = []
-                    number, title = numbered
-                    units.append(
-                        Unit(
-                            UnitKind.HEADING,
-                            f"{number}. {title}" if "." not in number else f"{number} {title}",
-                            level=_heading_level(number),
-                            page=page.page_number,
-                        )
-                    )
+                    units.append(heading)
                 else:
                     paragraph.append(text)
             if paragraph:
