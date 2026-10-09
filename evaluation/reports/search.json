@@ -1,0 +1,727 @@
+{
+  "suite": "search",
+  "title": "Business document search evaluation",
+  "created_at": "2026-10-09T14:56:48+00:00",
+  "git_revision": "42fedf983ee5",
+  "environment": {
+    "python": "3.13.16",
+    "pypdfium2": "5.14.0",
+    "pillow": "12.3.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "rapidfuzz": "3.14.6",
+    "reportlab": "5.0.1",
+    "embedding": "hashing-ngram-v1"
+  },
+  "dataset": {
+    "generator_seed": 2,
+    "scenarios": [
+      "CLEAN_MATCH",
+      "VENDOR_NAME_VARIANT",
+      "UNIT_PRICE_MISMATCH",
+      "QUANTITY_MISMATCH",
+      "SHORT_DELIVERY",
+      "TAX_RATE_MISMATCH"
+    ],
+    "documents": 18,
+    "questions": 32
+  },
+  "config": {
+    "embedding_model": "hashing-ngram-v1",
+    "text_depth": 10,
+    "quick": false,
+    "seconds": 16.3
+  },
+  "metrics": {
+    "families": {
+      "vendor": {
+        "tp": 30,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "questions": 15,
+        "exact_set_rate": 1.0
+      },
+      "payment terms": {
+        "tp": 16,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "questions": 3,
+        "exact_set_rate": 1.0
+      },
+      "totals": {
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "questions": 2,
+        "exact_set_rate": 1.0
+      },
+      "dates": {
+        "tp": 5,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "questions": 4,
+        "exact_set_rate": 1.0
+      },
+      "types": {
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "questions": 2,
+        "exact_set_rate": 1.0
+      },
+      "text": {
+        "tp": 21,
+        "fp": 19,
+        "fn": 0,
+        "precision": 0.525,
+        "recall": 1.0,
+        "f1": 0.6885,
+        "questions": 6,
+        "exact_set_rate": 1.0
+      }
+    },
+    "questions": [
+      {
+        "family": "vendor",
+        "question": "invoices from Kestrel Industrial Supply Inc.",
+        "relevant": [
+          "B0001-INV"
+        ],
+        "returned": [
+          "B0001-INV"
+        ],
+        "recognized": [
+          "type INVOICE",
+          "vendor 'Kestrel Industrial Supply Inc'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "purchase orders from KESTREL INDUSTRIAL SUPPLY",
+        "relevant": [
+          "B0001-PO"
+        ],
+        "returned": [
+          "B0001-PO"
+        ],
+        "recognized": [
+          "type PURCHASE_ORDER",
+          "vendor 'KESTREL INDUSTRIAL SUPPLY'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "documents from Kestrel Industrial",
+        "relevant": [
+          "B0001-DN",
+          "B0001-INV",
+          "B0001-PO"
+        ],
+        "returned": [
+          "B0001-INV",
+          "B0001-DN",
+          "B0001-PO"
+        ],
+        "recognized": [
+          "vendor 'Kestrel Industrial'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "invoices from Bluepeak Office Solutions LLC",
+        "relevant": [
+          "B0006-INV"
+        ],
+        "returned": [
+          "B0006-INV"
+        ],
+        "recognized": [
+          "type INVOICE",
+          "vendor 'Bluepeak Office Solutions LLC'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "purchase orders from BLUEPEAK OFFICE SOLUTIONS",
+        "relevant": [
+          "B0006-PO"
+        ],
+        "returned": [
+          "B0006-PO"
+        ],
+        "recognized": [
+          "type PURCHASE_ORDER",
+          "vendor 'BLUEPEAK OFFICE SOLUTIONS'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "documents from Bluepeak Office",
+        "relevant": [
+          "B0006-DN",
+          "B0006-INV",
+          "B0006-PO"
+        ],
+        "returned": [
+          "B0006-INV",
+          "B0006-DN",
+          "B0006-PO"
+        ],
+        "recognized": [
+          "vendor 'Bluepeak Office'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "invoices from Altamira Components GmbH",
+        "relevant": [
+          "B0005-INV"
+        ],
+        "returned": [
+          "B0005-INV"
+        ],
+        "recognized": [
+          "type INVOICE",
+          "vendor 'Altamira Components GmbH'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "purchase orders from ALTAMIRA COMPONENTS",
+        "relevant": [
+          "B0005-PO"
+        ],
+        "returned": [
+          "B0005-PO"
+        ],
+        "recognized": [
+          "type PURCHASE_ORDER",
+          "vendor 'ALTAMIRA COMPONENTS'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "documents from Altamira Components",
+        "relevant": [
+          "B0005-DN",
+          "B0005-INV",
+          "B0005-PO"
+        ],
+        "returned": [
+          "B0005-INV",
+          "B0005-DN",
+          "B0005-PO"
+        ],
+        "recognized": [
+          "vendor 'Altamira Components'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "invoices from Harbor & Pine Packaging Ltd.",
+        "relevant": [
+          "B0002-INV",
+          "B0004-INV"
+        ],
+        "returned": [
+          "B0004-INV",
+          "B0002-INV"
+        ],
+        "recognized": [
+          "type INVOICE",
+          "vendor 'Harbor & Pine Packaging Ltd'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "purchase orders from Harbor and Pine Packaging Ltd",
+        "relevant": [
+          "B0002-PO",
+          "B0004-PO"
+        ],
+        "returned": [
+          "B0004-PO",
+          "B0002-PO"
+        ],
+        "recognized": [
+          "type PURCHASE_ORDER",
+          "vendor 'Harbor and Pine Packaging Ltd'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "documents from Harbor &",
+        "relevant": [
+          "B0002-DN",
+          "B0002-INV",
+          "B0002-PO",
+          "B0004-DN",
+          "B0004-INV",
+          "B0004-PO"
+        ],
+        "returned": [
+          "B0004-INV",
+          "B0004-DN",
+          "B0004-PO",
+          "B0002-INV",
+          "B0002-DN",
+          "B0002-PO"
+        ],
+        "recognized": [
+          "vendor 'Harbor &'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "invoices from Sundaram Precision Tools Pvt. Ltd.",
+        "relevant": [
+          "B0003-INV"
+        ],
+        "returned": [
+          "B0003-INV"
+        ],
+        "recognized": [
+          "type INVOICE",
+          "vendor 'Sundaram Precision Tools Pvt. Ltd'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "purchase orders from SUNDARAM PRECISION TOOLS PRIVATE LIMITED",
+        "relevant": [
+          "B0003-PO"
+        ],
+        "returned": [
+          "B0003-PO"
+        ],
+        "recognized": [
+          "type PURCHASE_ORDER",
+          "vendor 'SUNDARAM PRECISION TOOLS PRIVATE LIMITED'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "vendor",
+        "question": "documents from Sundaram Precision",
+        "relevant": [
+          "B0003-DN",
+          "B0003-INV",
+          "B0003-PO"
+        ],
+        "returned": [
+          "B0003-INV",
+          "B0003-DN",
+          "B0003-PO"
+        ],
+        "recognized": [
+          "vendor 'Sundaram Precision'"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "payment terms",
+        "question": "documents with payment terms longer than 30 days",
+        "relevant": [
+          "B0002-INV",
+          "B0002-PO",
+          "B0004-INV",
+          "B0004-PO",
+          "B0006-INV",
+          "B0006-PO"
+        ],
+        "returned": [
+          "B0004-INV",
+          "B0004-PO",
+          "B0002-INV",
+          "B0002-PO",
+          "B0006-INV",
+          "B0006-PO"
+        ],
+        "recognized": [
+          "payment terms more than 30 days"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "payment terms",
+        "question": "documents with payment terms of at least 60 days",
+        "relevant": [
+          "B0002-INV",
+          "B0002-PO",
+          "B0004-INV",
+          "B0004-PO"
+        ],
+        "returned": [
+          "B0004-INV",
+          "B0004-PO",
+          "B0002-INV",
+          "B0002-PO"
+        ],
+        "recognized": [
+          "payment terms at least 60 days"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "payment terms",
+        "question": "documents with payment terms shorter than 45 days",
+        "relevant": [
+          "B0001-INV",
+          "B0001-PO",
+          "B0003-INV",
+          "B0003-PO",
+          "B0005-INV",
+          "B0005-PO"
+        ],
+        "returned": [
+          "B0003-INV",
+          "B0003-PO",
+          "B0005-INV",
+          "B0005-PO",
+          "B0001-INV",
+          "B0001-PO"
+        ],
+        "recognized": [
+          "payment terms less than 45 days"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "totals",
+        "question": "invoices over 2,000",
+        "relevant": [
+          "B0003-INV",
+          "B0005-INV"
+        ],
+        "returned": [
+          "B0003-INV",
+          "B0005-INV"
+        ],
+        "recognized": [
+          "total more than 2,000",
+          "type INVOICE"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "totals",
+        "question": "purchase orders under 1,000",
+        "relevant": [
+          "B0001-PO",
+          "B0002-PO",
+          "B0004-PO",
+          "B0006-PO"
+        ],
+        "returned": [
+          "B0004-PO",
+          "B0002-PO",
+          "B0001-PO",
+          "B0006-PO"
+        ],
+        "recognized": [
+          "total less than 1,000",
+          "type PURCHASE_ORDER"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "dates",
+        "question": "invoices in February 2026",
+        "relevant": [
+          "B0006-INV"
+        ],
+        "returned": [
+          "B0006-INV"
+        ],
+        "recognized": [
+          "dated 2026-02-01 to 2026-02-28",
+          "type INVOICE"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "dates",
+        "question": "invoices in March 2026",
+        "relevant": [
+          "B0001-INV"
+        ],
+        "returned": [
+          "B0001-INV"
+        ],
+        "recognized": [
+          "dated 2026-03-01 to 2026-03-31",
+          "type INVOICE"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "dates",
+        "question": "invoices in May 2026",
+        "relevant": [
+          "B0002-INV"
+        ],
+        "returned": [
+          "B0002-INV"
+        ],
+        "recognized": [
+          "dated 2026-05-01 to 2026-05-31",
+          "type INVOICE"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "dates",
+        "question": "invoices in June 2026",
+        "relevant": [
+          "B0004-INV",
+          "B0005-INV"
+        ],
+        "returned": [
+          "B0005-INV",
+          "B0004-INV"
+        ],
+        "recognized": [
+          "dated 2026-06-01 to 2026-06-30",
+          "type INVOICE"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "types",
+        "question": "delivery notes",
+        "relevant": [
+          "B0001-DN",
+          "B0002-DN",
+          "B0003-DN",
+          "B0004-DN",
+          "B0005-DN",
+          "B0006-DN"
+        ],
+        "returned": [
+          "B0003-DN",
+          "B0005-DN",
+          "B0004-DN",
+          "B0002-DN",
+          "B0001-DN",
+          "B0006-DN"
+        ],
+        "recognized": [
+          "type DELIVERY_NOTE"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "types",
+        "question": "purchase orders",
+        "relevant": [
+          "B0001-PO",
+          "B0002-PO",
+          "B0003-PO",
+          "B0004-PO",
+          "B0005-PO",
+          "B0006-PO"
+        ],
+        "returned": [
+          "B0003-PO",
+          "B0005-PO",
+          "B0004-PO",
+          "B0002-PO",
+          "B0001-PO",
+          "B0006-PO"
+        ],
+        "recognized": [
+          "type PURCHASE_ORDER"
+        ],
+        "free_text": "",
+        "mode": "structured"
+      },
+      {
+        "family": "text",
+        "question": "Brass ball valve DN50 PN25",
+        "relevant": [
+          "B0005-DN",
+          "B0005-INV",
+          "B0005-PO"
+        ],
+        "returned": [
+          "B0005-INV",
+          "B0005-PO",
+          "B0005-DN",
+          "B0001-DN",
+          "B0001-PO",
+          "B0001-INV"
+        ],
+        "recognized": [],
+        "free_text": "Brass ball valve DN50 PN25",
+        "mode": "text"
+      },
+      {
+        "family": "text",
+        "question": "Copy paper A4 80gsm, ream",
+        "relevant": [
+          "B0006-DN",
+          "B0006-INV",
+          "B0006-PO"
+        ],
+        "returned": [
+          "B0006-PO",
+          "B0006-INV",
+          "B0006-DN"
+        ],
+        "recognized": [],
+        "free_text": "Copy paper A4 80gsm ream",
+        "mode": "text"
+      },
+      {
+        "family": "text",
+        "question": "Cut-resistant gloves level 5, pair",
+        "relevant": [
+          "B0003-DN",
+          "B0003-INV",
+          "B0003-PO"
+        ],
+        "returned": [
+          "B0003-PO",
+          "B0003-INV",
+          "B0003-DN",
+          "B0005-INV",
+          "B0005-PO"
+        ],
+        "recognized": [],
+        "free_text": "Cut-resistant gloves level 5 pair",
+        "mode": "text"
+      },
+      {
+        "family": "text",
+        "question": "Digital caliper 150 mm",
+        "relevant": [
+          "B0003-DN",
+          "B0003-INV",
+          "B0003-PO"
+        ],
+        "returned": [
+          "B0003-PO",
+          "B0003-INV",
+          "B0003-DN",
+          "B0001-DN",
+          "B0001-PO",
+          "B0004-DN",
+          "B0005-INV",
+          "B0002-PO",
+          "B0002-INV",
+          "B0005-PO"
+        ],
+        "recognized": [],
+        "free_text": "Digital caliper 150 mm",
+        "mode": "text"
+      },
+      {
+        "family": "text",
+        "question": "Euro pallet 1200x800",
+        "relevant": [
+          "B0002-DN",
+          "B0002-INV",
+          "B0002-PO",
+          "B0004-DN",
+          "B0004-INV",
+          "B0004-PO"
+        ],
+        "returned": [
+          "B0004-DN",
+          "B0002-PO",
+          "B0002-INV",
+          "B0002-DN",
+          "B0004-INV",
+          "B0004-PO"
+        ],
+        "recognized": [],
+        "free_text": "Euro pallet 1200x800",
+        "mode": "text"
+      },
+      {
+        "family": "text",
+        "question": "HSS drill bit 8 mm, set of 10",
+        "relevant": [
+          "B0003-DN",
+          "B0003-INV",
+          "B0003-PO"
+        ],
+        "returned": [
+          "B0003-PO",
+          "B0003-INV",
+          "B0003-DN",
+          "B0004-DN",
+          "B0005-INV",
+          "B0002-PO",
+          "B0002-INV",
+          "B0005-PO",
+          "B0002-DN",
+          "B0004-INV"
+        ],
+        "recognized": [],
+        "free_text": "HSS drill bit 8 mm set 10",
+        "mode": "text"
+      }
+    ]
+  },
+  "notes": [
+    "Questions are generated from the ground truth of a synthetic dataset (native PDFs) and every document went through the production pipeline (classification, extraction, vendor resolution, indexing) first, so the scores measure parsing, extraction and filtering together.",
+    "Structured families (vendor, payment terms, totals, dates, types) are scored as sets: precision and recall over all questions of the family, and the share of questions whose result set is exactly right.",
+    "Text questions return a ranked list (first 10); documents that list the item are relevant. Other documents sharing words with the item are returned too, so text precision is low by design.",
+    "The first run of this suite found vendor names containing 'and' cut short ('Harbor and Pine Packaging Ltd' read as 'Harbor'); the parser was fixed and the suite re-run. Questions come from the ground truth of clean native PDFs, so these structured-search scores are an upper bound: scanned documents are not included.",
+    "Embeddings: lexical hashing model; semantic models not measured."
+  ]
+}
