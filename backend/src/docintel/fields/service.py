@@ -776,9 +776,22 @@ class FieldExtractionService:
                 for column in schema.table.columns:
                     local_cell = local_row.cells.get(column.name) if local_row else None
                     model_cell = model_row.cells.get(column.name) if model_row else None
-                    if local_cell is None and model_cell is None:
-                        continue
                     meta = column_types[column.name]
+                    if local_cell is None and model_cell is None:
+                        if meta.essential or meta.required:
+                            missing = _merge(
+                                f"{schema.table.name}[{index}].{column.name}",
+                                column.name,
+                                meta.type,
+                                meta.required,
+                                None,
+                                None,
+                                group=schema.table.name,
+                                row_index=index,
+                            )
+                            missing.method = "not found in this row"
+                            fields.append(missing)
+                        continue
                     fields.append(
                         _merge(
                             f"{schema.table.name}[{index}].{column.name}",

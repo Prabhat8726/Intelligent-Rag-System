@@ -19,8 +19,8 @@ from docintel.storage.base import (
     DEFAULT_CHUNK_SIZE,
     ObjectNotFoundError,
     StorageError,
-    StoredObject,
     StorageUnavailableError,
+    StoredObject,
     validate_key,
 )
 
@@ -62,7 +62,9 @@ class S3Storage:
             region_name=region,
             aws_access_key_id=access_key_id,
             aws_secret_access_key=secret_access_key,
-            config=Config(signature_version="s3v4", retries={"max_attempts": 5, "mode": "standard"}),
+            config=Config(
+                signature_version="s3v4", retries={"max_attempts": 5, "mode": "standard"}
+            ),
         )
 
     @property
@@ -87,7 +89,8 @@ class S3Storage:
                 str(source), self._bucket, object_key, ExtraArgs={"ContentType": content_type}
             ),
         )
-        return StoredObject(key=key, size_bytes=source.stat().st_size)
+        size = (await asyncio.to_thread(source.stat)).st_size
+        return StoredObject(key=key, size_bytes=size)
 
     async def open_stream(
         self, key: str, *, chunk_size: int = DEFAULT_CHUNK_SIZE
@@ -111,7 +114,9 @@ class S3Storage:
 
     async def delete(self, key: str) -> None:
         object_key = self._object_key(key)
-        await self._call(key, lambda: self._client.delete_object(Bucket=self._bucket, Key=object_key))
+        await self._call(
+            key, lambda: self._client.delete_object(Bucket=self._bucket, Key=object_key)
+        )
 
     async def exists(self, key: str) -> bool:
         object_key = self._object_key(key)

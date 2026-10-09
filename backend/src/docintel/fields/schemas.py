@@ -69,6 +69,10 @@ class ColumnMeta:
     required: bool = False
     # Counts towards the document's review routing (row numbers and units do not).
     routing: bool = True
+    # A line item is incomplete without it: a row missing the cell gets an explicit "not found"
+    # cell, which keeps the document out of auto-acceptance (required columns are essential
+    # too, but rows without them are not line items at all).
+    essential: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,10 +182,16 @@ UNIT_PRICE = ColumnMeta(
     ValueType.MONEY,
     ("unit price", "price", "rate", "unit cost", "price per unit", "einzelpreis"),
 )
-LINE_AMOUNT = ColumnMeta(
-    ValueType.MONEY,
-    ("amount", "line total", "total", "net amount", "extended price", "ext price", "betrag"),
+LINE_AMOUNT_HEADERS = (
+    "amount",
+    "line total",
+    "total",
+    "net amount",
+    "extended price",
+    "ext price",
+    "betrag",
 )
+ESSENTIAL_LINE_AMOUNT = ColumnMeta(ValueType.MONEY, LINE_AMOUNT_HEADERS, essential=True)
 
 
 class PricedLine(TableRowBase):
@@ -191,13 +201,20 @@ class PricedLine(TableRowBase):
     sku: Annotated[Cell, SKU] = Field(default=None, description="Item code / SKU / part number")
     description: Annotated[Cell, DESCRIPTION] = Field(default=None, description="Item description")
     quantity: Annotated[
-        Cell, ColumnMeta(ValueType.QUANTITY, ("qty", "quantity", "qty ordered", "units", "menge"))
+        Cell,
+        ColumnMeta(
+            ValueType.QUANTITY,
+            ("qty", "quantity", "qty ordered", "units", "menge"),
+            essential=True,
+        ),
     ] = Field(default=None, description="Quantity")
     unit: Annotated[Cell, UNIT] = Field(default=None, description="Unit of measure")
     unit_price: Annotated[Cell, UNIT_PRICE] = Field(
         default=None, description="Price per unit as printed"
     )
-    amount: Annotated[Cell, LINE_AMOUNT] = Field(default=None, description="Line total as printed")
+    amount: Annotated[Cell, ESSENTIAL_LINE_AMOUNT] = Field(
+        default=None, description="Line total as printed"
+    )
 
 
 class DeliveredLine(TableRowBase):
@@ -211,6 +228,7 @@ class DeliveredLine(TableRowBase):
         ColumnMeta(
             ValueType.QUANTITY,
             ("qty delivered", "qty shipped", "quantity delivered", "qty", "quantity", "menge"),
+            essential=True,
         ),
     ] = Field(default=None, description="Quantity delivered")
     unit: Annotated[Cell, UNIT] = Field(default=None, description="Unit of measure")
@@ -224,7 +242,9 @@ class ReceiptLine(TableRowBase):
     unit_price: Annotated[Cell, UNIT_PRICE] = Field(
         default=None, description="Price per unit as printed"
     )
-    amount: Annotated[Cell, LINE_AMOUNT] = Field(default=None, description="Line total as printed")
+    amount: Annotated[Cell, ESSENTIAL_LINE_AMOUNT] = Field(
+        default=None, description="Line total as printed"
+    )
 
 
 class StatementTransaction(TableRowBase):

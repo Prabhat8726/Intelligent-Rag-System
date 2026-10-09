@@ -365,6 +365,24 @@ async def test_a_missing_line_item_table_blocks_auto_acceptance_until_confirmed(
     assert field(complete, "line_items").value == 2
 
 
+async def test_a_line_item_missing_an_essential_cell_is_not_auto_accepted() -> None:
+    # A scan can garble a row so that its quantity is lost; the row's other cells are fine.
+    lines = [list(line) for line in INVOICE_PAGE_LINES]
+    row = next(i for i, line in enumerate(lines) if line and line[0] == (52, "1"))
+    lines[row] = [cell for cell in lines[row] if cell != (338, "10")]
+    outcome = await extract(service(), [invoice_page(lines=lines)])
+
+    quantity = field(outcome, "line_items[0].quantity")
+    assert quantity.found is False
+    assert quantity.evidence == EvidenceStatus.NOT_FOUND
+    assert quantity.confidence == 0.0
+    assert quantity.method == "not found in this row"
+    assert field(outcome, "line_items[0].amount").value == "48.5"
+    assert field(outcome, "line_items[1].quantity").value == "2"
+    assert outcome.scoring.level == ReviewLevel.MANDATORY_REVIEW
+    assert outcome.scoring.reasons == [ReviewReason.EXTRACTION_UNCERTAIN]
+
+
 async def test_document_currency_comes_from_the_page_when_nothing_else_says() -> None:
     page = make_page(
         [

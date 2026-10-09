@@ -10,8 +10,8 @@ from docintel.storage.base import (
     ObjectNotFoundError,
     StorageError,
     StorageKeyError,
-    StoredObject,
     StorageUnavailableError,
+    StoredObject,
     document_object_key,
     page_preview_key,
 )
