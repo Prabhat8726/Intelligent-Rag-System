@@ -192,7 +192,9 @@ describe("knowledge base", () => {
       "/api/v1/auth/me": me(VIEWER),
       [LIST_URL]: () => jsonResponse(page([])),
       "/api/v1/knowledge/query": () =>
-        jsonResponse(answer({ status: "INSUFFICIENT_EVIDENCE", answer: null, claims: [], notices: [] })),
+        jsonResponse(
+          answer({ status: "INSUFFICIENT_EVIDENCE", answer: null, claims: [], notices: [], model: null, provider: null }),
+        ),
     });
     const user = userEvent.setup();
     renderApp("/knowledge");
@@ -200,6 +202,8 @@ describe("knowledge base", () => {
     await user.click(screen.getByRole("button", { name: "Ask" }));
     const result = await screen.findByRole("region", { name: "Answer" });
     expect(within(result).getByText("Insufficient evidence")).toBeInTheDocument();
+    // No model saw anything, so no source is marked as withheld.
+    expect(within(result).queryByText("not sent to model")).not.toBeInTheDocument();
     expect(within(result).getByText("Closest passages")).toBeInTheDocument();
     expect(within(result).queryByRole("list", { name: "Statements" })).not.toBeInTheDocument();
   });

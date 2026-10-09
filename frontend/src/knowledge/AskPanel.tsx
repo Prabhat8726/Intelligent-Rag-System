@@ -7,7 +7,8 @@ import { ApiError, apiRequest } from "../lib/api";
 import type { AnswerSource, KnowledgeAnswer, KnowledgeCategory } from "../lib/types";
 import { ANSWER_STATUS, CATEGORIES, CATEGORY_LABELS, formatPeriod } from "./format";
 
-function SourceCard({ source }: { source: AnswerSource }) {
+/** `modelUsed`: a model answered, so a source it did not see was withheld on purpose. */
+function SourceCard({ source, modelUsed }: { source: AnswerSource; modelUsed: boolean }) {
   const [open, setOpen] = useState(source.cited);
   const period = formatPeriod(source.effective_from, source.effective_to);
   const pages =
@@ -28,10 +29,10 @@ function SourceCard({ source }: { source: AnswerSource }) {
           <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-700">earlier version</span>
         )}
         {source.cited && <span className="rounded bg-emerald-50 px-1.5 text-xs text-emerald-800">cited</span>}
-        {!source.sent_to_model && (
+        {modelUsed && !source.sent_to_model && (
           <span
             className="rounded bg-amber-50 px-1.5 text-xs text-amber-800"
-            title="Not sent to the language model (no model, or above the external AI sensitivity limit)"
+            title="Above the external AI sensitivity limit: not sent to the language model"
           >
             not sent to model
           </span>
@@ -99,7 +100,7 @@ export function AnswerView({ answer }: { answer: KnowledgeAnswer }) {
           </h3>
           <ol className="mt-2 space-y-2">
             {answer.sources.map((source) => (
-              <SourceCard key={source.label} source={source} />
+              <SourceCard key={source.label} source={source} modelUsed={answer.model !== null} />
             ))}
           </ol>
         </div>

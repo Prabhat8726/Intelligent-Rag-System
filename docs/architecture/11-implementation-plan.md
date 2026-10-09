@@ -213,3 +213,36 @@ Delivery
 
 Not in Phase 5 (by design): contract ↔ policy and resume ↔ job comparison (agent tools, Phase 7); workflow actions on review decisions (Phase 8); calibration of the confidence threshold on real documents (Phase 10).
 
+
+## 6. Phase 6 acceptance criteria
+
+Status as of 2026-10-09, same legend as §1. Metrics live in `evaluation/reports/retrieval.md`
+and `search.md` (commit `42fedf9`).
+
+Knowledge base (Module 12)
+- ✅ Markdown, text, PDF and image uploads with front-matter or form metadata; UTF-8/binary/size/front-matter validation; scope organization-wide or one department (managers: own department, administrators: any); a version can never change its audience; duplicates rejected (`unit/test_knowledge_ingestion.py`, `integration/test_knowledge_api.py`)
+- ✅ Worker: integrity, parse (PDFs through the business-document extraction), section-aware chunking with breadcrumbs, content sensitivity scan, gated embeddings; embedding failures retried, then stored full-text only with a note (`integration/test_knowledge_api.py`)
+- ✅ Versions: newer ACTIVE, older SUPERSEDED in either upload order and with concurrent uploads; retrieval windows on chunks; archiving the active version restores the previous one (`test_knowledge_api.py::test_a_new_version_supersedes_the_old_one_in_either_upload_order`, `::test_archiving_the_active_version_restores_the_previous_one`)
+- ✅ Business documents indexed by the pipeline's `index` stage, removed from the index on delete; `docintel reembed` adds vectors of the configured model and leaves gated chunks alone (`test_knowledge_api.py::test_business_documents_are_indexed_and_removed_on_delete`, `::test_reembed_adds_vectors_of_the_configured_model`)
+
+RAG (Module 13)
+- ✅ Hybrid retrieval with filters in SQL (access, status, window, category, keys); deterministic results (two runs of the suite identical) (`integration/test_knowledge_rag.py`)
+- ✅ Citations: answers composed from claims citing provided sources, invalid citations removed, numbers and words checked against the cited text, statuses ANSWERED / PARTIALLY_SUPPORTED / INSUFFICIENT_EVIDENCE / RETRIEVAL_ONLY; unanswerable questions refused without a model call; queries audited with a question fingerprint and model calls accounted (`test_knowledge_rag.py`, `unit/test_rag.py`)
+- ✅ Superseded policy cited only for past dates; the Legal playbook invisible to Finance on every path and never sent to an external model; planted instructions stay inside the delimited sources; hostile query strings are text or 422 (`security/test_knowledge_security.py`)
+
+Search (Module 28)
+- ✅ "Invoices from Vendor X", "contracts containing termination clauses", "payment terms longer than 60 days" (extracted, or read from text), totals, dates, free text with snippets; department-scoped (`integration/test_document_search.py`, `unit/test_search_query.py`)
+
+Evaluation (lexical hashing embeddings, synthetic data)
+- ✅ Retrieval with ablations: hybrid MRR 0.938 on kb-queries (tuning) and 0.950 on the holdout; full text 0.918, dense 0.885, no prefix 0.812, fixed-size chunks 0.841; gate refused 5/6 and 2/4 unanswerable questions, 1/48 and 0/10 false refusals; 0 passages of another department, 0 superseded passages as of the evaluation date
+- ✅ Search: 100% precision and recall on 26 structured questions; text recall@10 100%
+- ✅ The suites changed the code: non-deterministic tie-breaking (fixed), the full-text order chosen per mode on kb-queries, vendor names containing "and" (fixed), versions of one document rejected while one was processing (allowed now), a NUL byte in a query causing a 500 (now 422)
+- ⏳ Gemini and fastembed embeddings, and generated answers (citation precision/recall, faithfulness) — no key or model download in the build environment
+
+Delivery
+- ✅ 733 backend tests, ruff, ruff format, mypy --strict; 58 frontend tests, ESLint, `tsc`, production build
+- ✅ Docker stack rebuilt (sandbox-only base-image shim: `deb.debian.org` blocked), migration 0006 applied by the migrate service, smoke test passes on a fresh stack, the synthetic dataset (37 documents) and the knowledge base (11 files: 10 ACTIVE, 1 SUPERSEDED) load through nginx, knowledge and search APIs checked as Finance and Legal users, browser check of the Knowledge and Search pages without console errors
+- ✅ gitleaks clean on history; `actionlint` clean; CI loads the knowledge base through the stack
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+
+Not in Phase 6 (by design): agent use of retrieval and policy explanations of rule results (Phase 7); reranking (only if measured to help, Phase 10); calibrating `RAG_MIN_DENSE_SIMILARITY` for Gemini or fastembed (needs those models).
