@@ -66,6 +66,17 @@ def test_amounts_dates_and_vendors() -> None:
     assert (parsed.date_from, parsed.date_to) == (date(2026, 1, 1), date(2026, 12, 31))
 
 
+def test_vendor_names_with_and_or_of() -> None:
+    assert parse_query("purchase orders from Harbor and Pine Packaging Ltd").vendor == (
+        "Harbor and Pine Packaging Ltd"
+    )
+    assert parse_query("invoices from Bank of America in 2026").vendor == "Bank of America"
+    split = parse_query("invoices from Kestrel and over 1,000")
+    assert split.vendor == "Kestrel"
+    assert split.total == Comparison("gt", Decimal(1000))
+    assert split.text == ""
+
+
 def test_unrecognized_words_stay_free_text() -> None:
     parsed = parse_query("show me delivery notes for PO-2026-38140")
     assert parsed.document_types == (DocumentType.DELIVERY_NOTE,)

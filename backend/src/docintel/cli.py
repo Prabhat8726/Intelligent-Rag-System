@@ -571,6 +571,7 @@ SUITES = (
     "discrepancies",
     "versions",
     "retrieval",
+    "search",
 )
 
 
@@ -582,6 +583,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
         from docintel.evaluation.extraction_suite import run_extraction_suite
         from docintel.evaluation.ocr_suite import run_ocr_suite
         from docintel.evaluation.retrieval_suite import run_retrieval_suite
+        from docintel.evaluation.search_suite import run_search_suite
         from docintel.evaluation.tables_suite import run_tables_suite
         from docintel.evaluation.versions_suite import run_versions_suite
     except ImportError as exc:  # reportlab is not installed in the runtime image
@@ -604,19 +606,18 @@ async def _evaluate(args: argparse.Namespace) -> int:
                 report = await run_discrepancy_suite(
                     output, quick=args.quick, languages=args.languages
                 )
-            elif suite == "retrieval":
+            elif suite in ("retrieval", "search"):
                 database_url = args.database_url or os.environ.get(
                     "TEST_DATABASE_URL", os.environ.get("DATABASE_URL")
                 )
                 if not database_url:
                     _fail(
-                        "the retrieval suite needs a PostgreSQL server: pass --database-url "
+                        f"the {suite} suite needs a PostgreSQL server: pass --database-url "
                         "or set TEST_DATABASE_URL (a scratch database is created and dropped)"
                     )
                     return EXIT_USAGE
-                report = await run_retrieval_suite(
-                    output, database_url=database_url, quick=args.quick
-                )
+                run = run_retrieval_suite if suite == "retrieval" else run_search_suite
+                report = await run(output, database_url=database_url, quick=args.quick)
             elif suite == "versions":
                 report = await run_versions_suite(
                     output, quick=args.quick, languages=args.languages

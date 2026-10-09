@@ -6,6 +6,8 @@ import { useAuth } from "../auth/useAuth";
 // either way); feature screens are added in their phases.
 const NAV_ITEMS: { to: string; label: string; permission?: string }[] = [
   { to: "/documents", label: "Documents" },
+  { to: "/search", label: "Search", permission: "documents:read" },
+  { to: "/knowledge", label: "Knowledge", permission: "knowledge:read" },
   { to: "/reviews", label: "Review queue", permission: "reviews:work" },
   { to: "/rules", label: "Rules", permission: "rules:read" },
   { to: "/status", label: "System status" },

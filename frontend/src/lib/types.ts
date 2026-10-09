@@ -485,3 +485,183 @@ export interface VersionComparison {
   summary: Record<ClauseDiff["change"], number>;
   clauses: ClauseDiff[];
 }
+
+// ---------------------------------------------------------------- knowledge base (Module 12, 13)
+export type KnowledgeCategory =
+  | "POLICY"
+  | "PROCEDURE"
+  | "CONTRACT_GUIDELINE"
+  | "FAQ"
+  | "COMPLIANCE"
+  | "PUBLIC_REFERENCE";
+
+export type KnowledgeStatus = "PROCESSING" | "ACTIVE" | "SUPERSEDED" | "ARCHIVED" | "FAILED";
+
+export interface KnowledgeDocument {
+  id: string;
+  document_key: string;
+  title: string;
+  category: KnowledgeCategory;
+  version_label: string | null;
+  department: Department | null;
+  sensitivity: Sensitivity;
+  effective_sensitivity: Sensitivity | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  status: KnowledgeStatus;
+  supersedes_id: string | null;
+  source_format: string;
+  original_filename: string;
+  size_bytes: number;
+  page_count: number | null;
+  chunk_count: number;
+  embedding_model: string | null;
+  embedding_note: string | null;
+  processing_error: string | null;
+  processed_at: string | null;
+  uploaded_by: { id: string; full_name: string };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeDocumentDetail extends KnowledgeDocument {
+  sha256: string;
+  mime_type: string;
+  latest_job: ProcessingJob | null;
+}
+
+export interface KnowledgeChunk {
+  id: string;
+  chunk_index: number;
+  section_path: string;
+  heading: string;
+  kind: string;
+  content: string;
+  page_start: number | null;
+  page_end: number | null;
+  token_count: number;
+  embedding_model: string | null;
+  has_embedding: boolean;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
+export interface Evidence {
+  sufficient: boolean;
+  term_coverage: number;
+  dense_similarity: number | null;
+  reason: string;
+}
+
+export interface RetrievalInfo {
+  mode: "hybrid" | "full_text" | "dense" | "none";
+  embedding_model: string | null;
+  as_of: string;
+  query_terms: string[];
+  timings_ms: Record<string, number>;
+}
+
+export interface Passage {
+  chunk_id: string;
+  knowledge_document_id: string;
+  document_key: string;
+  title: string;
+  version_label: string | null;
+  category: KnowledgeCategory;
+  status: KnowledgeStatus;
+  section_path: string;
+  heading: string;
+  content: string;
+  page_start: number | null;
+  page_end: number | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  score: number;
+  dense_similarity: number | null;
+  text_score: number | null;
+  term_coverage: number;
+}
+
+export interface KnowledgeSearchResponse {
+  query: string;
+  passages: Passage[];
+  evidence: Evidence;
+  retrieval: RetrievalInfo;
+}
+
+export type AnswerStatus = "ANSWERED" | "PARTIALLY_SUPPORTED" | "INSUFFICIENT_EVIDENCE" | "RETRIEVAL_ONLY";
+
+export interface AnswerSource {
+  label: string;
+  cited: boolean;
+  sent_to_model: boolean;
+  knowledge_document_id: string;
+  document_key: string;
+  title: string;
+  version_label: string | null;
+  status: KnowledgeStatus;
+  section_path: string;
+  page_start: number | null;
+  page_end: number | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  chunk_ids: string[];
+  content: string;
+}
+
+export interface AnswerClaim {
+  text: string;
+  citations: string[];
+  grounded: boolean;
+  grounding: number;
+}
+
+export interface KnowledgeAnswer {
+  question: string;
+  status: AnswerStatus;
+  answer: string | null;
+  claims: AnswerClaim[];
+  sources: AnswerSource[];
+  evidence: Evidence;
+  retrieval: RetrievalInfo;
+  notices: string[];
+  model: string | null;
+  provider: string | null;
+}
+
+// ---------------------------------------------------------------- document search (Module 28)
+export interface SearchComparison {
+  op: "gt" | "gte" | "lt" | "lte" | "eq";
+  value: string;
+}
+
+export interface SearchInterpretation {
+  document_types: DocumentType[];
+  vendor: string | null;
+  vendors_matched: string[];
+  payment_terms_days: SearchComparison | null;
+  total: SearchComparison | null;
+  date_from: string | null;
+  date_to: string | null;
+  text: string;
+  recognized: string[];
+}
+
+export interface SearchHit {
+  document: DocumentSummary;
+  vendor_name: string | null;
+  document_date: string | null;
+  total: string | null;
+  payment_terms_days: number | null;
+  score: number | null;
+  reasons: string[];
+  snippet: { chunk_id: string; text: string; page_start: number | null; page_end: number | null } | null;
+}
+
+export interface DocumentSearchResponse {
+  query: string;
+  mode: "structured" | "text" | "structured+text";
+  interpretation: SearchInterpretation;
+  total: number;
+  results: SearchHit[];
+}

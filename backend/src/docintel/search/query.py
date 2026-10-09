@@ -66,13 +66,16 @@ _STOP = (
 _VENDOR = re.compile(
     r"\b(?:from|by|issued\s+by|billed\s+by|sent\s+by|vendor|supplier)\s+"
     r"(?:the\s+)?(?:vendor\s+|supplier\s+)?"
-    r"(?:\"(?P<quoted>[^\"]{1,120})\"|(?P<name>[\w&.'-]+(?:\s+(?!(?:"
+    # "and"/"of" belong to a name when a capitalized word follows ("Harbor and Pine").
+    r"(?:\"(?P<quoted>[^\"]{1,120})\"|(?P<name>[\w&.'-]+(?:\s+(?:(?:and|of)\s+(?=(?-i:[A-Z])))?(?!(?:"
     + _STOP
     + r")\b)[\w&.'-]+){0,6}))",
     re.IGNORECASE,
 )
 _FILLER = frozenset(
     [
+        "and",
+        "or",
         "find",
         "show",
         "list",
