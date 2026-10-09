@@ -102,10 +102,14 @@ document content.
 ### Knowledge, search, RAG
 | Method | Path | Permission | Status |
 |---|---|---|---|
-| POST/GET/DELETE | `/api/v1/knowledge/documents[/{id}]` | `knowledge:manage` / `knowledge:read` | 🔜 6 |
-| POST | `/api/v1/knowledge/search` (retrieval only, scored chunks) | `knowledge:read` | 🔜 6 |
-| POST | `/api/v1/knowledge/query` (answer + citations) | `knowledge:read` | 🔜 6 |
-| POST | `/api/v1/search` (semantic + metadata over business documents) | `documents:read` | 🔜 6 |
+| POST | `/api/v1/knowledge/documents` (multipart: file + optional `title`, `document_key`, `category`, `version_label`, `sensitivity`, `effective_from/to`, `department_id`; the rest from front matter). 409: identical file, or a key whose versions have another audience. Managers publish organization-wide or for their own department; administrators for any | `knowledge:manage` | ✅ 6 |
+| GET | `/api/v1/knowledge/documents` (filters `status`, `category`, `document_key`, `q`; versions of a key together, newest first) · `/{id}` (with latest job) · `/{id}/chunks` (the passages used for answers) | `knowledge:read` + scope | ✅ 6 |
+| DELETE | `/api/v1/knowledge/documents/{id}` (archive: passages removed; archiving the active version restores the previous one) | `knowledge:manage` + scope | ✅ 6 |
+| POST | `/api/v1/knowledge/search` `{query, as_of?, categories?, document_keys?, top_k?}` → scored passages, evidence, retrieval mode (no model call) | `knowledge:read` | ✅ 6 |
+| POST | `/api/v1/knowledge/query` `{question, as_of?, categories?, document_keys?}` → `status` (`ANSWERED, PARTIALLY_SUPPORTED, INSUFFICIENT_EVIDENCE, RETRIEVAL_ONLY`), `answer` (verified claims with citations), `claims[{text, citations, grounded}]`, `sources[{label, cited, sent_to_model, title, version, section, pages, period, content}]`, `evidence`, `notices`; audited | `knowledge:read` | ✅ 6 |
+| POST | `/api/v1/search` `{query, document_types?, limit?}` → `interpretation` (types, vendor and matched vendor master entries, payment-term and total comparisons, dates, free text), `results[{document, vendor_name, document_date, total, payment_terms_days, reasons, snippet}]` | `documents:read` + scope | ✅ 6 |
+
+Query and question text with control characters is rejected (422).
 
 ### Agent analysis
 | Method | Path | Permission | Status |

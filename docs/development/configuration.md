@@ -119,7 +119,7 @@ never part of a key (ADR-014).
 | Variable | Default | Description |
 |---|---|---|
 | `LLM_PROVIDER` | `gemini` | `gemini` or `ollama` (a self-hosted model server; see *Local model* below) |
-| `EMBEDDING_PROVIDER` | `gemini` | Embedding implementation (local fastembed in Phase 6) |
+| `EMBEDDING_PROVIDER` | `gemini` | Vectors for knowledge and document passages (ADR-042): `gemini` (external, behind the sensitivity gate; needs the key), `fastembed` (local ONNX model, optional dependency `uv sync --extra local-embeddings`, downloads the model on first use), `hashing` (offline and deterministic, **lexical not semantic** — for evaluation, tests and air-gapped demos). Without a usable provider, passages are found by full-text search only |
 | `GEMINI_API_KEY` | unset | See above. Blank = not configured |
 | `GEMINI_MODEL` | `gemini-3.5-flash` | Default tier: extraction, analysis, RAG answers |
 | `GEMINI_FAST_MODEL` | `gemini-3.5-flash-lite` | Fast tier: classification fallback, planning |
@@ -131,6 +131,9 @@ never part of a key (ADR-014).
 | `LLM_REQUESTS_PER_MINUTE` | `10` | Client-side token bucket for generation calls |
 | `EMBEDDING_REQUESTS_PER_MINUTE` | `60` | Client-side token bucket for embedding calls |
 | `EMBEDDING_BATCH_SIZE` | `100` | Texts per embedding request (max 100) |
+| `FASTEMBED_MODEL` | `BAAI/bge-base-en-v1.5` | Local model for `EMBEDDING_PROVIDER=fastembed`; it must produce 768-d vectors (queries get the model's retrieval instruction prefix) |
+| `FASTEMBED_CACHE_DIR` | unset | Where the model is stored (unset = fastembed's default cache) |
+| `FASTEMBED_THREADS` | unset | ONNX runtime threads (unset = runtime default) |
 | `LLM_DAILY_REQUEST_BUDGET` | `0` | Maximum LLM requests per provider per UTC day across all workers (counted in `llm_calls`); `0` = unlimited. When used up, calls fail fast and documents keep the layout result (ADR-031) |
 | `LLM_PRICING` | `{}` | JSON map of model ID → USD per million tokens, e.g. `{"gemini-3.5-flash": {"input_per_mtok": 0.5, "output_per_mtok": 3.0}}` (illustrative numbers — take current prices from the provider's pricing page). Used only for the estimated cost in `llm_calls` and `docintel llm-usage`; models without a price show no cost. No prices are shipped |
 
@@ -181,6 +184,26 @@ settings: one place decides both the comparison and the rule outcome.
 |---|---|---|
 | `COMPARISON_MIN_CONFIDENCE` | `0.85` | A difference involving a machine-read value below this confidence (and not corrected by a reviewer) is `UNCERTAIN` and its rule warns ("could not be verified") instead of failing. The same threshold decides whether a failed arithmetic check on the document is confirmed |
 | `REVIEW_SLA_HOURS` | `{"URGENT": 4, "HIGH": 24, "NORMAL": 72, "LOW": 168}` | Hours from task creation to its due date, per priority (JSON object; priorities left out keep their default; 1–8760) |
+
+### Knowledge base and RAG
+
+Changing the embedding provider or model leaves existing vectors from the old model unused
+(queries only match vectors of the configured model): run `make reembed` afterwards.
+
+| Variable | Default | Description |
+|---|---|---|
+| `KNOWLEDGE_TEXT_MAX_BYTES` | `2097152` | Size limit for Markdown/text knowledge files (PDFs and images use `UPLOAD_MAX_BYTES`) |
+| `KNOWLEDGE_CHUNK_TARGET_TOKENS` | `500` | Passages are filled up to about this size within a section (tokens ≈ characters / 4) |
+| `KNOWLEDGE_CHUNK_MAX_TOKENS` | `800` | Hard limit: longer paragraphs are split at sentences, longer tables by row groups with the header repeated |
+| `KNOWLEDGE_CHUNK_OVERLAP_TOKENS` | `75` | Whole sentences repeated between consecutive passages of one section (never across sections) |
+| `RAG_CANDIDATES` | `20` | Candidates taken from each retriever (vector, full text) before fusion |
+| `RAG_TOP_K` | `6` | Passages fused with Reciprocal Rank Fusion and given to the answer model |
+| `RAG_RRF_K` | `60` | RRF constant |
+| `RAG_MIN_TERM_COVERAGE` | `0.25` | Evidence gate: the best of the top five passages must contain this rarity-weighted share of the question's terms … |
+| `RAG_MIN_DENSE_SIMILARITY` | `0.5` | … or be at least this similar in embedding space; otherwise "insufficient evidence" and no model call. **Model-specific**: chosen with the hashing model on `kb-queries`; calibrate it for Gemini or fastembed with `make evaluate` before relying on it. Also the minimum similarity for a vector-only match in document search |
+| `RAG_MAX_CONTEXT_TOKENS` | `3000` | Budget for the sources sent to the answer model (the top source is always included) |
+| `RAG_GENERATION_ENABLED` | `true` | `false` = no generated answers: `/knowledge/query` returns the passages only (`RETRIEVAL_ONLY`) |
+| `RAG_MAX_OUTPUT_TOKENS` | `1024` | Output limit for the answer call |
 
 ### Containers
 

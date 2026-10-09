@@ -85,6 +85,27 @@ appear in the **Review queue** (reviewer, analyst, manager and admin roles) with
 and each document page shows its checks, comparison and review history. Uploading the same
 dataset again is allowed: the copies are flagged as duplicates and go to review.
 
+## Knowledge base (policies, procedures, FAQs)
+
+```bash
+make seed-knowledge                              # knowledge_base/*.md through the API (make dev) ...
+make seed-knowledge API_URL=http://localhost:8080   # ... or through the Docker stack
+```
+
+`knowledge_base/` holds eleven synthetic policies, procedures, guidelines and FAQs (one of
+them restricted to the Legal department, and two versions of the procurement policy). The
+command logs in as `admin@docintel.local`, uploads every file, waits for the worker and exits
+non-zero if a file does not end ACTIVE or SUPERSEDED; files already loaded are reported as
+`ALREADY_PRESENT`, so it is safe to re-run. Ask questions on the **Knowledge** page; search
+business documents in plain language on the **Search** page.
+
+Embeddings: with a `GEMINI_API_KEY`, passages are embedded by Gemini (INTERNAL and PUBLIC
+documents only — `AI_EXTERNAL_MAX_SENSITIVITY`); without one, search is full text only and
+still works. For local vectors set `EMBEDDING_PROVIDER=fastembed` (after
+`cd backend && uv sync --extra local-embeddings`; the model downloads on first use) or
+`hashing` (offline, lexical). After changing the provider run `make reembed`. Answers need an
+LLM; without one the Knowledge page shows the retrieved passages (`Passages only`).
+
 ## Everyday commands
 
 | Command | What it does |
@@ -96,7 +117,9 @@ dataset again is allowed: the copies are flagged as duplicates and go to review.
 | `make match` | Re-run comparisons, rules and review tasks for every processed document (after upgrading to Phase 5, or after changing rules) |
 | `make worker` | Process queued jobs on the host until the queue is empty |
 | `make check-ocr` | Verify Tesseract, the configured languages and TSV output |
-| `make evaluate` | Run the OCR, classification, table, extraction, discrepancy and version-comparison evaluations (~35 min) → `evaluation/reports/` |
+| `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search; ~40 min) → `evaluation/reports/`. Retrieval and search create and drop a scratch database on the `TEST_DATABASE_URL` server |
+| `make seed-knowledge` | Load `knowledge_base/` through the API |
+| `make reembed` | Add vectors of the configured embedding model to passages that have none (after switching `EMBEDDING_PROVIDER`, or after a provider outage) |
 | `make llm-usage` | LLM calls, tokens and estimated cost per day for the last 7 days (from `llm_calls`) |
 | `cd backend && uv run --env-file ../.env alembic revision -m "..."` | New migration (write it by hand, then `alembic check`) |
 
@@ -118,4 +141,8 @@ dataset again is allowed: the copies are flagged as duplicates and go to review.
 | `JWT_SECRET_KEY looks like a placeholder` | You are in `staging`/`production` with the example secret: generate a real one |
 | `make check-ai`: `model ... is NOT available` | The model was retired or isn't enabled for your key: pick one from the printed list and update `GEMINI_MODEL` / `GEMINI_FAST_MODEL` |
 | `make check-ai`: `ProviderRateLimitError` | Free-tier quota exhausted; wait or lower `LLM_REQUESTS_PER_MINUTE` |
+| A knowledge document says *full-text only* | No embedding provider is configured, the document is above `AI_EXTERNAL_MAX_SENSITIVITY` for an external embedder, or the provider failed (the note on the document page says which): configure one / use a local provider, then `make reembed` |
+| Knowledge answers show *Passages only* | No LLM is configured (`GEMINI_API_KEY`), `RAG_GENERATION_ENABLED=false`, or every source was above the external sensitivity limit |
+| *Insufficient evidence* for a question you expect to be answered | The knowledge base does not contain the question's terms (the default lexical evidence check); rephrase with the policy's wording, or check the document is ACTIVE and in force for the date asked |
+| `make seed-knowledge`: `Unknown department in front matter: 'Legal'` | The Legal department does not exist yet: run `make seed` first |
 | Docker build fails with TLS errors behind a corporate proxy | Your proxy intercepts TLS; build on a network without interception or add your corporate CA to the base images |

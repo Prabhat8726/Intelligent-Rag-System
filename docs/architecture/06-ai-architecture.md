@@ -40,7 +40,7 @@ classDiagram
 | Interface | Default (Phase) | Local alternative (Phase) |
 |---|---|---|
 | `LLMProvider` | Gemini via `google-genai` 2.x (**0**) | Ollama HTTP API (**4**) |
-| `EmbeddingProvider` | Gemini `gemini-embedding-001`, 768-d, L2-normalized (**0**) | `fastembed` `BAAI/bge-base-en-v1.5`, 768-d (6) |
+| `EmbeddingProvider` | Gemini `gemini-embedding-001`, 768-d, L2-normalized (**0**) | `fastembed` `BAAI/bge-base-en-v1.5`, 768-d, optional extra (**6**); `hashing` — offline signed feature hashing, lexical only, for evaluation and air-gapped demos (**6**, ADR-042) |
 | `VisionProvider` | Page images in the extraction request (`LLMRequest.images`; Gemini, **4** — ADR-024) | Ollama vision model (`OLLAMA_VISION=true`, **4**) |
 | `OCRProvider` | Tesseract 5 via subprocess (**3**) | — (already local) |
 
@@ -258,7 +258,10 @@ ADR-030). The model's own certainty is not an input (ADR-005).
 2. Local classifier handles confident cases; LLM only for the uncertain tail.
 3. One extraction call per document version (all fields at once), cached by input hash
    (identical input → stored output, no call).
-4. Embeddings batched; re-embedding only when content hash or model changes (Phase 6).
+4. Embeddings batched (`EMBEDDING_BATCH_SIZE`); chunks are embedded once at ingestion and
+   `docintel reembed` only touches chunks without a vector of the configured model (Phase 6).
+   Retrieval answers questions without any model call when the evidence gate fails, and
+   `RAG_GENERATION_ENABLED=false` turns answers into retrieval only.
 5. Client-side token bucket + SDK retries; `LLM_DAILY_REQUEST_BUDGET` (0 = unlimited) is
    checked before every call; when it is used up the call fails with
    `ProviderBudgetExceededError`, the error is recorded in the extraction's signals, and the

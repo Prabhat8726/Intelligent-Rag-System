@@ -12,7 +12,8 @@ versions and git SHA.
 | `synthetic-core` | `docintel.synthetic` generator (fixed seed) | JSON sidecar per document: type, every field, line items, page of each field, injected defects | 2/5 |
 | `synthetic-noisy` | Same documents rendered → image degradations: blur, rotation ±3°, JPEG artefacts, salt-and-pepper, low DPI | Same as above + exact page text for CER/WER | 3 |
 | `synthetic-scenarios` | PO/invoice/delivery/contract/policy *bundles* with controlled discrepancies (price, quantity, tax, vendor, missing PO, duplicate, expired contract, injection payloads) | Expected discrepancy codes, expected recommendation, expected tool set | 5/7 |
-| `kb-queries` | Hand-written questions over the seeded policy KB | Relevant chunk ids / section paths; answerable flag | 6 |
+| `kb-queries` | 54 hand-written questions over the seed knowledge base (`knowledge_base/`), 6 unanswerable; used to choose the evidence-gate thresholds and the full-text order (the `dev` split) | Relevant (document_key, section heading) pairs; empty = unanswerable | 6 |
+| `kb-queries-holdout` | 14 questions written after those choices, 4 unanswerable; never used for tuning (the `test` split) | Same | 6 |
 | Public (optional) | e.g. SROIE / CORD receipts, FUNSD forms | Dataset labels | 10, after licence review; reported separately |
 
 Splits: `dev` (prompt/threshold tuning) and `test` (reported numbers only).
@@ -57,12 +58,18 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 | Structured extraction, layout extractor (field exact / normalized match, P/R/F1 per field, line-item row P/R and cell accuracy, vendor and date normalization of printed variants, consistency checks, auto-accept share and **error inside the auto bucket**) | Phase 4 | [`evaluation/reports/extraction.md`](../../evaluation/reports/extraction.md) | synthetic-core POs, invoices and delivery notes (seed 31), native, re-rendered as scans and the dataset's own scans; document type from ground truth |
 | Discrepancies and duplicates (recall per planted defect, precision per rule, (document, rule) P/R/F1 at FAIL and at FAIL-or-WARN, alarms on defect-free documents, resent-invoice detection) — extraction as the worker does it, then `matching.service.assess`, all bundles of an input in one department | Phase 5 | [`evaluation/reports/discrepancies.md`](../../evaluation/reports/discrepancies.md) | synthetic-core, all 12 scenarios × 4 bundles (seed 53, 148 documents), as generated and with every native PDF re-rendered as a scan |
 | Contract versions (clause segmentation; added / removed / modified P/R; steps exactly right) | Phase 5 | [`evaluation/reports/versions.md`](../../evaluation/reports/versions.md) | 20 synthetic contract families × 3 versions (seed 61), native and re-rendered as scans |
+| Knowledge retrieval (hit@1/3/5, section recall@5, precision@5, MRR, nDCG@5; evidence-gate refusals and false refusals; access control; version filtering; latency; ablations dense / full text / hybrid, full-text order, contextual prefix off, fixed-size chunks) — the seed knowledge base ingested by the production upload service and worker in a scratch database, questions answered by `KnowledgeRetriever` | Phase 6 | [`evaluation/reports/retrieval.md`](../../evaluation/reports/retrieval.md) | `kb-queries` (tuning) and `kb-queries-holdout`; offline lexical hashing embeddings |
+| Business document search (precision / recall / exact result sets per question family: vendor, payment terms, totals, dates, types, free text) — synthetic documents processed by the worker, questions generated from ground truth, answered by `DocumentSearchService` | Phase 6 | [`evaluation/reports/search.md`](../../evaluation/reports/search.md) | synthetic-core, 6 scenarios × 2 bundles (seed 2), native PDFs |
 
 Not yet measured: the **LLM extraction path** (no API key or local model in the build
 environment; its merge, evidence and gating logic is covered by tests), provenance metrics
 (page accuracy, bbox IoU), field extraction for contracts, receipts, resumes, bank statements
-and policies (no generator ground truth yet), contract/policy comparison (Phase 7), RAG, agent
-and system latency. Comparison and rules are deterministic: besides the suite, every planted
+and policies (no generator ground truth yet), contract/policy comparison (Phase 7), **semantic embeddings**
+(Gemini, fastembed: no key or model download in the build environment — retrieval was measured
+with the lexical hashing model), **generated RAG answers** (citation precision/recall,
+unsupported-claim rate: need an LLM; the citation and grounding checks are covered by tests),
+agent and system latency. The retrieval and search suites need a PostgreSQL server
+(`TEST_DATABASE_URL`); they create and drop a scratch database. Comparison and rules are deterministic: besides the suite, every planted
 discrepancy on native documents is a unit test (`tests/unit/test_rules.py`), so CI catches a
 regression without running the evaluation. All current
 datasets are synthetic; reports say so next to the numbers.

@@ -62,7 +62,7 @@ flowchart TD
   RT --> R{open findings?}
   R -- none --> DONE[doc COMPLETED]
   R -- yes --> REV[doc REVIEW_REQUIRED + open review task]
-  DONE & REV -.-> CH[11 Chunk + embed for semantic search  — Phase 6]
+  CF -.-> CH[index stage, before 9: section-aware chunks of the pages, embeddings behind<br/>the sensitivity gate; stored with the results: document_chunks for search]
   P -. unrecoverable error / attempts exhausted .-> F[doc FAILED, job FAILED, error recorded]
 ```
 
@@ -114,24 +114,27 @@ sequenceDiagram
   participant DB as PostgreSQL (pgvector + FTS)
   participant L as LLMProvider
 
-  M->>A: POST /api/v1/knowledge/documents (policy PDF + metadata)
-  A->>DB: knowledge_documents(PROCESSING) + job
-  WK->>WK: extract text with structure (headings, sections, pages)
-  WK->>WK: structure-aware chunking (section path, ~500 tokens, overlap)
-  WK->>E: embed(chunks, task=RETRIEVAL_DOCUMENT) in batches
-  WK->>DB: knowledge_chunks(content, tsvector, vector(768), metadata)
+  M->>A: POST /api/v1/knowledge/documents (Markdown/text/PDF/image + metadata or front matter)
+  A->>A: validate, metadata, scope (org-wide or one department), version checks
+  A->>DB: knowledge_documents(PROCESSING) + KNOWLEDGE_PROCESSING job + audit
+  WK->>WK: integrity, parse (Markdown directly; PDFs/images via text layer/OCR + layout)
+  WK->>WK: section-aware chunking (breadcrumb prefix, ~500 tokens, sentence overlap), content scan
+  WK->>E: embed(chunks, RETRIEVAL_DOCUMENT) if the sensitivity gate allows (local models: always)
+  WK->>DB: advisory lock on document_key → chunks replaced; ACTIVE / SUPERSEDED decided;<br/>retrieval windows copied onto chunks; audit
   Note over M,DB: --- query time ---
-  M->>A: POST /api/v1/knowledge/query {question, filters}
-  A->>E: embed(question, task=RETRIEVAL_QUERY)
-  A->>DB: vector top-k  ∪  full-text top-k  (both pre-filtered by access, status, effective dates)
-  A->>A: Reciprocal Rank Fusion → score threshold → context assembly [S1..Sn]
+  M->>A: POST /api/v1/knowledge/query {question, as_of?, categories?}
+  A->>E: embed(question, RETRIEVAL_QUERY) unless it holds restricted data
+  A->>DB: vector top-20 ∪ full-text top-20, filtered in SQL by access, status, window ∋ as_of
+  A->>A: Reciprocal Rank Fusion → evidence gate (IDF term coverage or similarity)
   alt evidence below threshold
-    A-->>M: "insufficient evidence" + nearest sources (no generation)
+    A-->>M: INSUFFICIENT_EVIDENCE + closest passages (no model call)
   else
-    A->>L: answer with schema {answer, claims[{text, citations}]}
-    A->>A: validate citations ⊆ provided sources; drop/flag uncited claims
-    A-->>M: answer + citations (doc, section, page, effective date)
+    A->>A: sources S1..Sn (merged neighbours, budget); per-source sensitivity gate
+    A->>L: claims[{text, citations}] from delimited, untrusted sources
+    A->>A: citations ⊆ sources given; numbers + words grounded in cited text
+    A-->>M: answer composed from verified claims + sources (title, version, section, period)
   end
+  A->>DB: audit (question fingerprint, sources, cited, sent to model)
 ```
 
 ## Flow D — Agent investigation & human approval

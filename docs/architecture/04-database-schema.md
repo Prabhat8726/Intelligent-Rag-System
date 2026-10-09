@@ -119,12 +119,17 @@ erDiagram
   knowledge_chunks {
     uuid id PK
     uuid knowledge_document_id FK
+    text context_prefix
     text section_path
     int page_start
     text content
-    tsvector content_tsv "generated"
+    tsvector search "generated, weighted"
     vector embedding "768"
     text embedding_model
+    text status "copied from the document"
+    uuid department_id "copied"
+    date effective_from "retrieval window"
+    date effective_to "retrieval window"
   }
   workflow_actions {
     uuid id PK
@@ -234,9 +239,10 @@ and resume/job comparisons arrive with the agent (Phase 7).
 
 | Table | Purpose / notable columns |
 |---|---|
-| `knowledge_documents` | `title`, `category` CHECK (`POLICY, PROCEDURE, CONTRACT_GUIDELINE, FAQ, COMPLIANCE, PUBLIC_REFERENCE`), `department_id` (NULL = organization-wide), `version_label`, `effective_from`, `effective_to`, `status` (`PROCESSING, ACTIVE, SUPERSEDED, ARCHIVED, FAILED`), `supersedes_id`, storage + checksum columns. |
-| `knowledge_chunks` | `chunk_index`, `section_path`, `heading`, `page_start`, `page_end`, `content`, `token_count`, `content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED`, `embedding vector(768)`, `embedding_model`, `metadata jsonb`. HNSW index `vector_cosine_ops (m=16, ef_construction=64)`; GIN on `content_tsv`. |
-| `document_chunks` | Same shape for business documents (semantic search, duplicate similarity), plus `document_id` and `version_id` for access filtering. |
+| `knowledge_documents` (migration 0006) | One row per uploaded version. `document_key` (same key = versions of one document), `title`, `category` CHECK (`POLICY, PROCEDURE, CONTRACT_GUIDELINE, FAQ, COMPLIANCE, PUBLIC_REFERENCE`), `version_label`, `department_id` FK `RESTRICT` (NULL = organization-wide), `sensitivity` (label) and `effective_sensitivity` (label raised by content findings, set when processed), `effective_from`, `effective_to` (CHECK to ≥ from), `status` CHECK (`PROCESSING, ACTIVE, SUPERSEDED, ARCHIVED, FAILED`), `supersedes_id` FK `SET NULL`, `source_format` (`MARKDOWN, TEXT, PDF, PNG, JPEG, TIFF`), file columns (name, MIME type, size, SHA-256, storage backend + key), `page_count`, `chunk_count`, `embedding_model` / `embedding_note` (why there are no vectors), `processing_error`, `processed_at`, `uploaded_by_id`, `deleted_at` (archive = soft delete). Partial unique index: **one ACTIVE row per `document_key`**. |
+| `knowledge_chunks` | `knowledge_document_id` FK `CASCADE`, `chunk_index` (unique per document), `context_prefix` (title + breadcrumb), `content`, `section_path`, `heading`, `kind` (text/table), `page_start/end`, `token_count`, `content_hash`, `search tsvector GENERATED ALWAYS AS (setweight(to_tsvector('english', context_prefix), 'A') ‖ setweight(to_tsvector('english', content), 'B')) STORED`, `embedding vector(768)` (NULL = full text only), `embedding_model`; copied from the document so filters run in the same scan: `status`, `department_id`, `category`, `sensitivity` (effective), `effective_from/to` (the version's **retrieval window**, ADR-044). HNSW `vector_cosine_ops (m=16, ef_construction=64)`, GIN on `search`, B-tree `(status, department_id)`. |
+| `document_chunks` | Same chunk columns for business documents (current version only; removed when the document is deleted): `document_id`, `document_version_id` FK `CASCADE`. Access is filtered through `documents` (the same predicate as every document read). |
+| `processing_jobs` (0006) | `knowledge_document_id` FK `CASCADE`; `job_type` adds `KNOWLEDGE_PROCESSING`; partial unique index: one active job per knowledge document. |
 
 pgvector 0.8 **iterative index scans** (`SET hnsw.iterative_scan = relaxed_order`)
 are enabled for filtered queries so access/metadata filters don't under-fill top-k.

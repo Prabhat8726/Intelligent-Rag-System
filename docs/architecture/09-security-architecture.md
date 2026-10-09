@@ -39,6 +39,14 @@ and model output as untrusted input** at every boundary.
   documents of one department; a comparison is visible only when every document in it is; findings, review
   tasks and duplicate links are filtered by the same scope; a manual comparison of documents
   the caller cannot see is a 404, never a hint that they exist.
+* Knowledge (Phase 6): a knowledge document is organization-wide or restricted to one
+  department; its chunks carry the department and retrieval filters on it inside the vector and
+  full-text scans (`visible_knowledge_chunks`), so another department's passages are never
+  loaded, cited or sent to a model. Managers publish organization-wide or for their own
+  department, administrators for any; every version of a `document_key` keeps the audience of
+  the first one, so a new version cannot widen it. Archived knowledge loses its passages.
+  Business-document search uses the same predicate as every document read; deleting a
+  document removes its search chunks.
 * Rule changes (`rules:manage`, ADMIN) are validated against the rule type's parameter model,
   versioned and audited with before/after parameters; review decisions are audited with the
   findings' codes, never extracted values or note text.
@@ -57,6 +65,15 @@ and model output as untrusted input** at every boundary.
 ### LLM / agent security
 * System prompts are constants in code, versioned; user/document text goes only in delimited data sections.
 * Structured outputs everywhere; free text never parsed for actions.
+* RAG (Phase 6): sources are wrapped in markers with a per-request random nonce and declared
+  untrusted; the answer shown is composed only from claims whose citations name provided
+  sources and whose numbers and words occur in them. Sources above
+  `AI_EXTERNAL_MAX_SENSITIVITY` are not sent to an external model (they are still shown to a
+  user allowed to read them), embeddings of such chunks are not computed externally, and a
+  question holding restricted data (card numbers, SSNs) is not embedded externally. Queries
+  are audited with a SHA-256 fingerprint of the question, never its text. Query text with
+  control characters is rejected before it reaches PostgreSQL; tsquery operands are quoted, so
+  no operator can be injected.
 * Tool allowlist; no shell/OS/network/SQL tools; authz per call as the requesting user.
 * Budgets: max steps, max LLM calls, timeouts per tool and per run.
 * Outputs validated: citations exist, evidence ids exist, findings can't contradict deterministic facts, recommendations in allowlist, guardrail rules.
@@ -121,4 +138,5 @@ and model output as untrusted input** at every boundary.
 | Prompt injection | Document text cannot close the data block; injected values never reach AUTO, whether they disagree with the layout reading or only the model reports them (**4**, `tests/security/test_prompt_injection.py`); payloads must not change rule results, recommendations or tool calls (5, 7, 10) |
 | Field corrections | Only `documents:review`; inaccessible documents 404; audit details carry no values (**4**, `tests/integration/test_extraction_api.py`) |
 | Tool argument abuse | Out-of-range limits, foreign ids, extra fields rejected and logged (7) |
-| Data leakage | Restricted knowledge chunks never returned to other departments (6) |
+| Data leakage | Restricted knowledge never returned to other departments on any read path (detail, chunks, list, search, query, even when named by key); CONFIDENTIAL sources and content-detected RESTRICTED chunks never sent to an external model or embedder; superseded and archived content not cited (**6**, `tests/security/test_knowledge_security.py`, `tests/integration/test_knowledge_rag.py`, `test_knowledge_api.py`) |
+| RAG injection | Instructions planted in a knowledge document stay inside the nonce-delimited sources block; hostile query strings (SQL, tsquery operators, NUL bytes) are plain text or a 422 (**6**, `tests/security/test_knowledge_security.py`) |

@@ -30,7 +30,9 @@ Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 | Vendor name search | PostgreSQL **pg_trgm** (GIN trigram index, `similarity()`) as a pre-filter, RapidFuzz for the final score (Phase 4) | Scales the vendor master without loading it into memory; extension ships with PostgreSQL | Full-text search (poor on short names), loading all vendors per document |
 | Structured extraction | Own layout extractor (labels, letterhead, table headers) + Pydantic schemas for the LLM (Phase 4, ADR-028) | Works without a key or network; every value carries page, quote and box | LLM-only extraction (cost, injection exposure), Docling / LayoutLM (torch, training data) |
 | Classifier | scikit-learn 1.9 (TF-IDF + calibrated LR) | Calibrated probabilities, tiny, private, trains in seconds | Fine-tuned transformer (cost, data needs) |
-| Local embeddings | fastembed (ONNX) `bge-base-en-v1.5` | No torch, 768-d to match Gemini | sentence-transformers (torch) |
+| Local embeddings | fastembed (ONNX) `bge-base-en-v1.5` as an optional extra; an offline hashing embedder for tests, evaluation and air-gapped demos | No torch, 768-d to match Gemini; the hashing model needs no download (the build environment blocks Hugging Face) but is lexical, not semantic | sentence-transformers (torch) |
+| Retrieval | pgvector HNSW + PostgreSQL full text, fused with Reciprocal Rank Fusion, filters in SQL | Measured better than either alone on kb-queries; no extra service | Dedicated vector DB; cross-encoder reranking (not measured to help yet) |
+| Search query understanding | Deterministic parser (types, vendor, payment terms, totals, dates) + free text | Explainable, testable, no external call | LLM query planner (possible later behind the same interface) |
 | Synthetic docs | reportlab + Pillow + Faker | Deterministic PDF generation with ground truth | — |
 | Tests | pytest, pytest-asyncio, httpx `ASGITransport`, **respx** (HTTP transport mocks) | Real SDK code paths tested without network | — |
 | Quality | ruff (lint+format), mypy (strict) | Fast, comprehensive | black+flake8+isort |

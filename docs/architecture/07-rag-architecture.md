@@ -1,113 +1,150 @@
 # 07 — RAG Architecture (Modules 12, 13, 28)
 
 Goal: answers about company policy that are **grounded, cited, access-controlled
-and measurably good** — or an explicit "insufficient evidence".
+and measurably good** — or an explicit "insufficient evidence". This document
+describes what is implemented (Phase 6); decisions are ADR-042 … ADR-048.
 
 ## 1. Ingestion pipeline
 
 ```
-knowledge document (PDF / image)
-  → text extraction with structure (same processing stack as business documents)
-  → section detection (numbered headings, font-size/bold for native PDFs, markdown-like patterns)
-  → structure-aware chunking
-  → metadata enrichment
-  → embeddings (batched, task = RETRIEVAL_DOCUMENT)
-  → knowledge_chunks (content, tsvector, vector(768), metadata)
+POST /api/v1/knowledge/documents  (Markdown, text, PDF, PNG, JPEG, TIFF)
+  → validation (text: UTF-8, no binary, size; files: the business-document gate)
+  → metadata: form fields, then front matter (title, document_key, version, category,
+    effective_from/to, sensitivity, department), then defaults
+  → scope and version checks → blob + row + KNOWLEDGE_PROCESSING job + audit (one transaction)
+worker:
+  → integrity (re-hash the stored file)
+  → parse: Markdown/text directly; PDFs and images through the same text-layer/OCR
+    extraction and layout analysis as business documents
+  → structure-aware chunking → content sensitivity scan
+  → embeddings (batched, RETRIEVAL_DOCUMENT) behind the sensitivity gate
+  → one transaction: chunks replaced, version state decided, audit
 ```
 
-**Chunking**
+Business documents get the same treatment in an `index` stage of their own
+pipeline (`document_chunks`, current version only; deleted documents leave the index).
 
-* Split on section boundaries first; then recursively by paragraph → sentence to
-  a target of ~500 tokens (hard max 800) with ~15% overlap inside a section only.
-* Tables are kept whole (Markdown) when ≤ max size; otherwise split by row groups
-  with the header repeated.
-* Each chunk stores a `section_path` breadcrumb
-  (`Procurement Policy › 4 Price Variance › 4.2 Tolerances`) that is **prepended
-  to the text that gets embedded** (contextual chunking) but stored separately.
-* Token counts use a conservative character heuristic (documented), validated
-  against the provider's `count_tokens` in tests.
+**Chunking** (`knowledge/chunking.py`, ADR-043)
 
-**Metadata** (filterable columns, not only JSON): `category`, `department_id`
-(NULL = organization-wide), `effective_from/to`, `status`, `version_label`,
-`knowledge_document_id`, `page_start/end`, `embedding_model`.
+* Sections first (Markdown `#` headings; numbered and large headings in PDFs and
+  plain text). A chunk never crosses a section, so every citation names one section.
+* Paragraphs are packed to ~500 tokens (hard max 800; longer paragraphs split at
+  sentences, then words). Consecutive chunks of a section share ~75 tokens of whole
+  sentences; nothing overlaps across sections.
+* Tables stay whole up to the maximum; longer ones are split by row groups with the
+  header repeated.
+* `context_prefix` = document title + breadcrumb (`4. Price variance › 4.1 Tolerance`).
+  It is stored separately from the content and is part of both the embedded text and
+  the full-text vector (`setweight` A for the prefix, B for the content).
+* Tokens are estimated as characters / 4; budgets are approximate by design.
 
-**Versioning**: uploading a new version marks the old one `SUPERSEDED`; retrieval
-defaults to `ACTIVE` and effective-today, so outdated policy is not cited.
+**Metadata on every chunk** (filterable columns): status, department, category,
+effective sensitivity, retrieval window (`effective_from/to`), embedding model.
 
-## 2. Retrieval
+**Versions** (`knowledge/lifecycle.py`, ADR-044): rows with the same `document_key`
+are versions; at most one is ACTIVE. A processed version becomes ACTIVE if it takes
+effect later than the active one (same or unknown date: the later upload), otherwise
+it is kept as SUPERSEDED history. Each version's *retrieval window* is copied onto its
+chunks: the effective dates, with the end capped the day before the next version
+starts. Archiving the active version restores the latest earlier one.
+
+**Embeddings** (`knowledge/embedding.py`, ADR-042): `gemini`, `fastembed` (local) or
+`hashing` (offline, lexical). External providers receive only chunks at or below
+`AI_EXTERNAL_MAX_SENSITIVITY` (label or detected content). A chunk without a vector is
+found by full-text search; `docintel reembed` adds vectors later.
+
+## 2. Retrieval (`knowledge/retrieval.py`, ADR-045)
 
 ```mermaid
 flowchart LR
-  Q[query] --> QE[embed query<br/>RETRIEVAL_QUERY]
-  Q --> FT[websearch_to_tsquery]
-  QE --> V[pgvector HNSW cosine top-20<br/>iterative scan, pre-filtered]
-  FT --> K[FTS ts_rank_cd top-20<br/>pre-filtered]
-  V & K --> RRF[Reciprocal Rank Fusion k=60]
-  RRF --> TH{top score ≥ threshold?}
-  TH -- no --> INS[insufficient evidence]
-  TH -- yes --> CA[context assembly<br/>dedupe · neighbour merge · token budget]
-  CA --> GEN[LLM answer with citation schema]
-  GEN --> CV[citation validation]
+  Q[question] --> QE[embed query<br/>RETRIEVAL_QUERY<br/>skipped if it holds restricted data]
+  Q --> FT[stemmed terms<br/>to_tsvector english]
+  QE --> V[pgvector HNSW cosine top-20<br/>iterative scan, filtered in SQL]
+  FT --> K[full text top-20<br/>GIN, filtered in SQL]
+  V & K --> RRF[Reciprocal Rank Fusion k=60<br/>deterministic ties]
+  RRF --> G{evidence gate}
+  G -- no --> INS[insufficient evidence<br/>no model call]
+  G -- yes --> CA[context assembly]
+  CA --> GEN[claims with citations]
+  GEN --> CV[citation + grounding checks]
 ```
 
-* **Hybrid** retrieval because policy questions mix semantics ("how much price
-  variance is allowed") with exact tokens (clause numbers, vendor names, codes)
-  that dense vectors handle poorly.
-* **Filters in SQL** (`WHERE status='ACTIVE' AND (department_id IS NULL OR
-  department_id = ANY(:user_departments)) AND effective_from <= today …`) — never
-  post-filtering in Python, so unauthorized chunks never leave the database.
-  pgvector 0.8 `hnsw.iterative_scan` keeps filtered top-k full.
-* **Reranking**: off by default. An LLM or cross-encoder reranker is only enabled
-  if Phase 10 shows a measured gain worth its latency/cost.
+* **Filters in SQL**, inside both scans: organization-wide chunks plus the user's
+  department (administrators: all); status ACTIVE or SUPERSEDED with the retrieval
+  window containing `as_of` (default today); optional categories and document keys.
+  Unauthorized or out-of-date chunks never leave the database.
+* **Full-text order**: when full text is the only retriever (no embedding provider),
+  candidates are ordered by the IDF-weighted share of the question's terms they
+  contain; when fused with vectors, by `ts_rank_cd` — the better choice in each mode
+  on the kb-queries tuning set.
+* **Evidence gate**: the best of the top five passages must cover ≥
+  `RAG_MIN_TERM_COVERAGE` (0.25) of the question's terms weighted by rarity, or reach
+  `RAG_MIN_DENSE_SIMILARITY` (0.5, model-specific).
+* **Reranking**: none. A cross-encoder or LLM reranker is only worth adding if the
+  evaluation shows a gain worth its latency and cost.
 
-## 3. Context assembly
+## 3. Context assembly (`knowledge/answering.py`)
 
-* Top-N (default 6) chunks within a token budget; adjacent chunks of the same
-  section merged; near-duplicates removed.
-* Each source labelled `[S1]…[Sn]` with title, section path, page range,
-  effective date.
-* Sources are wrapped in a delimited **untrusted data** block; the system
-  instruction states that instructions inside sources must be ignored.
+* Passages in rank order are labelled `S1…Sn`; consecutive chunks of one section are
+  merged (their overlap removed); duplicate texts are dropped; the context stops at
+  `RAG_MAX_CONTEXT_TOKENS` (the top source is always included).
+* Each source header carries title, version, period in force and section path.
+* **Per-source sensitivity gate** (ADR-047): sources above the external limit are not
+  sent to an external model; they are still returned to the user (`sent_to_model:
+  false`, with a notice). If no source may be sent, the answer is `RETRIEVAL_ONLY`.
+* Sources are wrapped in markers with a per-request random nonce (a source cannot close
+  the block); the system instruction declares them untrusted data whose instructions
+  must be ignored.
 
-## 4. Generation & hallucination safeguards
+## 4. Generation and hallucination safeguards (ADR-046)
 
-Structured output:
+Structured output — claims only:
 
 ```json
-{
-  "answer": "string",
-  "claims": [{"text": "string", "citations": ["S1", "S3"]}],
-  "insufficient_evidence": false
-}
+{"claims": [{"text": "string", "citations": ["S1", "S3"]}], "insufficient_evidence": false}
 ```
 
-1. **Retrieval gate** — no generation when evidence is below threshold.
-2. **Citation validation** — every citation must reference a provided source;
-   claims without valid citations are removed and the response is flagged
-   `partially_supported`.
-3. **Grounding check** — lexical/semantic overlap between each claim and its cited
-   chunk; low overlap → claim flagged (Phase 10 adds an LLM-judge in evaluation only).
-4. **No tool execution from retrieved text** — RAG output is data for the agent,
-   never instructions.
-5. **Deterministic facts win** — when used by the agent, retrieved policy can
-   explain a rule result but cannot overturn it.
+1. **Retrieval gate** — no generation below the evidence thresholds.
+2. **Citation validation** — citations must name provided sources; claims without one
+   are removed (status `PARTIALLY_SUPPORTED`).
+3. **Grounding check** — every number in a claim must occur in its cited text and ≥ 60%
+   of its content words; failing claims are kept but flagged for the reader.
+4. **Answer from claims** — the text shown is the surviving claims with their
+   citations, never free model prose.
+5. **No tool execution from retrieved text** — RAG output is data for the agent.
+6. **Deterministic facts win** — retrieved policy can explain a rule result (Phase 7)
+   but cannot overturn it.
 
-## 5. Semantic search over business documents (Module 28)
+Statuses: `ANSWERED`, `PARTIALLY_SUPPORTED`, `INSUFFICIENT_EVIDENCE`,
+`RETRIEVAL_ONLY`. Every query is audited with a fingerprint of the question (never its
+text), the passages used, which were cited and which were sent to the model; model
+calls are accounted in `llm_calls`.
 
-Same hybrid engine over `document_chunks` + structured filters on extracted
-metadata (`document_type`, `vendor_id`, dates, amounts). Examples:
+## 5. Search over business documents (Module 28, ADR-048)
 
-* "Find all invoices from Vendor X" → structured filter on normalized vendor
-  (no vectors needed).
-* "Contracts containing termination clauses" → hybrid search restricted to `CONTRACT`.
-* "Documents mentioning payment terms longer than 60 days" → structured filter on
-  normalized `payment_terms_days > 60` where extracted, plus hybrid search for the rest.
+`POST /api/v1/search` — a deterministic parser turns the request into filters plus
+free text and returns its interpretation:
 
-A small query-understanding step (fast LLM, schema-constrained, or rule-based
-fallback) maps natural language to `{filters, semantic_query}`.
+* "Find all invoices from Vendor X" → type INVOICE + vendor (vendor master by key,
+  alias or name; printed names otherwise). No vectors needed.
+* "Contracts containing termination clauses" → type CONTRACT + hybrid search for
+  "termination clauses" over `document_chunks`, grouped per document with a snippet.
+* "Documents with payment terms longer than 60 days" → `payment_terms_days > 60` on
+  the current extraction (corrections win); documents whose terms were not extracted
+  are matched from terms written in their text, and the result says so.
+* Totals ("over 10,000"), months, years and ISO date ranges on the document date.
 
-## 6. Evaluation (details in 10-evaluation-plan.md)
+Access is the same SQL predicate as every document read.
 
-Labelled query set over the seeded knowledge base: Recall@k, Precision@k, MRR,
-nDCG@k, citation precision/recall, refusal accuracy on unanswerable questions.
-Ablations: dense-only vs FTS-only vs hybrid; chunk size; contextual prefix on/off.
+## 6. Evaluation (`docintel evaluate --suite retrieval|search`, 10-evaluation-plan.md)
+
+Measured with the offline hashing embeddings (semantic models: Not yet measured):
+hit@k, section recall@5, precision@5, MRR, nDCG@5 on kb-queries (tuning set) and
+kb-queries-holdout; the evidence gate's refusals; access-control and version checks;
+ablations dense vs full text vs hybrid, full-text order, contextual prefix off,
+fixed-size chunks; business search precision/recall per question family. Results:
+[retrieval report](../../evaluation/reports/retrieval.md),
+[search report](../../evaluation/reports/search.md). Generated-answer quality
+(citation precision/recall, faithfulness) needs an LLM: Not yet measured.
+EOF
+grep -n "^## \|Phase 6\|knowledge\|RAG\|retrieval" docs/architecture/10-evaluation-plan.md | head -30
