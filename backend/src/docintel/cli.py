@@ -8,7 +8,9 @@ docintel worker [--until-idle]     run the background job worker
 docintel worker-health             exit 0 if the worker heartbeat is fresh (container probe)
 docintel generate-documents        synthetic POs/invoices/delivery notes with ground truth
 docintel ingest DIR                upload a directory through the REST API and wait for results
-docintel evaluate --suite ...      OCR / classification / table / extraction metrics
+docintel evaluate --suite ...      OCR / classification / table / extraction / discrepancy /
+                                   version-comparison metrics
+docintel match                     re-run matching for every processed document
 """
 
 from __future__ import annotations
@@ -489,21 +491,24 @@ async def _ingest(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------- evaluation
+SUITES = ("ocr", "classification", "tables", "extraction", "discrepancies", "versions")
+
+
 async def _evaluate(args: argparse.Namespace) -> int:
     """Offline evaluation with production defaults; needs the dev/synthetic dependency groups."""
     try:
         from docintel.evaluation.classification_suite import run_classification_suite
+        from docintel.evaluation.discrepancy_suite import run_discrepancy_suite
         from docintel.evaluation.extraction_suite import run_extraction_suite
         from docintel.evaluation.ocr_suite import run_ocr_suite
         from docintel.evaluation.tables_suite import run_tables_suite
+        from docintel.evaluation.versions_suite import run_versions_suite
     except ImportError as exc:  # reportlab is not installed in the runtime image
         _fail(f"evaluation needs the synthetic dependency group (uv sync): {exc}")
         return EXIT_USAGE
     defaults = Settings.model_fields
     output = Path(args.output)
-    suites = (
-        ["ocr", "classification", "tables", "extraction"] if args.suite == "all" else [args.suite]
-    )
+    suites = list(SUITES) if args.suite == "all" else [args.suite]
     try:
         for suite in suites:
             if suite == "ocr":
@@ -512,6 +517,14 @@ async def _evaluate(args: argparse.Namespace) -> int:
                 report = await run_tables_suite(output, quick=args.quick, languages=args.languages)
             elif suite == "extraction":
                 report = await run_extraction_suite(
+                    output, quick=args.quick, languages=args.languages
+                )
+            elif suite == "discrepancies":
+                report = await run_discrepancy_suite(
+                    output, quick=args.quick, languages=args.languages
+                )
+            elif suite == "versions":
+                report = await run_versions_suite(
                     output, quick=args.quick, languages=args.languages
                 )
             else:
@@ -567,7 +580,7 @@ def _build_parser() -> argparse.ArgumentParser:
     evaluate = commands.add_parser("evaluate", help="run evaluation suites and write reports")
     evaluate.add_argument(
         "--suite",
-        choices=["ocr", "classification", "tables", "extraction", "all"],
+        choices=[*SUITES, "all"],
         default="all",
     )
     evaluate.add_argument("--output", default="../evaluation/reports")

@@ -81,6 +81,28 @@ def test_independent_columns_stay_separate_blocks() -> None:
     ]
 
 
+def test_a_wide_space_inside_a_sentence_does_not_move_the_rest_of_the_line() -> None:
+    # OCR word boxes are tight: a space can measure wider than the column threshold. The tail
+    # must stay on its line, not be read after the whole paragraph.
+    first = words_on_line("The Supplier shall maintain insurance of at least", 50, 100)
+    tail = words_on_line("1,000,000 USD per", first[-1].bbox.x1 + 0.9 * SIZE, 100)
+    words = [
+        *first,
+        *tail,
+        *words_on_line("claim.", 50, 112),
+        *words_on_line("5. Non-Solicitation", 50, 124),
+    ]
+    page = page_of(words)
+    assert line_texts(page)[0] == [
+        "The Supplier shall maintain insurance of at least",
+        "1,000,000 USD per",
+    ]
+    assert page.text.splitlines()[:2] == [
+        "The Supplier shall maintain insurance of at least  1,000,000 USD per",
+        "claim.",
+    ]
+
+
 def test_far_numeric_column_still_pairs_with_its_labels() -> None:
     words: list[Word] = []
     for row, (label, amount) in enumerate([("Subtotal", "$ 962.55"), ("Total Due", "$ 1,041.96")]):

@@ -385,7 +385,10 @@ class _Builder:
         facts: DocumentFacts,
         side: str,
         what: str,
+        unread: bool = False,
     ) -> None:
+        """A line on one side only. `unread`: no line at all was read on the other side, which
+        is an extraction gap (an order without lines does not exist), not a discrepancy."""
         cell = line.get("sku") or line.get("description")
         present = [_side(facts, cell, line.label)]
         left, right = (present, []) if side == "left" else ([], present)
@@ -394,7 +397,7 @@ class _Builder:
                 key=f"line:{line.label}:{check}",
                 category=Category.LINE_ITEM,
                 check=check,
-                status=ItemStatus.MISSING,
+                status=ItemStatus.UNCERTAIN if unread else ItemStatus.MISSING,
                 left=left,
                 right=right,
                 left_value=line.label if side == "left" else None,
@@ -497,20 +500,32 @@ def _against_order(
             unit=unit,
         )
     for line in extra:
+        absent = (
+            f"no line items could be read on the {order_name}"
+            if not order.lines
+            else f"not on the {order_name}"
+        )
         builder.missing_line(
             check=LINE_ON_ORDER,
             line=line,
             facts=subject,
             side="left",
-            what=f"{line.label} is on the {subject_name} but not on the {order_name}.",
+            what=f"{line.label} is on the {subject_name} but {absent}.",
+            unread=not order.lines,
         )
     for line in open_lines:
+        absent = (
+            f"no line items could be read on the {subject_name}"
+            if not subject.lines
+            else f"is not on the {subject_name}"
+        )
         builder.missing_line(
             check=LINE_FULFILLED,
             line=line,
             facts=order,
             side="right",
-            what=f"{line.label} was ordered but is not on the {subject_name}.",
+            what=f"{line.label} was ordered but {absent}.",
+            unread=not subject.lines,
         )
 
 
@@ -518,6 +533,8 @@ def _against_deliveries(
     builder: _Builder, invoice: DocumentFacts, deliveries: Sequence[DocumentFacts]
 ) -> None:
     tolerances = builder.tolerances
+    unread = not any(note.lines for note in deliveries)
+    absent = "no line items could be read on the delivery note" if unread else "on no delivery note"
     delivered: dict[int, list[tuple[DocumentFacts, LineFacts]]] = {}
     for note in deliveries:
         pairs, _, _ = match_lines(invoice.lines, note.lines, tolerances.description_similarity)
@@ -532,7 +549,8 @@ def _against_deliveries(
                 line=line,
                 facts=invoice,
                 side="left",
-                what=f"{label} is invoiced but on no delivery note.",
+                what=f"{label} is invoiced but {absent}.",
+                unread=unread,
             )
             continue
         builder.numeric(

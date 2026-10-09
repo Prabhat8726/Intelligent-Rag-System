@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
 from sqlalchemy import Select, delete, or_, select
@@ -118,6 +119,99 @@ def store_comparison(
     return record
 
 
+# ------------------------------------------------------------------------------ pure decisions
+def pick_order(
+    facts: DocumentFacts, orders: Sequence[DocumentFacts], tolerances: Tolerances
+) -> DocumentFacts | None:
+    """The purchase order a document references, among the orders carrying that number
+    (oldest upload first): one from the same vendor first, the latest upload of it."""
+    if not orders:
+        return None
+    same = [order for order in orders if same_vendor(facts, order, tolerances.vendor_similarity)]
+    return (same or list(orders))[-1]
+
+
+def duplicate_matches(
+    facts: DocumentFacts,
+    candidates: Sequence[DocumentFacts],
+    rules: Sequence[RuleDefinition],
+    *,
+    identical_file: DuplicateMatch | None = None,
+) -> list[DuplicateMatch]:
+    """Possible duplicates among `candidates` under the duplicate rule's parameters.
+
+    `identical_file` is the original of a byte-identical upload: one entry per original
+    document, and the identical file is the strongest reason.
+    """
+    params = duplicate_params(applicable(rules, facts.document_type))
+    if params is None:
+        return []
+    matches = find_duplicates(
+        facts,
+        candidates,
+        date_window_days=int(params.get("date_window_days", 7)),
+        match_amount_and_date=bool(params.get("match_amount_and_date", True)),
+    )
+    if identical_file is not None:
+        matches = [match for match in matches if match.document_id != identical_file.document_id]
+        matches.insert(0, identical_file)
+    return matches
+
+
+@dataclass(slots=True)
+class Assessment:
+    """What matching decides for one document: its order, comparison, duplicates and rules."""
+
+    order: DocumentFacts | None = None
+    comparison: ComparisonOutcome | None = None
+    duplicates: list[DuplicateMatch] = field(default_factory=list)
+    results: list[RuleResult] = field(default_factory=list)
+
+
+def assess(
+    facts: DocumentFacts,
+    *,
+    orders: Sequence[DocumentFacts],
+    deliveries: Sequence[DocumentFacts],
+    candidates: Sequence[DocumentFacts],
+    rules: Sequence[RuleDefinition],
+    tolerances: Tolerances,
+    reference_date: date,
+    identical_file: DuplicateMatch | None = None,
+) -> Assessment:
+    """Compare, look for duplicates and run the rules (pure: the service loads the inputs).
+
+    `orders` are the purchase orders carrying the number the document references and
+    `deliveries` the delivery notes referencing it (both oldest first); `candidates` are
+    documents of the same type that may duplicate it. The evaluation suite calls this too.
+    """
+    assessment = Assessment()
+    if facts.document_type in (DocumentType.INVOICE, DocumentType.DELIVERY_NOTE):
+        assessment.order = pick_order(facts, orders, tolerances)
+    if facts.document_type == DocumentType.INVOICE:
+        if assessment.order is not None or deliveries:
+            assessment.comparison = compare_invoice(
+                facts, assessment.order, list(deliveries), tolerances
+            )
+    elif facts.document_type == DocumentType.DELIVERY_NOTE and assessment.order is not None:
+        assessment.comparison = compare_delivery(facts, assessment.order, tolerances)
+    assessment.duplicates = duplicate_matches(
+        facts, candidates, rules, identical_file=identical_file
+    )
+    assessment.results = evaluate(
+        rules,
+        RuleContext(
+            document=facts,
+            reference_date=reference_date,
+            comparison=assessment.comparison,
+            duplicates=assessment.duplicates,
+            order_on_file=None if facts.po_reference is None else assessment.order is not None,
+            min_confidence=tolerances.min_confidence,
+        ),
+    )
+    return assessment
+
+
 class MatchingService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self._session = session
@@ -187,78 +281,50 @@ class MatchingService:
         )
         return list(rows)
 
-    async def _order_for(
-        self, document: Document, facts: DocumentFacts, tolerances: Tolerances
-    ) -> DocumentFacts | None:
-        """The purchase order the document references: same department, same vendor first."""
-        key = facts.po_key
-        if not key:
-            return None
-        candidates = [
-            found
-            for found in [
-                await self._facts_of(order)
-                for order in await self._documents(document, DocumentType.PURCHASE_ORDER, key)
-            ]
-            if found is not None
-        ]
-        if not candidates:
-            return None
-        same = [c for c in candidates if same_vendor(facts, c, tolerances.vendor_similarity)]
-        return (same or candidates)[-1]  # the latest upload of that order
+    async def _facts_list(self, documents: Sequence[Document]) -> list[DocumentFacts]:
+        return [found for document in documents if (found := await self._facts_of(document))]
 
-    async def _deliveries_for(
-        self, document: Document, facts: DocumentFacts
+    async def _referencing(
+        self, document: Document, facts: DocumentFacts, document_type: DocumentType
     ) -> list[DocumentFacts]:
+        """Processed documents of a type sharing the order reference (oldest first)."""
         if not facts.po_key:
             return []
-        notes = await self._documents(document, DocumentType.DELIVERY_NOTE, facts.po_key)
-        return [found for note in notes if (found := await self._facts_of(note)) is not None]
+        return await self._facts_list(await self._documents(document, document_type, facts.po_key))
 
-    async def _duplicates(
-        self, document: Document, facts: DocumentFacts, rules: Sequence[RuleDefinition]
-    ) -> list[DuplicateMatch]:
-        params = duplicate_params(applicable(rules, facts.document_type))
-        if params is None:
-            return []
+    async def _duplicate_candidates(
+        self, document: Document, facts: DocumentFacts
+    ) -> list[DocumentFacts]:
         conditions = []
         if facts.number_key:
             conditions.append(Document.number_key == facts.number_key)
         if facts.total is not None:
             conditions.append(Document.total_amount == facts.total)
-        candidates: list[DocumentFacts] = []
-        if conditions:
-            rows = await self._session.scalars(
-                self._in_department(document).where(
-                    or_(*conditions),
-                    Document.document_type == document.document_type,
-                    Document.status.in_(PROCESSED),
-                    Document.id != document.id,
-                )
+        if not conditions:
+            return []
+        rows = await self._session.scalars(
+            self._in_department(document).where(
+                or_(*conditions),
+                Document.document_type == document.document_type,
+                Document.status.in_(PROCESSED),
+                Document.id != document.id,
             )
-            candidates = [found for row in rows if (found := await self._facts_of(row))]
-        matches = find_duplicates(
-            facts,
-            candidates,
-            date_window_days=int(params.get("date_window_days", 7)),
-            match_amount_and_date=bool(params.get("match_amount_and_date", True)),
         )
-        if document.duplicate_reason == EXACT_FILE and document.duplicate_of_id is not None:
-            original = await self._session.get(Document, document.duplicate_of_id)
-            if original is not None and original.deleted_at is None:
-                # One entry per original document: the identical file is the strongest reason.
-                matches = [match for match in matches if match.document_id != str(original.id)]
-                matches.insert(
-                    0,
-                    DuplicateMatch(
-                        kind=DuplicateKind.SAME_FILE,
-                        document_id=str(original.id),
-                        label=original.display_filename,
-                        created_at=original.created_at,
-                        evidence={"reason": "byte-identical file (same SHA-256)"},
-                    ),
-                )
-        return matches
+        return await self._facts_list(list(rows))
+
+    async def _identical_file(self, document: Document) -> DuplicateMatch | None:
+        if document.duplicate_reason != EXACT_FILE or document.duplicate_of_id is None:
+            return None
+        original = await self._session.get(Document, document.duplicate_of_id)
+        if original is None or original.deleted_at is not None:
+            return None
+        return DuplicateMatch(
+            kind=DuplicateKind.SAME_FILE,
+            document_id=str(original.id),
+            label=original.display_filename,
+            created_at=original.created_at,
+            evidence={"reason": "byte-identical file (same SHA-256)"},
+        )
 
     # ------------------------------------------------------------------ evaluation
     async def refresh(self, trigger: Document, *, actor: User | None = None) -> None:
@@ -295,30 +361,31 @@ class MatchingService:
         actor: User | None,
     ) -> None:
         facts = await self._facts_of(document)
-        comparison: ComparisonOutcome | None = None
-        duplicates: list[DuplicateMatch] = []
-        results: list[RuleResult] = []
-        order: DocumentFacts | None = None
+        assessment = Assessment()
         if facts is not None:
-            if facts.document_type in (DocumentType.INVOICE, DocumentType.DELIVERY_NOTE):
-                order = await self._order_for(document, facts, tolerances)
-            if facts.document_type == DocumentType.INVOICE:
-                notes = await self._deliveries_for(document, facts)
-                if order is not None or notes:
-                    comparison = compare_invoice(facts, order, notes, tolerances)
-            elif facts.document_type == DocumentType.DELIVERY_NOTE and order is not None:
-                comparison = compare_delivery(facts, order, tolerances)
-            duplicates = await self._duplicates(document, facts, rules)
-            results = evaluate(
-                rules,
-                RuleContext(
-                    document=facts,
-                    reference_date=date.today(),
-                    comparison=comparison,
-                    duplicates=duplicates,
-                    order_on_file=None if facts.po_reference is None else order is not None,
-                ),
+            kind = facts.document_type
+            orders, deliveries, candidates = [], [], []
+            if kind in (DocumentType.INVOICE, DocumentType.DELIVERY_NOTE):
+                orders = await self._referencing(document, facts, DocumentType.PURCHASE_ORDER)
+            if kind == DocumentType.INVOICE:
+                deliveries = await self._referencing(document, facts, DocumentType.DELIVERY_NOTE)
+            if duplicate_params(applicable(rules, kind)) is not None:
+                candidates = await self._duplicate_candidates(document, facts)
+            assessment = assess(
+                facts,
+                orders=orders,
+                deliveries=deliveries,
+                candidates=candidates,
+                rules=rules,
+                tolerances=tolerances,
+                reference_date=date.today(),
+                identical_file=await self._identical_file(document),
             )
+        comparison, duplicates, results = (
+            assessment.comparison,
+            assessment.duplicates,
+            assessment.results,
+        )
 
         await self._session.execute(
             delete(Comparison).where(

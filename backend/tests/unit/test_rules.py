@@ -114,6 +114,23 @@ def test_missing_and_unknown_purchase_orders() -> None:
     assert "not on file" in not_on_file["INV_MISSING_PO"].message
 
 
+def test_a_billed_line_on_no_delivery_note_exceeds_the_delivered_quantity() -> None:
+    notes = [delivery([line(0, "BRG-6204", 10)])]
+    found = results(invoice(ORDER), order=purchase_order(ORDER), notes=notes)
+    assert outcomes(found)["INV_DELIVERED_QUANTITY"] == Outcome.FAIL
+    assert (
+        "VLV-BL050 is invoiced but on no delivery note" in found["INV_DELIVERED_QUANTITY"].message
+    )
+    unread = results(invoice(ORDER), order=purchase_order(ORDER), notes=[delivery([])])
+    assert outcomes(unread)["INV_DELIVERED_QUANTITY"] == Outcome.WARN
+
+
+def test_unread_order_lines_warn_instead_of_failing() -> None:
+    found = results(invoice(ORDER), order=purchase_order([]))
+    assert outcomes(found)["INV_LINE_NOT_ORDERED"] == Outcome.WARN
+    assert found["INV_LINE_NOT_ORDERED"].message.startswith("Could not be verified")
+
+
 def test_duplicates_fail_or_warn() -> None:
     first = invoice(ORDER, number="INV-7", total="125.30", created_minutes=0)
     again = invoice(ORDER, number="INV-7", total="125.30", created_minutes=1)
@@ -140,6 +157,22 @@ def test_single_document_rules() -> None:
         ],
     )
     assert outcomes(results(broken))["DOC_ARITHMETIC"] == Outcome.FAIL
+
+    # The same failed sum over a line amount read with low confidence may be a misread.
+    lines_sum = {
+        "code": "LINES_SUM",
+        "status": "FAIL",
+        "fields": ["line_items[0].amount", "total"],
+        "message": "sum of line amounts = subtotal",
+    }
+    misread = invoice(
+        [line(0, "BRG-6204", 10, "4.85", confidence=0.5)], total="1", checks=[lines_sum]
+    )
+    found = results(misread)
+    assert outcomes(found)["DOC_ARITHMETIC"] == Outcome.WARN
+    assert found["DOC_ARITHMETIC"].message.startswith("Could not be verified")
+    confirmed = invoice([line(0, "BRG-6204", 10, "4.85")], total="1", checks=[lines_sum])
+    assert outcomes(results(confirmed))["DOC_ARITHMETIC"] == Outcome.FAIL
 
     no_currency = invoice(ORDER, total="1", currency=None)
     found = results(no_currency)

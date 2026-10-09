@@ -36,6 +36,25 @@ def bag_of_words_f1(reference: str, hypothesis: str) -> float:
     return 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
 
 
+def counts_prf(tp: int, fp: int, fn: int) -> dict[str, int | float | None]:
+    """Precision / recall / F1 from counts (None where undefined: nothing found or expected)."""
+    precision = tp / (tp + fp) if tp + fp else None
+    recall = tp / (tp + fn) if tp + fn else None
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision is not None and recall is not None and precision + recall
+        else None
+    )
+    return {
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "precision": None if precision is None else round(precision, 4),
+        "recall": None if recall is None else round(recall, 4),
+        "f1": None if f1 is None else round(f1, 4),
+    }
+
+
 def summary(values: Sequence[float]) -> dict[str, float]:
     if not values:
         return {"mean": 0.0, "median": 0.0, "min": 0.0, "max": 0.0, "n": 0}

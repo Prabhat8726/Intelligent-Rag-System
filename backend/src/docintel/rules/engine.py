@@ -58,6 +58,8 @@ class RuleContext:
     duplicates: list[DuplicateMatch] = field(default_factory=list)
     # The referenced purchase order exists in scope (None: no reference to look up).
     order_on_file: bool | None = None
+    # Below this, a machine-read value cannot confirm a discrepancy (COMPARISON_MIN_CONFIDENCE).
+    min_confidence: float = 0.85
 
 
 @dataclass(slots=True)

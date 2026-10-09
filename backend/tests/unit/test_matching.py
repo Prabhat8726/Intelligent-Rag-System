@@ -107,6 +107,26 @@ def test_lines_missing_on_either_side() -> None:
     assert open_line.right[0].value == "VLV-BL050"
 
 
+def test_lines_are_uncertain_when_no_line_was_read_on_the_other_side() -> None:
+    # An order or delivery note without any line is an extraction gap (e.g. a table OCR could
+    # not reconstruct), not a set of discrepancies: verify by hand, do not fail.
+    bill = invoice([line(0, "BRG-6204", 10, "4.85")])
+    outcome = compare_invoice(bill, purchase_order([]), [delivery([])], TOL)
+    on_order = item(outcome, "line:BRG-6204:line_on_order")
+    assert on_order.status == ItemStatus.UNCERTAIN
+    assert on_order.explanation == (
+        "BRG-6204 is on the invoice but no line items could be read on the purchase order."
+    )
+    delivered = item(outcome, "line:BRG-6204:line_delivered")
+    assert delivered.status == ItemStatus.UNCERTAIN
+    open_line = item(
+        compare_invoice(invoice([]), purchase_order(ORDER), [], TOL),
+        "line:VLV-BL050:line_fulfilled",
+    )
+    assert open_line.status == ItemStatus.UNCERTAIN
+    assert "no line items could be read on the invoice" in open_line.explanation
+
+
 def test_lines_without_sku_pair_by_description() -> None:
     bill = invoice([line(0, None, 10, "4.85", description="Deep groove ball bearing 6204")])
     order = purchase_order(

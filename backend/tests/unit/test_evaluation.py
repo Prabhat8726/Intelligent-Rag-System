@@ -7,18 +7,24 @@ from pathlib import Path
 
 import pytest
 
+from docintel.evaluation.discrepancy_suite import EvaluatedDocument, match_corpus, score_corpus
 from docintel.evaluation.metrics import (
     Prediction,
     bag_of_words_f1,
     cer,
     classification_report,
+    counts_prf,
     expected_calibration_error,
     summary,
     wer,
 )
 from docintel.evaluation.report import Report
 from docintel.evaluation.tables_suite import score_table
+from docintel.evaluation.versions_suite import score_segmentation, score_step
+from docintel.matching.facts import DocumentFacts
 from docintel.processing.content import BBox, DocumentTable, TableRow
+from docintel.versions.clauses import segment
+from tests.factories.facts import delivery, invoice, line, purchase_order
 
 
 def test_character_and_word_error_rates() -> None:
@@ -175,3 +181,100 @@ async def test_extraction_scoring_on_a_native_synthetic_invoice(tmp_path: Path) 
     assert summary["all_fields"]["f1"] == 1.0
     assert summary["line_items"]["cell_accuracy"] == 1.0
     assert summary["documents_fully_correct_rate"] == 1.0
+
+
+def test_counts_prf() -> None:
+    assert counts_prf(3, 1, 2) == {
+        "tp": 3,
+        "fp": 1,
+        "fn": 2,
+        "precision": 0.75,
+        "recall": 0.6,
+        "f1": 0.6667,
+    }
+    assert counts_prf(0, 0, 0)["precision"] is None
+
+
+def _evaluated(
+    doc_id: str, facts: DocumentFacts, defects: list[dict[str, str]]
+) -> EvaluatedDocument:
+    truth = {"doc_id": doc_id, "scenario": "TEST", "defects": defects}
+    return EvaluatedDocument(truth, facts, extraction_review=False)
+
+
+def test_discrepancy_scoring_counts_planted_defects_and_false_alarms() -> None:
+    ordered = [line(0, "BRG-6204", 10, "4.85"), line(1, "VLV-BL050", 2, "38.40")]
+    billed = [line(0, "BRG-6204", 10, "5.25"), line(1, "VLV-BL050", 2, "38.40")]
+    corpus = [
+        _evaluated("B1-PO", purchase_order(ordered, number="PO-2026-10001", total="100"), []),
+        _evaluated("B1-DN", delivery(ordered, number="DN-1", po="PO-2026-10001"), []),
+        _evaluated(
+            "B1-INV",
+            invoice(billed, number="INV-1", total="100", created_minutes=1),
+            [{"code": "UNIT_PRICE_MISMATCH"}],
+        ),
+        _evaluated(
+            "B1-INV2",
+            invoice(billed, number="INV-1", total="100", created_minutes=2),
+            [
+                {"code": "UNIT_PRICE_MISMATCH"},
+                {"code": "DUPLICATE_INVOICE", "duplicate_of": "B1-INV"},
+            ],
+        ),
+        # Clean, but its order is not on file: a false alarm (WARN).
+        _evaluated("B2-INV", invoice(ordered, number="INV-9", po="PO-2026-99999", total="9"), []),
+    ]
+    for document in corpus:
+        document.facts.label = document.doc_id
+    match_corpus(corpus)
+    metrics = score_corpus(corpus)
+
+    fail = metrics["fail"]
+    assert fail["by_defect"]["UNIT_PRICE_MISMATCH"] == {
+        "documents": 2,
+        "detected": 2,
+        "recall": 1.0,
+    }
+    assert fail["by_defect"]["DUPLICATE_INVOICE"]["recall"] == 1.0
+    assert fail["unexpected_alarms"] == [], fail["unexpected_alarms"]
+    assert fail["pairs"]["precision"] == 1.0
+    assert fail["routing"]["defect_free_documents_flagged"] == {"documents": 3, "rate": 0.0}
+    either = metrics["fail_or_warn"]
+    assert either["by_rule"]["INV_MISSING_PO"] == {"flagged": 1, "correct": 0, "precision": 0.0}
+    assert either["routing"]["defect_free_documents_flagged"]["rate"] == round(1 / 3, 4)
+    assert [alarm["document"] for alarm in either["unexpected_alarms"]] == ["B2-INV"]
+    duplicates = metrics["duplicates"]
+    assert duplicates["strong"]["precision"] == duplicates["strong"]["recall"] == 1.0
+    assert duplicates["wrong_pairs"] == []
+
+
+CONTRACT_V1 = [
+    "SUPPLY AGREEMENT\nVersion 1\n1. Term\nTwo years.\n2. Fees and Payment\n"
+    "Invoices are payable within 30 days.\n3. Insurance\nCover of 1,000,000 USD.\n"
+    "IN WITNESS WHEREOF the Parties have signed."
+]
+CONTRACT_V2 = [
+    "SUPPLY AGREEMENT\nVersion 2\n1. Term\nTwo years.\n2. Data Protection\n"
+    "Personal data is processed under the DPA.\n3. Fees and Payment\n"
+    "Invoices are payable within 45 days.\nIN WITNESS WHEREOF the Parties have signed."
+]
+
+
+def test_version_scoring_by_change_type() -> None:
+    truth = {
+        "added": ["Data Protection"],
+        "removed": ["Insurance"],
+        "modified": ["Fees and Payment"],
+    }
+    old, new = segment(CONTRACT_V1), segment(CONTRACT_V2)
+    scores = score_step(old, new, truth)
+    # Renumbering ("Fees and Payment" 2 -> 3) and the preamble's version line are not changes.
+    assert scores == {
+        "added": {"tp": 1, "fp": 0, "fn": 0},
+        "removed": {"tp": 1, "fp": 0, "fn": 0},
+        "modified": {"tp": 1, "fp": 0, "fn": 0},
+    }
+    wrong = score_step(old, new, {"added": [], "removed": [], "modified": ["Term"]})
+    assert wrong["modified"] == {"tp": 0, "fp": 1, "fn": 1}
+    titles = {"clauses": [{"title": "Term"}, {"title": "Fees and Payment"}, {"title": "Insurance"}]}
+    assert score_segmentation(old, titles) == {"count": True, "titles": True}

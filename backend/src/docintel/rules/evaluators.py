@@ -158,11 +158,16 @@ class LineQuantityDelivered:
         comparison = context.comparison
         if comparison is None or not comparison.deliveries:
             return Finding(Outcome.NOT_APPLICABLE, "No delivery note for this order yet.")
-        items = comparison.by_check(checks.QUANTITY_DELIVERED)
+        # A billed line on no delivery note counts as delivered quantity zero.
+        items = [
+            *comparison.by_check(checks.QUANTITY_DELIVERED),
+            *comparison.by_check(checks.LINE_DELIVERED),
+        ]
         failing = [
             item
             for item in items
-            if item.status == ItemStatus.MISMATCH and _difference(item) > params.tolerance
+            if (item.status == ItemStatus.MISMATCH and _difference(item) > params.tolerance)
+            or (item.check == checks.LINE_DELIVERED and item.status == ItemStatus.MISSING)
         ]
         return _comparison_finding(
             items,
@@ -184,10 +189,10 @@ class LineNotOrdered:
         comparison = context.comparison
         if comparison is None or comparison.purchase_order is None:
             return Finding(Outcome.NOT_APPLICABLE, "No purchase order to compare lines with.")
-        failing = comparison.by_check(checks.LINE_ON_ORDER)
+        items = comparison.by_check(checks.LINE_ON_ORDER)
         return _comparison_finding(
-            failing,
-            failing=failing,
+            items,
+            failing=[item for item in items if item.status == ItemStatus.MISSING],
             fail_lead="Lines not on the purchase order",
             ok_message="Every line is on the purchase order.",
         )
@@ -260,12 +265,27 @@ class DocumentArithmetic:
     params_model: ClassVar[type[RuleParams]] = ArithmeticParams
 
     def evaluate(self, context: RuleContext, params: Any) -> Finding:
-        failed = [
-            check for check in context.document.failed_checks if check.get("code") in params.checks
-        ]
-        if failed:
-            messages = "; ".join(str(check.get("message")) for check in failed[:_SHOWN])
+        document = context.document
+        failed = [check for check in document.failed_checks if check.get("code") in params.checks]
+
+        def unverified(check: dict[str, Any]) -> bool:
+            # A sum that is off because a value was misread (or not read) is not a document
+            # error: like a comparison, a weak reading can only ask for a check.
+            values = [document.at(str(path)) for path in check.get("fields", [])]
+            return any(v is None or v.uncertain(context.min_confidence) for v in values)
+
+        confirmed = [check for check in failed if not unverified(check)]
+        shown = confirmed or failed
+        messages = "; ".join(str(check.get("message")) for check in shown[:_SHOWN])
+        if confirmed:
             return Finding(Outcome.FAIL, f"Amounts do not add up: {messages}.", {"checks": failed})
+        if failed:
+            return Finding(
+                Outcome.WARN,
+                f"Could not be verified (a value involved was read with low confidence): "
+                f"{messages}.",
+                {"checks": failed},
+            )
         return Finding(Outcome.PASS, "Amounts add up.")
 
 

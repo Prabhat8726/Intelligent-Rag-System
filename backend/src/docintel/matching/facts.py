@@ -172,6 +172,16 @@ class DocumentFacts:
         item = self.get(name)
         return item.value if item else None
 
+    def at(self, path: str) -> FactValue | None:
+        """The value read at a field path ("subtotal", "line_items[2].amount"), if any."""
+        for item in [
+            *self.fields.values(),
+            *(c for line in self.lines for c in line.cells.values()),
+        ]:
+            if item.path == path:
+                return item if item.value is not None else None
+        return None
+
     @property
     def number(self) -> FactValue | None:
         name = NUMBER_FIELD.get(self.document_type)
