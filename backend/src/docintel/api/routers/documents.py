@@ -240,7 +240,7 @@ async def correct_classification(
 ) -> ClassificationRead:
     document = await DocumentService(session, storage, settings).get(user, document_id)
     record = await DocumentContentService(session, storage).correct_classification(
-        user, document, body.document_type, body.note, meta, max_attempts=settings.job_max_attempts
+        user, document, body.document_type, body.note, meta, settings=settings
     )
     return ClassificationRead.model_validate(record)
 

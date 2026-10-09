@@ -51,9 +51,11 @@ def _field(extraction: dict[str, Any], path: str) -> dict[str, Any]:
 async def test_invoice_fields_are_extracted_with_evidence_and_vendor(
     env: Env, tmp_path: Path
 ) -> None:
+    order, _ = _synthetic(tmp_path, Scenario.CLEAN_MATCH, "-PO")
     content, truth = _synthetic(tmp_path, Scenario.CLEAN_MATCH, "-INV")
+    await env.upload(order, "order.pdf")  # the invoice is matched with its purchase order
     document_id = await env.upload(content, "invoice.pdf")
-    assert await env.worker().run_until_idle() == 1
+    assert await env.worker().run_until_idle() == 2
 
     detail = await env.detail(document_id)
     assert detail["status"] == "COMPLETED", detail["review_reasons"]
@@ -124,12 +126,15 @@ async def test_extraction_endpoints_respect_scope_and_state(env: Env, tmp_path: 
 async def test_reviewer_corrects_a_wrong_total_and_the_document_leaves_review(
     env: Env, tmp_path: Path
 ) -> None:
+    order, _ = _synthetic(tmp_path, Scenario.TOTAL_ARITHMETIC_ERROR, "-PO")
     content, _ = _synthetic(tmp_path, Scenario.TOTAL_ARITHMETIC_ERROR, "-INV")
+    await env.upload(order, "order.pdf")
     document_id = await env.upload(content, "invoice.pdf")
     await env.worker().run_until_idle()
     detail = await env.detail(document_id)
     assert detail["status"] == "REVIEW_REQUIRED"
-    assert "EXTRACTION_INCONSISTENT" in detail["review_reasons"]
+    # The extraction flags the inconsistency, and so does the arithmetic rule.
+    assert detail["review_reasons"] == ["EXTRACTION_INCONSISTENT", "RULE_VIOLATION"]
 
     extraction = await _extraction(env, document_id)
     assert extraction["review_level"] == "MANDATORY_REVIEW"

@@ -114,7 +114,9 @@ async def test_scanned_invoice_is_read_classified_and_previewed(env: Env) -> Non
     assert await env.worker().run_until_idle() == 1
 
     detail = await env.detail(document_id)
-    assert detail["status"] == "COMPLETED", detail["review_reasons"]
+    # Read and classified cleanly; held only because the invoice names no purchase order.
+    assert detail["status"] == "REVIEW_REQUIRED"
+    assert detail["review_reasons"] == ["RULE_VIOLATION"]
     assert detail["document_type"] == "INVOICE"
     classification = detail["classification"]
     assert classification["method"] == "LOCAL_MODEL"
@@ -187,8 +189,13 @@ async def test_uncertain_document_is_corrected_and_correction_survives_reprocess
     await env.worker().run_until_idle()
     detail = await env.detail(document_id)
     assert detail["status"] == "REVIEW_REQUIRED"
-    # Uncertain type, and the one-line "invoice" lacks most invoice fields.
-    assert detail["review_reasons"] == ["CLASSIFICATION_UNCERTAIN", "MISSING_REQUIRED_FIELDS"]
+    # Uncertain type, and the one-line "invoice" lacks most invoice fields (and so fails the
+    # mandatory-field and purchase-order rules).
+    assert detail["review_reasons"] == [
+        "CLASSIFICATION_UNCERTAIN",
+        "MISSING_REQUIRED_FIELDS",
+        "RULE_VIOLATION",
+    ]
     machine = detail["classification"]
     assert machine["signals"]["llm"]["used"] is False
     extraction = (
@@ -304,7 +311,7 @@ async def test_confidential_documents_never_reach_the_llm(env: Env) -> None:
     detail = await env.detail(document_id)
     assert llm.calls == 0
     assert detail["status"] == "REVIEW_REQUIRED"
-    assert detail["review_reasons"] == ["CLASSIFICATION_UNCERTAIN"]
+    assert detail["review_reasons"] == ["CLASSIFICATION_UNCERTAIN", "RULE_VIOLATION"]
     gate = detail["classification"]["signals"]["external_ai"]
     assert gate == {
         "allowed": False,

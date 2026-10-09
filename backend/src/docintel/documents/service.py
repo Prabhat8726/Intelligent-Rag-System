@@ -47,6 +47,9 @@ from docintel.db.models import (
     User,
 )
 from docintel.documents.validation import UploadLimits, ValidatedUpload, validate_upload
+from docintel.matching.service import MatchingService
+from docintel.matching.store import lock_department
+from docintel.review.service import cancel_open_task
 from docintel.storage import DocumentStorage, StorageError, document_object_key
 from docintel.workers.queue import cancel_queued_jobs, enqueue_job
 
@@ -344,9 +347,13 @@ class DocumentService:
     # ------------------------------------------------------------------------ writes
     async def soft_delete(self, actor: User, document_id: uuid.UUID, meta: RequestMeta) -> None:
         document = await self.get(actor, document_id)
+        await lock_department(self._session, document.department_id)
         document.deleted_at = datetime.now(UTC)
         document.deleted_by_id = actor.id
         cancelled = await cancel_queued_jobs(self._session, document_id=document_id)
+        await cancel_open_task(self._session, document, "The document was deleted.")
+        # Documents compared with it, or flagged as its duplicates, are re-evaluated without it.
+        await MatchingService(self._session, self._settings).refresh(document, actor=actor)
         record_audit_event(
             self._session,
             action=AuditAction.DOCUMENT_DELETED,

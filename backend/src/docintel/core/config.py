@@ -53,6 +53,14 @@ class ModelPriceSetting(BaseModel):
     output_per_mtok: Decimal = Field(ge=0)
 
 
+ReviewPriorityName = Literal["URGENT", "HIGH", "NORMAL", "LOW"]
+DEFAULT_REVIEW_SLA_HOURS: dict[ReviewPriorityName, int] = {
+    "URGENT": 4,
+    "HIGH": 24,
+    "NORMAL": 72,
+    "LOW": 168,
+}
+
 JWT_SECRET_MIN_LENGTH = 32
 _PLACEHOLDER_MARKERS = ("change", "replace", "example", "placeholder", "secret-key")
 
@@ -185,6 +193,14 @@ class Settings(BaseSettings):
     extraction_max_images: int = Field(default=2, ge=0, le=20)
     evidence_fuzzy_threshold: float = Field(default=85.0, ge=50, le=100)
     vendor_match_min_score: float = Field(default=85.0, ge=50, le=100)
+
+    # ---------------------------------------------------------------- matching & review
+    # A difference involving a machine value below this confidence is UNCERTAIN, not MISMATCH.
+    comparison_min_confidence: float = Field(default=0.85, ge=0, le=1)
+    # Hours from task creation to due date, per priority.
+    review_sla_hours: dict[ReviewPriorityName, int] = Field(
+        default_factory=lambda: dict(DEFAULT_REVIEW_SLA_HOURS)
+    )
 
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None

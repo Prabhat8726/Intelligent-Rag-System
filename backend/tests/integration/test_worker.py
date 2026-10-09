@@ -33,6 +33,7 @@ from docintel.db.models import (
     JobStatus,
     JobType,
     ProcessingJob,
+    ReviewTask,
     Role,
     Sensitivity,
     User,
@@ -147,6 +148,15 @@ def make_worker(
     return Worker(settings=settings, sessionmaker=maker, storage=storage, worker_id=worker_id)
 
 
+PROCESSED = (DocumentStatus.COMPLETED, DocumentStatus.REVIEW_REQUIRED)
+
+
+def assert_processed(document: Document) -> None:
+    """Processing worked: any review is for business rules (a lone invoice has no order)."""
+    assert document.status in PROCESSED
+    assert set(document.review_reasons) <= {"RULE_VIOLATION"}
+
+
 # ------------------------------------------------------------------------------ happy paths
 async def test_native_pdf_is_inspected_and_completed(
     maker: async_sessionmaker[AsyncSession],
@@ -161,8 +171,13 @@ async def test_native_pdf_is_inspected_and_completed(
     assert await make_worker(worker_settings, maker, storage).run_until_idle() == 1
 
     document, version, jobs = await load(maker, document_id)
-    assert document.status == DocumentStatus.COMPLETED
-    assert document.review_reasons == []
+    # Read cleanly; held only because the invoice names no purchase order (INV_MISSING_PO).
+    assert document.status == DocumentStatus.REVIEW_REQUIRED
+    assert document.review_reasons == ["RULE_VIOLATION"]
+    async with maker() as session:
+        held = await session.scalar(select(ReviewTask).where(ReviewTask.document_id == document_id))
+        assert held is not None
+        assert [reason["code"] for reason in held.reasons] == ["INV_MISSING_PO"]
     assert document.document_type == DocumentType.INVOICE
     assert document.last_processed_at is not None
     assert document.processing_error is None
@@ -325,7 +340,7 @@ async def test_transient_failure_is_retried_then_succeeds(
     document, _, (job,) = await load(maker, document_id)
     assert job.status == JobStatus.COMPLETED
     assert job.attempts == 2
-    assert document.status == DocumentStatus.COMPLETED
+    assert_processed(document)
 
 
 async def test_retries_are_exhausted_then_failed(
@@ -458,7 +473,7 @@ async def test_expired_lease_is_reclaimed_and_stale_worker_cannot_complete(
     document, _, (job,) = await load(maker, document_id)
     assert job.status == JobStatus.COMPLETED
     assert job.attempts == 2
-    assert document.status == DocumentStatus.COMPLETED
+    assert_processed(document)
     async with maker() as session, session.begin():
         assert await crashed.complete(session, claimed.id, stage_timings={}) is None
         assert not await crashed.heartbeat(session, claimed.id)
@@ -519,7 +534,7 @@ async def test_running_worker_is_woken_by_notify_not_polling(
         await asyncio.sleep(0.5)  # let the loop go idle and the listener subscribe
         document_id = await ingest(maker, storage, settings, uploader, invoice_pdf_bytes())
         async with asyncio.timeout(10):
-            while (await load(maker, document_id))[0].status != DocumentStatus.COMPLETED:  # noqa: ASYNC110 (polling DB state)
+            while (await load(maker, document_id))[0].status not in PROCESSED:  # noqa: ASYNC110 (polling DB state)
                 await asyncio.sleep(0.1)
     finally:
         stop.set()

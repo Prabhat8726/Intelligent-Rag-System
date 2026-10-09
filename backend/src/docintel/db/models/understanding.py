@@ -57,6 +57,9 @@ class ReviewReason(StrEnum):
     MISSING_REQUIRED_FIELDS = "MISSING_REQUIRED_FIELDS"
     EXTRACTION_UNCERTAIN = "EXTRACTION_UNCERTAIN"
     EXTRACTION_INCONSISTENT = "EXTRACTION_INCONSISTENT"
+    # Phase 5: business rules and duplicate detection (details on the review task).
+    RULE_VIOLATION = "RULE_VIOLATION"
+    DUPLICATE_SUSPECTED = "DUPLICATE_SUSPECTED"
 
 
 class DocumentPage(UUIDPrimaryKeyMixin, Base):

@@ -86,6 +86,7 @@ class ProcessingServices:
     extraction: ExtractionOptions
     ocr_review_below_confidence: float
     fields: FieldExtractionService
+    settings: Settings  # matching and review (thresholds, SLAs) run in the result transaction
     llm: LLMProvider | None = None
 
     async def aclose(self) -> None:
@@ -155,6 +156,7 @@ def build_processing_services(
             remove_ruling_lines=settings.ocr_remove_ruling_lines,
         ),
         ocr_review_below_confidence=settings.ocr_review_below_confidence,
+        settings=settings,
         fields=FieldExtractionService(
             policy=policy_from_settings(settings),
             llm=llm,

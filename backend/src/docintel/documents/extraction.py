@@ -35,6 +35,8 @@ from docintel.fields.service import (
 )
 from docintel.fields.store import apply_scoring, resolved_from_row
 from docintel.fields.vendors import match_in_session
+from docintel.matching.service import MatchingService
+from docintel.matching.store import lock_department
 
 NO_EXTRACTION = "No structured extraction for this document."
 FIELD_NOT_FOUND = "Field not found."
@@ -82,7 +84,8 @@ class ExtractionService:
         note: str | None,
         meta: RequestMeta,
     ) -> ExtractedField:
-        # Serialize with the worker's result transaction, which locks the same row.
+        # Same lock order as the worker's result transaction: department, then the document.
+        await lock_department(self._session, document.department_id)
         locked = await self._session.scalar(
             select(Document)
             .where(Document.id == document.id)
@@ -133,8 +136,11 @@ class ExtractionService:
         reasons = [reason for reason in locked.review_reasons if reason not in EXTRACTION_REASONS]
         reasons += [reason.value for reason in scoring.reasons if reason.value not in reasons]
         locked.review_reasons = reasons
+        previous_status = locked.status
         if locked.status in (DocumentStatus.REVIEW_REQUIRED, DocumentStatus.COMPLETED):
-            locked.status = DocumentStatus.REVIEW_REQUIRED if reasons else DocumentStatus.COMPLETED
+            # Corrected values change comparisons, duplicates and rules - here and in related
+            # documents - and with them the review task and status.
+            await MatchingService(self._session, self._settings).refresh(locked, actor=actor)
 
         # Values are document content: the audit trail records what changed, not the values.
         record_audit_event(
@@ -152,6 +158,7 @@ class ExtractionService:
                 "confirmed_empty": target.corrected_value == "",
                 "note": bool(note),
                 "review_level": {"from": previous_level, "to": scoring.level.value},
+                "status": {"from": previous_status.value, "to": locked.status.value},
             },
         )
         await self._session.commit()

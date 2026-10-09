@@ -9,13 +9,23 @@ from pathlib import Path
 
 import httpx
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from docintel.api.app import create_app
 from docintel.audit.service import SYSTEM_REQUEST
 from docintel.auth.service import UserService
-from docintel.db.models import ProcessingJob, Role
+from docintel.db.models import (
+    Comparison,
+    ComparisonType,
+    ProcessingJob,
+    ReviewTask,
+    ReviewTaskStatus,
+    ReviewTaskType,
+    Role,
+    RuleOutcome,
+    RuleResultRecord,
+)
 from docintel.storage import LocalStorage
 from docintel.synthetic.generator import generate_dataset
 from docintel.synthetic.scenarios import Scenario
@@ -80,22 +90,49 @@ async def test_generated_documents_flow_through_api_queue_and_worker(
             stop.set()
             await asyncio.wait_for(worker_task, timeout=10)
 
-    # Every document is processed; scans may be routed to review by extraction confidence.
+    # Every document is processed. The price-mismatch bundle's invoice is held for its
+    # discrepancy, found by matching it with its purchase order and delivery note; scans may
+    # be held by extraction confidence or by differences their OCR reading cannot settle.
     by_doc = {item.doc_id: item for item in items}
     assert sum(summarize(items).values()) == manifest["document_count"]
     assert set(summarize(items)) <= {"COMPLETED", "REVIEW_REQUIRED"}
     for item in items:
-        if item.status == "REVIEW_REQUIRED":
-            assert item.variant == "scanned", (item.doc_id, item.review_reasons)
-            # OCR noise can cost a table row or a label; it must show as a review reason.
+        if item.status == "REVIEW_REQUIRED" and item.variant == "scanned":
             assert set(item.review_reasons or []) <= {
                 "EXTRACTION_UNCERTAIN",
                 "MISSING_REQUIRED_FIELDS",
                 "EXTRACTION_INCONSISTENT",
                 "LOW_OCR_CONFIDENCE",
-            }
-    native = [item for item in items if item.variant == "native"]
+                "RULE_VIOLATION",
+            }, (item.doc_id, item.review_reasons)
+    native = [item for item in items if item.variant == "native" and item.doc_id != "B0001-INV"]
     assert {item.status for item in native} == {"COMPLETED"}
+    held = by_doc["B0001-INV"]
+    assert (held.status, held.review_reasons) == ("REVIEW_REQUIRED", ["RULE_VIOLATION"])
+    async with sessions() as session:
+        document_id = uuid.UUID(str(held.document_id))
+        failing = set(
+            await session.scalars(
+                select(RuleResultRecord.rule_code).where(
+                    RuleResultRecord.document_id == document_id,
+                    RuleResultRecord.outcome != RuleOutcome.PASS,
+                    RuleResultRecord.outcome != RuleOutcome.NOT_APPLICABLE,
+                )
+            )
+        )
+        assert failing == {"INV_PO_UNIT_PRICE"}
+        comparison = await session.scalar(
+            select(Comparison).where(Comparison.subject_document_id == document_id)
+        )
+        assert comparison is not None
+        assert comparison.comparison_type == ComparisonType.INVOICE_PO_DELIVERY
+        assert comparison.summary["MISMATCH"] == 1
+        task = await session.scalar(select(ReviewTask).where(ReviewTask.document_id == document_id))
+        assert task is not None
+        assert (task.status, task.task_type) == (
+            ReviewTaskStatus.OPEN,
+            ReviewTaskType.DISCREPANCY_REVIEW,
+        )
     assert by_doc["B0001-INV"].inspection_kind == "native_pdf"
     assert by_doc["B0001-INV"].pages_needing_ocr == []
     assert by_doc["B0002-INV"].inspection_kind == "scanned_pdf"

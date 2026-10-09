@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -92,6 +92,20 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_documents_document_type", "document_type"),
         Index("ix_documents_duplicate_of_id", "duplicate_of_id"),
         Index("ix_documents_vendor_id", "vendor_id"),
+        # Matching (Phase 5): related documents by order reference and duplicates by number.
+        Index(
+            "ix_documents_department_po_key",
+            "department_id",
+            "po_key",
+            postgresql_where=text("deleted_at IS NULL AND po_key IS NOT NULL"),
+        ),
+        Index(
+            "ix_documents_department_number_key",
+            "department_id",
+            "number_key",
+            postgresql_where=text("deleted_at IS NULL AND number_key IS NOT NULL"),
+        ),
+        CheckConstraint("currency IS NULL OR currency ~ '^[A-Z]{3}$'", name="currency_code"),
         CheckConstraint(
             "type_confidence IS NULL OR (type_confidence >= 0 AND type_confidence <= 1)",
             name="type_confidence_range",
@@ -133,8 +147,17 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("vendors.id", ondelete="SET NULL")
     )
+    # Key facts of the current extraction, kept in step with it (and with corrections), so
+    # matching finds related documents and duplicates by index (Phase 5).
+    number_key: Mapped[str | None] = mapped_column(String(100))
+    po_key: Mapped[str | None] = mapped_column(String(100))
+    document_date: Mapped[date | None]
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    currency: Mapped[str | None] = mapped_column(String(3))
+    vendor_key: Mapped[str | None] = mapped_column(String(300))
     processing_error: Mapped[str | None] = mapped_column(String(500))
-    # ReviewReason codes explaining REVIEW_REQUIRED (Phase 5 turns them into review tasks).
+    # ReviewReason codes: what processing and the rules found. Whether a person still has to
+    # look is the open review task (status REVIEW_REQUIRED), see docintel.review.
     review_reasons: Mapped[list[str]] = mapped_column(
         JSONB, default=list, server_default=text("'[]'::jsonb")
     )

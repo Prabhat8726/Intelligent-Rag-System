@@ -35,6 +35,7 @@ from docintel.audit.service import SYSTEM_REQUEST, AuditAction, record_audit_eve
 from docintel.classification.service import ClassificationOutcome
 from docintel.core.logging import get_logger
 from docintel.db.models import (
+    OPEN_TASK_STATUSES,
     ActorType,
     AuditOutcome,
     ClassificationMethod,
@@ -49,6 +50,9 @@ from docintel.db.models import (
     ExtractionMethod,
     JobStatus,
     ReviewReason,
+    ReviewTask,
+    RuleOutcome,
+    RuleResultRecord,
     Sensitivity,
     TableMethod,
     TableRow,
@@ -56,6 +60,8 @@ from docintel.db.models import (
 from docintel.documents.validation import FileKind
 from docintel.fields.service import ExtractionOutcome, ExtractionRequest
 from docintel.fields.store import carry_over_corrections, extraction_record
+from docintel.matching.service import MatchingService
+from docintel.matching.store import lock_department
 from docintel.processing.content import DocumentTable as ExtractedTable
 from docintel.processing.content import PageContent
 from docintel.processing.extraction import extract_document
@@ -300,6 +306,26 @@ async def _lock_document(session: AsyncSession, document_id: Any) -> Document | 
     return document
 
 
+async def _review_summary(session: AsyncSession, document: Document) -> dict[str, Any]:
+    """What the audit trail records about matching: rule codes and the task, never values."""
+    failing = await session.scalars(
+        select(RuleResultRecord.rule_code).where(
+            RuleResultRecord.document_id == document.id,
+            RuleResultRecord.outcome.in_((RuleOutcome.FAIL, RuleOutcome.WARN, RuleOutcome.ERROR)),
+        )
+    )
+    task = await session.scalar(
+        select(ReviewTask.id).where(
+            ReviewTask.document_id == document.id, ReviewTask.status.in_(OPEN_TASK_STATUSES)
+        )
+    )
+    return {
+        "rules_needing_review": sorted(failing),
+        "review_task_id": str(task) if task else None,
+        "duplicate_reason": document.duplicate_reason,
+    }
+
+
 def build_stages(storage: DocumentStorage, services: ProcessingServices) -> list[Stage]:
     return [
         IntegrityStage(storage),
@@ -508,6 +534,11 @@ class DocumentProcessingHandler:
     async def on_success(
         self, session: AsyncSession, context: ProcessingContext, finished_at: datetime
     ) -> None:
+        # Matching runs in this transaction: take the department lock before any row lock.
+        department_id = await session.scalar(
+            select(Document.department_id).where(Document.id == context.document_id)
+        )
+        await lock_department(session, department_id)
         document = await _lock_document(session, context.document_id)
         version = await session.get(DocumentVersion, context.version_id)
         if document is None or version is None:
@@ -533,14 +564,16 @@ class DocumentProcessingHandler:
         extraction = await self._store_extraction(session, document, context)
 
         reasons = list(dict.fromkeys(reason.value for reason in context.review_reasons))
+        review: dict[str, Any] | None = None
         # Deleted while processing: keep the results, don't resurrect the document's status.
         if document.deleted_at is None:
-            document.status = (
-                DocumentStatus.REVIEW_REQUIRED if reasons else DocumentStatus.COMPLETED
-            )
             document.review_reasons = reasons
             document.processing_error = None
             document.last_processed_at = finished_at
+            # Comparisons, duplicates and rules for this document and its related documents;
+            # the open review task (if any) decides the status.
+            await MatchingService(session, self._services.settings).refresh(document)
+            review = await _review_summary(session, document)
         outcome = context.classification
         record_audit_event(
             session,
@@ -573,7 +606,8 @@ class DocumentProcessingHandler:
                         context.extraction and context.extraction.signals.get("llm", {}).get("used")
                     ),
                 },
-                "review_reasons": reasons,
+                "review_reasons": document.review_reasons,
+                "review": review,
             },
         )
 

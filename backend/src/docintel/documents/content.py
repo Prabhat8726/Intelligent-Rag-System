@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from docintel.audit.service import AuditAction, RequestMeta, record_audit_event
+from docintel.core.config import Settings
 from docintel.core.errors import NotFoundError
 from docintel.core.logging import get_logger
 from docintel.db.models import (
@@ -31,6 +32,9 @@ from docintel.db.models import (
     User,
 )
 from docintel.fields.schemas import schema_for
+from docintel.matching.service import MatchingService
+from docintel.matching.store import lock_department
+from docintel.review.items import RULE_REASONS
 from docintel.storage import DocumentStorage, StorageError
 from docintel.workers.queue import enqueue_job
 
@@ -124,7 +128,7 @@ class DocumentContentService:
         note: str | None,
         meta: RequestMeta,
         *,
-        max_attempts: int = 3,
+        settings: Settings,
     ) -> DocumentClassification:
         """Record a human label as the current classification (worker results never override it).
 
@@ -133,7 +137,8 @@ class DocumentContentService:
         """
         if document.current_version_id is None:
             raise NotFoundError("Document not found.")
-        # Serialize with the worker's result transaction, which locks the same row.
+        # Same lock order as the worker's result transaction: department, then the document.
+        await lock_department(self._session, document.department_id)
         locked = await self._session.scalar(
             select(Document)
             .where(Document.id == document.id)
@@ -176,9 +181,13 @@ class DocumentContentService:
             for reason in locked.review_reasons
             if reason != ReviewReason.CLASSIFICATION_UNCERTAIN.value
         ]
-        reextract = await self._follow_schema(actor, locked, label, max_attempts)
-        if locked.status == DocumentStatus.REVIEW_REQUIRED and not locked.review_reasons:
-            locked.status = DocumentStatus.COMPLETED
+        reextract = await self._follow_schema(actor, locked, label, settings.job_max_attempts)
+        if reextract is None and locked.status in (
+            DocumentStatus.REVIEW_REQUIRED,
+            DocumentStatus.COMPLETED,
+        ):
+            # Same extraction (or none any more): re-run matching and settle the review task.
+            await MatchingService(self._session, settings).refresh(locked, actor=actor)
         record_audit_event(
             self._session,
             action=AuditAction.DOCUMENT_CLASSIFICATION_CORRECTED,
@@ -211,8 +220,11 @@ class DocumentContentService:
         schema = schema_for(label)
         if current is not None and schema is not None and current.schema_name == schema.name:
             return None
+        # Extraction findings and the rules evaluated on them belong to the old schema.
         document.review_reasons = [
-            reason for reason in document.review_reasons if reason not in EXTRACTION_REASONS
+            reason
+            for reason in document.review_reasons
+            if reason not in EXTRACTION_REASONS and reason not in RULE_REASONS
         ]
         if schema is None:
             if current is not None:

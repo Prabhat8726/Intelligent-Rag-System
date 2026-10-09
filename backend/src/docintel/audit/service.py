@@ -36,6 +36,13 @@ class AuditAction(StrEnum):
     DOCUMENT_FIELD_CORRECTED = "document.extraction.field_corrected"
     VENDOR_CREATED = "vendor.created"
     VENDOR_UPDATED = "vendor.updated"
+    DOCUMENT_VERSION_UPLOADED = "document.version.uploaded"
+    COMPARISON_CREATED = "comparison.created"
+    RULE_UPDATED = "rule.updated"
+    RULES_EVALUATED = "rules.evaluated"
+    REVIEW_TASK_CLAIMED = "review_task.claimed"
+    REVIEW_TASK_RELEASED = "review_task.released"
+    REVIEW_TASK_RESOLVED = "review_task.resolved"
 
 
 @dataclass(frozen=True, slots=True)
