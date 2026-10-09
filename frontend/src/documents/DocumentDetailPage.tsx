@@ -4,8 +4,9 @@ import { Link, useNavigate, useParams } from "react-router";
 
 import { useAuth } from "../auth/useAuth";
 import { ApiError, apiRequest, downloadFile } from "../lib/api";
-import type { DocumentDetail, ProcessingJob } from "../lib/types";
+import type { DocumentDetail, Highlight, ProcessingJob } from "../lib/types";
 import { ClassificationCard } from "./ClassificationCard";
+import { ExtractionSection } from "./ExtractionSection";
 import {
   ACTIVE_STATUSES,
   formatBytes,
@@ -39,6 +40,8 @@ export function DocumentDetailPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedPage, setSelectedPage] = useState(1);
+  const [highlight, setHighlight] = useState<Highlight | null>(null);
   const can = (permission: string) => user?.permissions.includes(permission) ?? false;
   const url = `/api/v1/documents/${encodeURIComponent(documentId)}`;
 
@@ -213,12 +216,29 @@ export function DocumentDetailPage() {
 
       {processed && <ClassificationCard document={document} />}
 
+      {processed && (
+        <ExtractionSection
+          documentId={document.id}
+          onShow={(target) => {
+            setHighlight(target);
+            setSelectedPage(target.page);
+            window.document.getElementById("pages-heading")?.scrollIntoView({ behavior: "smooth" });
+          }}
+        />
+      )}
+
       {document.pages.length > 0 && (
         <section aria-labelledby="pages-heading" className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 id="pages-heading" className="font-medium">
             Pages
           </h2>
-          <PageViewer documentId={document.id} pages={document.pages} />
+          <PageViewer
+            documentId={document.id}
+            pages={document.pages}
+            selected={selectedPage}
+            onSelect={setSelectedPage}
+            highlight={highlight}
+          />
         </section>
       )}
 

@@ -125,7 +125,7 @@ export function fieldValue(field: ExtractedField): string {
   if (field.corrected_value !== null) return field.corrected_value === "" ? "(not on document)" : field.corrected_value;
   const normalized = field.normalized_value;
   if (normalized?.vendor) return normalized.vendor.canonical_name;
-  if (normalized && normalized.value !== null && normalized.value !== undefined) {
+  if (normalized && normalized.value !== null) {
     if (field.value_type === "MONEY" && normalized.currency) return `${String(normalized.value)} ${normalized.currency}`;
     if (field.value_type === "PERCENT") return `${String(Math.round(Number(normalized.value) * 10000) / 100)}%`;
     if (field.value_type === "DAYS") return `${String(normalized.value)} days`;

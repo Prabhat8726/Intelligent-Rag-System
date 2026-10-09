@@ -47,8 +47,8 @@ export function DocumentsPage() {
       <div>
         <h1 className="text-xl font-semibold">Documents</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Uploaded files are validated, read page by page (text layer or OCR) and classified. Field extraction
-          arrives in a later phase.
+          Uploaded files are validated, read page by page (text layer or OCR), classified and their fields
+          extracted with evidence; uncertain results go to review.
         </p>
       </div>
 
@@ -125,6 +125,7 @@ export function DocumentsPage() {
                 <th className="px-5 py-2 font-medium">Document</th>
                 <th className="py-2 font-medium">Status</th>
                 <th className="py-2 font-medium">Type</th>
+                <th className="py-2 font-medium">Vendor</th>
                 <th className="py-2 text-right font-medium">Pages</th>
                 <th className="py-2 text-right font-medium">Size</th>
                 <th className="py-2 pl-6 font-medium">Uploaded by</th>
@@ -157,6 +158,7 @@ export function DocumentsPage() {
                       "—"
                     )}
                   </td>
+                  <td className="py-2 text-slate-700">{document.vendor?.canonical_name ?? "—"}</td>
                   <td className="py-2 text-right tabular-nums">{document.current_version?.page_count ?? "—"}</td>
                   <td className="py-2 text-right tabular-nums">
                     {document.current_version ? formatBytes(document.current_version.size_bytes) : "—"}

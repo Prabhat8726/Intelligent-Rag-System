@@ -129,7 +129,12 @@ function FieldRow({
     <tr className={found && confidence < ATTENTION_BELOW ? "bg-amber-50/60" : undefined}>
       <td className="py-2 pr-3 align-top">
         {fieldLabel(field.field_name)}
-        {field.is_required && <span className="ml-1 text-xs text-slate-400">required</span>}
+        {field.is_required && (
+          <>
+            {" "}
+            <span className="text-xs text-slate-400">required</span>
+          </>
+        )}
       </td>
       <td className="py-2 pr-3 align-top">
         {found ? (

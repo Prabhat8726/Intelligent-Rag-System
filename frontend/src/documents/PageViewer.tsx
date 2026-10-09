@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/useAuth";
 import { apiRequest, fetchBlob } from "../lib/api";
-import type { PageDetail, PageSummary } from "../lib/types";
+import type { Highlight, PageDetail, PageSummary } from "../lib/types";
 
 const LOW_CONFIDENCE = 60;
 
@@ -29,9 +29,20 @@ function usePreviewUrl(
   return { url, failed: image.isError };
 }
 
-export function PageViewer({ documentId, pages }: { documentId: string; pages: PageSummary[] }) {
+export function PageViewer({
+  documentId,
+  pages,
+  selected,
+  onSelect,
+  highlight,
+}: {
+  documentId: string;
+  pages: PageSummary[];
+  selected: number;
+  onSelect: (page: number) => void;
+  highlight: Highlight | null;
+}) {
   const { token } = useAuth();
-  const [selected, setSelected] = useState(1);
   const [showBoxes, setShowBoxes] = useState(false);
   const summary = pages.find((page) => page.page_number === selected) ?? pages[0];
   const detail = useQuery({
@@ -63,7 +74,7 @@ export function PageViewer({ documentId, pages }: { documentId: string; pages: P
                 role="tab"
                 aria-selected={item.page_number === summary.page_number}
                 onClick={() => {
-                  setSelected(item.page_number);
+                  onSelect(item.page_number);
                 }}
                 className={`rounded-md px-2.5 py-1 text-sm ${
                   item.page_number === summary.page_number
@@ -105,6 +116,26 @@ export function PageViewer({ documentId, pages }: { documentId: string; pages: P
             <p className="p-6 text-sm text-slate-500">
               {!summary.has_preview ? "No preview." : preview.failed ? "Preview unavailable." : "Loading preview…"}
             </p>
+          )}
+          {previewUrl && highlight?.page === summary.page_number && highlight.bbox.length === 4 && (
+            <svg
+              role="img"
+              aria-label={`Source of ${highlight.label}`}
+              viewBox={`0 0 ${String(summary.width)} ${String(summary.height)}`}
+              preserveAspectRatio="none"
+              className="pointer-events-none absolute inset-0 h-full w-full"
+            >
+              <rect
+                x={(highlight.bbox[0] ?? 0) - 2}
+                y={(highlight.bbox[1] ?? 0) - 2}
+                width={(highlight.bbox[2] ?? 0) - (highlight.bbox[0] ?? 0) + 4}
+                height={(highlight.bbox[3] ?? 0) - (highlight.bbox[1] ?? 0) + 4}
+                fill="rgba(245, 158, 11, 0.25)"
+                stroke="#d97706"
+                strokeWidth={2}
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
           )}
           {previewUrl && showBoxes && page && (
             <svg
