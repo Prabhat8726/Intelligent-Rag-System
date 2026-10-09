@@ -46,6 +46,18 @@ def test_environment_derived_defaults() -> None:
     assert production.hsts_enabled is True
 
 
+def test_review_sla_hours_keep_defaults_for_omitted_priorities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REVIEW_SLA_HOURS", '{"URGENT": 2}')
+    settings = make_settings()
+    assert settings.review_sla_hours == {"URGENT": 2, "HIGH": 24, "NORMAL": 72, "LOW": 168}
+    with pytest.raises(ValidationError, match="REVIEW_SLA_HOURS"):
+        make_settings(review_sla_hours={"LOW": 0})
+    with pytest.raises(ValidationError):
+        make_settings(review_sla_hours={"SOMEDAY": 5})
+
+
 def test_blank_gemini_key_is_treated_as_missing() -> None:
     assert make_settings(gemini_api_key="   ").gemini_api_key is None
 

@@ -54,6 +54,7 @@ class ModelPriceSetting(BaseModel):
 
 
 ReviewPriorityName = Literal["URGENT", "HIGH", "NORMAL", "LOW"]
+MAX_REVIEW_SLA_HOURS = 8760  # a year
 DEFAULT_REVIEW_SLA_HOURS: dict[ReviewPriorityName, int] = {
     "URGENT": 4,
     "HIGH": 24,
@@ -227,6 +228,17 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @field_validator("review_sla_hours")
+    @classmethod
+    def _complete_review_sla(
+        cls, value: dict[ReviewPriorityName, int]
+    ) -> dict[ReviewPriorityName, int]:
+        merged = {**DEFAULT_REVIEW_SLA_HOURS, **value}  # omitted priorities keep their default
+        if not all(1 <= hours <= MAX_REVIEW_SLA_HOURS for hours in merged.values()):
+            msg = f"REVIEW_SLA_HOURS must be between 1 and {MAX_REVIEW_SLA_HOURS} hours"
+            raise ValueError(msg)
+        return merged
 
     @model_validator(mode="after")
     def _validate_secrets_for_environment(self) -> Self:

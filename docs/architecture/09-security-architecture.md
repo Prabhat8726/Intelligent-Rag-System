@@ -35,6 +35,13 @@ and model output as untrusted input** at every boundary.
   One module (`auth/policies.py`, Phase 2) produces SQL predicates reused by REST,
   tools, MCP, search and RAG.
 * Inaccessible resources → 404.
+* Derived data follows the documents (Phase 5): automatic matching only ever compares
+  documents of one department; a comparison is visible only when every document in it is; findings, review
+  tasks and duplicate links are filtered by the same scope; a manual comparison of documents
+  the caller cannot see is a 404, never a hint that they exist.
+* Rule changes (`rules:manage`, ADMIN) are validated against the rule type's parameter model,
+  versioned and audited with before/after parameters; review decisions are audited with the
+  findings' codes, never extracted values or note text.
 
 ### Input & file handling (Phase 2)
 * Streaming size limit; extension allowlist ∩ magic-byte sniffing ∩ declared MIME.
@@ -109,7 +116,8 @@ and model output as untrusted input** at every boundary.
 | Invalid/oversized uploads | Wrong magic bytes, spoofed extension, oversized, encrypted PDF, pixel bomb (2) |
 | Path traversal | Malicious filenames never influence storage paths (2) |
 | Cross-user / cross-department access | Documents, evidence, search, RAG, agent tools (2, 6, 7) |
-| Privilege escalation | VIEWER cannot upload/approve; proposer cannot approve own action (5, 8) |
+| Privilege escalation | VIEWER cannot upload/approve; proposer cannot approve own action (5, 8). Phase 5: viewers cannot work the review queue or change rules; another user's claimed task needs a manager (**5**, `tests/integration/test_matching_api.py`) |
+| Cross-department matching | Documents are never compared or flagged as duplicates across departments; comparisons, findings and review tasks of other departments return 404 / are not listed (**5**, `tests/security/test_matching_security.py`) |
 | Prompt injection | Document text cannot close the data block; injected values never reach AUTO, whether they disagree with the layout reading or only the model reports them (**4**, `tests/security/test_prompt_injection.py`); payloads must not change rule results, recommendations or tool calls (5, 7, 10) |
 | Field corrections | Only `documents:review`; inaccessible documents 404; audit details carry no values (**4**, `tests/integration/test_extraction_api.py`) |
 | Tool argument abuse | Out-of-range limits, foreign ids, extra fields rejected and logged (7) |

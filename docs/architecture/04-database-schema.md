@@ -214,14 +214,21 @@ is_current`); older ones are kept as history.
 
 ### Phase 5 — comparison, rules, review
 
+Implemented by migration `0005_matching_rules_review` (✅ Phase 5), which also seeds the 19
+default rules (ids are UUIDv5 of `docintel:rule:<CODE>`, so every installation has the same
+ids) and opens a review task for every document already in `REVIEW_REQUIRED`. Contract-version
+comparison is computed on request from the stored page text and not stored; contract/policy
+and resume/job comparisons arrive with the agent (Phase 7).
+
 | Table | Purpose / notable columns |
 |---|---|
-| `comparisons` | `comparison_type` CHECK (`INVOICE_PO, PO_DELIVERY, INVOICE_PO_DELIVERY, CONTRACT_POLICY, RESUME_JD, CONTRACT_VERSION`), `status`, `summary jsonb` (counts per result), `requested_by`. |
-| `comparison_documents` | `comparison_id`, `document_id`, `version_id`, `role` (`PO, INVOICE, DELIVERY_NOTE, CONTRACT, POLICY, …`). Supports 3-way match. |
-| `comparison_results` | `item_key` (field path / line key / clause id), `category` (`HEADER, LINE_ITEM, CLAUSE`), `result` CHECK (`MATCH, MISMATCH, MISSING, UNCERTAIN`), `left_value`, `right_value`, `difference jsonb`, `tolerance jsonb`, `severity`, `evidence jsonb` (field ids, pages, source_text from both sides), `explanation` (deterministic template). |
-| `business_rules` | `code` UNIQUE (e.g. `INV_PO_UNIT_PRICE_MISMATCH`), `rule_type` (evaluator key), `applies_to text[]`, `params jsonb` (validated by the evaluator's Pydantic model), `severity`, `is_enabled`, `version`, `updated_by`. |
-| `rule_results` | `rule_id`, `rule_version`, `document_id` / `comparison_id`, `context_type`/`context_id`, `outcome` CHECK (`PASS, FAIL, WARN, ERROR, NOT_APPLICABLE`), `severity`, `message`, `evidence jsonb`. |
-| `review_tasks` | Human review queue: `task_type` (`EXTRACTION_REVIEW, CLASSIFICATION_REVIEW, DISCREPANCY_REVIEW, DUPLICATE_REVIEW`), `document_id`, `workflow_id`, `priority`, `status` (`OPEN, IN_PROGRESS, RESOLVED, DISMISSED`), `reason`, `assigned_to`, `assigned_role`, `resolution jsonb`, `resolved_by`, `resolved_at`. Index (status, priority, created_at). |
+| `documents` (new columns) | Key facts of the current extraction, kept in step by matching: `number_key`, `po_key` (normalized references; for a purchase order its own number), `document_date`, `total_amount numeric(18,4)`, `currency` CHECK ISO pattern, `vendor_key`. Partial indexes `(department_id, po_key)` and `(department_id, number_key)` where not deleted. |
+| `comparisons` | `comparison_type` CHECK (`INVOICE_PO, INVOICE_DELIVERY, INVOICE_PO_DELIVERY, PO_DELIVERY`), `origin` CHECK (`AUTO, MANUAL`), `subject_document_id` FK `CASCADE`, `department_id` FK `RESTRICT`, `summary jsonb` (items per status), `settings jsonb` (tolerances and confidence threshold used), `requested_by_id` FK `RESTRICT`, `created_at`. Partial unique index: one `AUTO` comparison per subject (replaced on every run); index `(department_id, created_at)`. |
+| `comparison_documents` | PK `(comparison_id, document_id)`; `document_version_id` and `extraction_id` (FK `SET NULL`: what exactly was compared), `role` CHECK (`INVOICE, PURCHASE_ORDER, DELIVERY_NOTE`), `position`. Supports the three-way match with several delivery notes. |
+| `comparison_results` | One row per check: `position`, `item_key` (e.g. `line:BRG-6204:unit_price`), `category` CHECK (`HEADER, LINE_ITEM`), `check_name`, `line_key`, `status` CHECK (`MATCH, MISMATCH, MISSING, UNCERTAIN`), `left_value`, `right_value`, `difference jsonb` (absolute / relative), `tolerance jsonb`, `evidence jsonb` (per side: document, field id, page, quote, box, confidence, corrected), `explanation` (deterministic template). |
+| `business_rules` | `code` UNIQUE (e.g. `INV_PO_UNIT_PRICE`), `rule_type` (evaluator key), `name`, `description`, `applies_to text[]`, `params jsonb` (validated by the evaluator's Pydantic model, `extra=forbid`), `severity` CHECK (`LOW, MEDIUM, HIGH, CRITICAL`), `is_enabled`, `version` CHECK ≥ 1 (+1 per change), `updated_by_id`, `updated_at`. |
+| `rule_results` | Latest evaluation per document: `document_id` / `document_version_id` FK `CASCADE`, `comparison_id` FK `SET NULL` (when the finding rests on comparison items), `rule_id` FK `CASCADE`, `rule_code`, `rule_version`, `outcome` CHECK (`PASS, FAIL, WARN, ERROR, NOT_APPLICABLE`), `severity`, `message`, `evidence jsonb`, `items jsonb` (comparison item keys), `evaluated_at`. |
+| `review_tasks` | Human review queue: `document_id` / `document_version_id` FK `CASCADE`, `task_type` CHECK (`DUPLICATE_REVIEW, DISCREPANCY_REVIEW, EXTRACTION_REVIEW, CLASSIFICATION_REVIEW`), `status` CHECK (`OPEN, IN_PROGRESS, RESOLVED, CANCELLED`), `priority` CHECK (`URGENT, HIGH, NORMAL, LOW`), `reasons jsonb` (key, category, code, severity, message), `reason_keys text[]` (what a human resolution acknowledges), `due_at`, `assigned_to_id`, `claimed_at`, `resolution` CHECK (`APPROVED, CORRECTED, REJECTED, CLEARED`), `resolution_note`, `resolved_by_id`, `resolved_at`. CHECKs: `resolved_at` set exactly when closed, `resolution` set exactly when resolved. Partial unique index: **one open task per document**; index `(status, priority, created_at)`. The `workflow_id` link arrives with workflows (Phase 8). |
 
 ### Phase 6 — knowledge & search
 
@@ -265,3 +272,4 @@ are enabled for filtered queries so access/metadata filters don't under-fill top
 * `workflow_action_transitions` rows are written by the same service method that changes `workflow_actions.status`, inside the same transaction; invalid transitions are rejected before the write.
 * Vector columns store L2-normalized vectors; cosine distance (`<=>`) is used consistently.
 * Extraction history: a new extraction clears `is_current` on the previous one in the same transaction; the partial unique index makes two current extractions impossible. Human corrections are copied forward onto a re-extraction of the same version and schema (ADR-032).
+* Matching state is derived and rebuilt: automatic comparisons and rule results of a document are replaced on every run; review tasks are the only matching state with human input and are never deleted (closed as `RESOLVED`, `CLEARED` or `CANCELLED`). `documents.status` is `REVIEW_REQUIRED` exactly while an open review task exists (ADR-035).

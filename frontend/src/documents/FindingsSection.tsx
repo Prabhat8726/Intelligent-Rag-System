@@ -112,7 +112,11 @@ function ReviewTaskCard({ task, documentId }: { task: ReviewTask; documentId: st
   };
 
   return (
-    <div role="group" aria-labelledby={`task-${documentId}`} className="mt-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+    <div
+      role="group"
+      aria-labelledby={`task-${documentId}`}
+      className="mt-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={`task-${documentId}`} className="text-sm font-medium">
           Open review: {TASK_TYPE_LABELS[task.task_type]}

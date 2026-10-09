@@ -54,7 +54,10 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 | GET | `/api/v1/documents/{id}/extraction` (current extraction: schema, method, provider/model, review level, overall confidence, consistency checks, signals, matched vendor, every field with original and normalized value, page, quote, box, evidence status, origin, confidence and its signals, competing reading, correction) → 404 if the type has no schema or nothing was extracted | `documents:read` + scope | ✅ 4 |
 | GET | `/api/v1/documents/{id}/evidence?field_path=` (where each value was read: page, quote, box, evidence status) | `documents:read` + scope | ✅ 4 |
 | PATCH | `/api/v1/documents/{id}/extraction/fields/{field_id}` `{value, note?}` (value as printed; empty = not on the document; normalized and re-scored; review reasons and status recomputed; audited without values) → 422 if the value does not fit the field type | `documents:review` + scope | ✅ 4 |
-| POST/GET | `/api/v1/documents/{id}/versions` · `/versions/compare?from=&to=` | `documents:upload` / `read` | 🔜 5 |
+| GET | `/api/v1/documents/{id}/findings` (comparisons the caller can see, rule results with outcome and message, duplicates in both directions, the open review task, review history) | `documents:read` + scope | ✅ 5 |
+| GET | `/api/v1/documents/{id}/versions` (newest first: processed, current) | `documents:read` + scope | ✅ 5 |
+| POST | `/api/v1/documents/{id}/versions` (multipart `file`; becomes the current version and is processed; same validation and limits as an upload) → 201; 409 while processing or when the file is identical to the current version | `documents:upload` + scope | ✅ 5 |
+| GET | `/api/v1/documents/{id}/versions/compare?from=&to=` (clauses ADDED / REMOVED / MODIFIED / UNCHANGED with word-level changes and renumbering) → 409 if a version is not processed | `documents:read` + scope | ✅ 5 |
 | GET | `/api/v1/documents/{id}/duplicates` | `documents:read` | 🔜 5 |
 
 Upload rules (Phase 2, `docintel/documents/validation.py`):
@@ -87,11 +90,14 @@ document content.
 ### Comparison, rules, review
 | Method | Path | Permission | Status |
 |---|---|---|---|
-| POST | `/api/v1/comparisons` `{comparison_type, documents:[{id, role}]}` | `comparisons:create` | 🔜 5 |
-| GET | `/api/v1/comparisons` · `/comparisons/{id}` | `documents:read` | 🔜 5 |
-| GET | `/api/v1/rules` · PATCH `/rules/{id}` | `rules:read` / `rules:manage` | 🔜 5 |
-| POST | `/api/v1/rules/evaluate` `{document_ids \| comparison_id}` | `comparisons:create` | 🔜 5 |
-| GET | `/api/v1/review-tasks` · POST `/{id}/claim` · POST `/{id}/resolve` | `reviews:work` | 🔜 5 |
+| POST | `/api/v1/comparisons` `{documents:[{document_id, role}]}` (2–10: an invoice with a purchase order and/or delivery notes, or a delivery note with a purchase order; every document visible to the caller and processed) → 201, stored with origin `MANUAL`; no rules run, no review task | `comparisons:create` + scope | ✅ 5 |
+| GET | `/api/v1/comparisons` (filters: `document_id`, `comparison_type`, `origin`, `with_issues`; only comparisons whose documents are all visible) · `/comparisons/{id}` (every item with explanation, tolerance and both sides' evidence) | `documents:read` + scope | ✅ 5 |
+| GET | `/api/v1/rules` · `/rules/{code}` (with the JSON schema of its parameters) | `rules:read` | ✅ 5 |
+| PATCH | `/api/v1/rules/{code}` `{params?, severity?, is_enabled?, note?}` (parameters validated by the rule type; version +1; audited with before/after) → 422 on invalid parameters | `rules:manage` | ✅ 5 |
+| POST | `/api/v1/rules/evaluate` `{document_ids}` (1–100: re-run matching and rules for each document and its related documents, e.g. after a rule change) | `documents:process` + scope | ✅ 5 |
+| GET | `/api/v1/review-tasks` (filters: `state` open/closed/all, `task_type`, `priority`, `assigned` any/me/unassigned, `document_id`, `overdue`; most urgent first; caller's scope) · `/review-tasks/{id}` | `reviews:work` + scope | ✅ 5 |
+| POST | `/api/v1/review-tasks/{id}/claim` · `/release` (another user's claim only by managers and admins → 409 otherwise) | `reviews:work` + scope | ✅ 5 |
+| POST | `/api/v1/review-tasks/{id}/resolve` `{resolution: APPROVED \| CORRECTED \| REJECTED, note?}` (note required to reject; the document leaves review; audited) | `reviews:work` + scope | ✅ 5 |
 
 ### Knowledge, search, RAG
 | Method | Path | Permission | Status |

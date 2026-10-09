@@ -172,6 +172,16 @@ environment. `make check-ai` verifies your setup (lists models, one structured c
 | `EVIDENCE_FUZZY_THRESHOLD` | `85` | RapidFuzz alignment score (0–100) at which a quote counts as a close match (`FUZZY`) |
 | `VENDOR_MATCH_MIN_SCORE` | `85` | Name similarity (0–100) needed to link a printed vendor name to the vendor master (tax IDs and aliases match exactly) |
 
+### Matching and review
+
+Price, quantity and tax-rate tolerances are rule parameters (`/rules`, `rules:manage`), not
+settings: one place decides both the comparison and the rule outcome.
+
+| Variable | Default | Description |
+|---|---|---|
+| `COMPARISON_MIN_CONFIDENCE` | `0.85` | A difference involving a machine-read value below this confidence (and not corrected by a reviewer) is `UNCERTAIN` and its rule warns ("could not be verified") instead of failing. The same threshold decides whether a failed arithmetic check on the document is confirmed |
+| `REVIEW_SLA_HOURS` | `{"URGENT": 4, "HIGH": 24, "NORMAL": 72, "LOW": 168}` | Hours from task creation to its due date, per priority (JSON object; priorities left out keep their default; 1–8760) |
+
 ### Containers
 
 | Variable | Default | Description |

@@ -57,12 +57,12 @@ flowchart TD
   X --> MG[6 Merge field by field; evidence: quote located on the page → page, box, status]
   MG --> NM[7 Normalize: amounts, currency, dates, terms; vendor master match]
   NM --> CF[8 Consistency checks → confidence per field + document → review level]
-  CF --> D[9 Duplicate detection: invoice#+vendor · fuzzy amount/date  — Phase 5]
-  D --> CH[10 Chunk + embed for semantic search  — Phase 6]
-  CH --> WF[11 Auto-workflow hook: invoice → PO → comparison + rules  — Phase 5]
-  WF --> R{routing}
-  R -- AUTO, no open reason --> DONE[doc COMPLETED]
-  R -- review level or other reason --> REV[doc REVIEW_REQUIRED + reasons]
+  CF --> MT[9 Matching, same transaction, department lock:<br/>order by reference → compare with order + delivery notes;<br/>duplicates by vendor + number / amount + date; 19 rules;<br/>related documents re-evaluated  ·fields·]
+  MT --> RT[10 Review task: one open task per document, reasons with stable keys,<br/>priority from severity, due date from SLA]
+  RT --> R{open findings?}
+  R -- none --> DONE[doc COMPLETED]
+  R -- yes --> REV[doc REVIEW_REQUIRED + open review task]
+  DONE & REV -.-> CH[11 Chunk + embed for semantic search  — Phase 6]
   P -. unrecoverable error / attempts exhausted .-> F[doc FAILED, job FAILED, error recorded]
 ```
 
@@ -76,6 +76,31 @@ flowchart TD
   jitter, `run_after` pushed forward; permanent errors (validation, corrupt file)
   → fail fast.
 * Lease expiry lets another worker reclaim a job whose worker crashed.
+
+### Matching and the review queue (Phase 5)
+
+* **When**: in the processing job's final transaction, after a field or type correction, a
+  delete, `POST /rules/evaluate` and `docintel match` / `make match`. Each run takes a
+  transaction-scoped advisory lock per department first, then row locks (department →
+  document → review task, the same order everywhere), so two documents of one bundle
+  finishing together cannot deadlock or miss each other.
+* **What**: the document's facts come from its current extraction (reviewer corrections
+  included). An invoice or delivery note looks up the purchase order it references (same
+  department, same vendor first) and, for an invoice, the delivery notes of that order;
+  the comparison records MATCH / MISMATCH / MISSING / UNCERTAIN per check with both sides'
+  evidence. Duplicates: same vendor and number (strong), or same vendor, amount and a date
+  within 7 days (possible), older documents only. Then the enabled rules run.
+* **Related documents** — those sharing the order reference, number or amount, flagged as
+  duplicates of it, or compared with it before — are re-evaluated in the same run, so the
+  result does not depend on the order in which an invoice, its order and its delivery notes
+  arrive.
+* **Review task**: findings (processing reasons, failed or unverifiable rules, duplicates)
+  become one open task per document with a reason per finding (key, message, severity),
+  priority from the most severe finding and a due date from `REVIEW_SLA_HOURS`. The document
+  is `REVIEW_REQUIRED` exactly while that task is open. A reviewer approves, records a
+  correction or rejects (with a note); findings resolved for a version do not reopen a task,
+  new ones do. When every finding disappears (e.g. the missing order arrives, a correction
+  fixes a value) the task closes as `CLEARED`; a new version cancels the old version's task.
 
 ## Flow C — Knowledge ingestion & RAG query
 
