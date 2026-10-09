@@ -66,12 +66,24 @@ if [[ -n "${SEED_PASSWORD}" ]]; then
   for _ in $(seq 1 60); do
     detail="$(curl -s "${BASE_URL}/api/v1/documents/${document_id}" -H "Authorization: Bearer ${token}")"
     status="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' <<<"$detail")"
-    [[ "$status" == "COMPLETED" || "$status" == "FAILED" ]] && break
+    [[ "$status" == "COMPLETED" || "$status" == "REVIEW_REQUIRED" || "$status" == "FAILED" ]] && break
     sleep 1
   done
-  check "worker processed the document (status ${status})" test "$status" = "COMPLETED"
+  # The invoice cites a purchase order that is not on file, so matching holds it for review.
+  check "worker processed the document (status ${status})" test "$status" = "REVIEW_REQUIRED"
   kind="$(python3 -c 'import json,sys; print((json.load(sys.stdin)["inspection"] or {}).get("kind"))' <<<"$detail")"
   check "page inspection recorded (${kind})" test "$kind" = "native_pdf"
+  findings="$(curl -s "${BASE_URL}/api/v1/documents/${document_id}/findings" -H "Authorization: Bearer ${token}")"
+  held="$(python3 -c '
+import json, sys
+findings = json.load(sys.stdin)
+outcomes = {r["rule_code"]: r["outcome"] for r in findings["rule_results"]}
+task = findings["open_task"] or {}
+codes = {reason["code"] for reason in task.get("reasons", [])}
+print(outcomes.get("INV_MISSING_PO"), "task" if "INV_MISSING_PO" in codes else "no-task")
+' <<<"$findings")"
+  # (A re-run against the same stack also flags the upload as a duplicate of the first one.)
+  check "matching ran: order not on file -> review task (${held})" test "$held" = "WARN task"
 else
   echo "  SKIP login round-trip (SEED_USER_PASSWORD not set in .env)"
 fi

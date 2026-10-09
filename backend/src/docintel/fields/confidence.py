@@ -108,6 +108,13 @@ def field_confidence(signals: dict[str, Any]) -> float:
     return round(result, 4)
 
 
+def reading_confidence(signals: dict[str, Any]) -> float:
+    """Confidence in the reading alone: every factor except consistency. A failed check means
+    the document disagrees with itself (e.g. a wrong printed total), not that a value was
+    misread, so it must not make a difference between documents look like a misreading."""
+    return field_confidence({**signals, "consistency": None})
+
+
 def document_confidence(required: Iterable[float | None]) -> float:
     """Weakest required field; a missing one (None) counts as 0. No required fields: 1.0."""
     values = [0.0 if value is None else value for value in required]

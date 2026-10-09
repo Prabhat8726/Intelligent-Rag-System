@@ -17,6 +17,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from docintel.db.models import DocumentType
+from docintel.fields.confidence import reading_confidence
 from docintel.fields.normalize import NormalizationStatus, organization_key
 from docintel.fields.schemas import SCHEMA_INFO, ValueType
 from docintel.fields.service import ResolvedField
@@ -100,12 +101,15 @@ class FactValue:
     corrected: bool = False
     ambiguous: bool = False  # normalization UNCERTAIN (e.g. day/month order)
     field_id: str | None = None
+    # Confidence in the reading alone (no consistency penalty); None: same as `confidence`.
+    reading_confidence: float | None = None
 
     def uncertain(self, min_confidence: float) -> bool:
-        """A machine value too weak to call a difference a real discrepancy."""
+        """A machine reading too weak to call a difference a real discrepancy."""
         if self.corrected:
             return False
-        return self.ambiguous or self.confidence < min_confidence
+        reading = self.confidence if self.reading_confidence is None else self.reading_confidence
+        return self.ambiguous or reading < min_confidence
 
     def text(self) -> str | None:
         if self.value is None:
@@ -258,6 +262,7 @@ def _fact(item: ResolvedField, field_id: str | None) -> FactValue:
         corrected=item.corrected,
         ambiguous=(source or {}).get("status") == NormalizationStatus.UNCERTAIN.value,
         field_id=field_id,
+        reading_confidence=reading_confidence(item.signals) if "evidence" in item.signals else None,
     )
 
 

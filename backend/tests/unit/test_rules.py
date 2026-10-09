@@ -336,6 +336,9 @@ async def test_generated_bundles_raise_exactly_their_discrepancy(
     order, note, bill = facts["PO"], facts["DN"], facts["INV"]
     found = results(bill, order=order if bill.po_reference else None, notes=[note])
     assert failing(found) == expected
+    # Native documents are read reliably: every planted discrepancy is confirmed, not "could
+    # not be verified" (a failed consistency check must not count as a weak reading).
+    assert {code: found[code].outcome for code in expected} == dict.fromkeys(expected, Outcome.FAIL)
     assert failing(results(note, order=order)) == set()
     assert failing(results(order)) == set()
 
