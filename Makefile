@@ -14,7 +14,7 @@ INGEST_FLAGS ?=
 
 .PHONY: help env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
         reset-db logs seed-docker generate-documents process worker test test-backend \
-        test-frontend lint format check-ai check-ocr evaluate smoke clean
+        test-frontend lint format check-ai check-ocr llm-usage evaluate smoke clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -102,7 +102,10 @@ check-ai: require-env ## Verify GEMINI_API_KEY and configured models with real A
 check-ocr: require-env ## Verify the Tesseract OCR engine and configured languages
 	$(BACKEND) docintel check-ocr
 
-evaluate: ## Run OCR, classification and table evaluations -> evaluation/reports (several minutes)
+llm-usage: require-env ## LLM requests, tokens and estimated cost per day (last 7 days)
+	$(BACKEND) docintel llm-usage --days 7
+
+evaluate: ## Run OCR, classification, table and extraction evaluations -> evaluation/reports (several minutes)
 	cd backend && uv run docintel evaluate --output ../evaluation/reports
 
 smoke: ## Smoke-test the running Docker stack through nginx

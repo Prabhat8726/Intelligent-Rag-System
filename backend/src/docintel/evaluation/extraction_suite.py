@@ -435,8 +435,10 @@ async def run_extraction_suite(
         by_method[method].append(score)
         by_type[f"{method} / {truth['document_type']}"].append(score)
         has_error = any(d["code"] == "TOTAL_MISMATCH" for d in truth["defects"])
+        # On a correctly printed document a failed check means a value was misread: the flag
+        # is right (the misread is caught), but it sends a correct document to review.
         arithmetic[
-            "flagged (printed total wrong)" if has_error else "false alarm (no error)"
+            "printed total wrong" if has_error else "printed document consistent (flag = misread)"
         ].append(score["inconsistent"])
         for variation in truth["variations"]:
             field = "vendor_name" if variation["code"] == "VENDOR_NAME_VARIANT" else None
@@ -613,8 +615,8 @@ async def run_extraction_suite(
                 type_rows,
             ),
             (
-                "Consistency checks (invoices with a wrong printed total)",
-                ["Case", "Docs", "Flagged"],
+                "Consistency checks: documents flagged inconsistent",
+                ["Printed document", "Docs", "Flagged"],
                 check_rows,
             ),
             (

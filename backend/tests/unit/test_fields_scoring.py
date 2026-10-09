@@ -170,6 +170,8 @@ BASE = {
         ({}, 0.9),  # single source, nothing to cross-check
         ({"agreement": True}, 1.0),
         ({"agreement": False}, 0.6),
+        ({"model_only": True}, 0.8),  # only the LLM read it: below the default AUTO threshold
+        ({"model_only": True, "agreement": True}, 1.0),  # e.g. confirmed by the vendor master
         ({"consistency": True, "agreement": True}, 1.0),
         ({"consistency": False}, 0.54),
         ({"evidence": "FUZZY", "evidence_score": 90.0}, 0.81),

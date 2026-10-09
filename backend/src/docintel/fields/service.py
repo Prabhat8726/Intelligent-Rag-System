@@ -378,6 +378,7 @@ def _resolved(
         "conflicts": chosen.candidate.conflicts,
         "page_matches_citation": evidence.page_matches_citation,
         "agreement": agreement,
+        "model_only": agreement is None and chosen.candidate.origin == Origin.LLM,
         "consistency": None,
     }
     alternatives = []

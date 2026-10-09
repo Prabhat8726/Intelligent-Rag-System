@@ -149,10 +149,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
+      # Every document must finish processing. REVIEW_REQUIRED counts as finished: the dataset
+      # deliberately contains arithmetic errors, and scanned pages can route fields to review.
       - name: Generate the synthetic dataset and process it through the stack
         run: |
           make generate-documents
-          make process API_URL=http://localhost:8080 INGEST_FLAGS=--require-completed
+          make process API_URL=http://localhost:8080
 
       - name: Container logs
         if: failure()

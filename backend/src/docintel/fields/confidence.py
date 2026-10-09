@@ -13,10 +13,14 @@ self-reported by a model (ADR-005):
 | page          | 0.95 when the model cited the wrong page                        |
 | consistency   | a check involving the field passed 1.0, all failed 0.6, none 1.0 |
 | agreement     | two sources agree 1.0, single source 0.9, disagree 0.6           |
+|               | (only the LLM read it: 0.8, below the default AUTO threshold)    |
 
 Two sources are the layout extractor and the LLM, or a printed vendor name and the vendor
-master. The factor values are design choices recorded here; whether they are well calibrated is
-measured by the evaluation (error rate inside the auto-accepted bucket), not assumed.
+master. A value only the model found is printed on the page (evidence) but nothing shows it is
+the right field - text on the page can talk a model into quoting it - so on its own it never
+reaches AUTO with the default thresholds. The factor values are design choices recorded here;
+whether they are well calibrated is measured by the evaluation (error rate inside the
+auto-accepted bucket), not assumed.
 
 Document confidence is the weakest required field (missing = 0). Routing: at or above HIGH and
 no failed check -> AUTO; at or above MEDIUM -> ANALYST_REVIEW; otherwise MANDATORY_REVIEW.
@@ -36,6 +40,7 @@ CONFLICT_FACTOR = 0.8
 WRONG_PAGE_FACTOR = 0.95
 CONSISTENCY_FAIL_FACTOR = 0.6
 AGREEMENT_FACTORS = {True: 1.0, None: 0.9, False: 0.6}
+MODEL_ONLY_FACTOR = 0.8
 NORMALIZATION_FACTORS = {
     NormalizationStatus.OK: 1.0,
     NormalizationStatus.UNCERTAIN: 0.6,
@@ -74,6 +79,13 @@ def ocr_factor(ocr_confidence: float | None) -> float:
     return 0.5 + 0.5 * max(0.0, min(100.0, ocr_confidence)) / 100
 
 
+def _agreement_factor(signals: dict[str, Any]) -> float:
+    agreement = signals.get("agreement")
+    if agreement is None and signals.get("model_only"):
+        return MODEL_ONLY_FACTOR
+    return AGREEMENT_FACTORS[agreement]
+
+
 def field_confidence(signals: dict[str, Any]) -> float:
     """Confidence in [0, 1] from a field's stored signals (recomputable after corrections)."""
     if signals.get("human"):
@@ -88,7 +100,7 @@ def field_confidence(signals: dict[str, Any]) -> float:
         CONFLICT_FACTOR if signals.get("conflicts", 0) else 1.0,
         1.0 if signals.get("page_matches_citation", True) else WRONG_PAGE_FACTOR,
         CONSISTENCY_FAIL_FACTOR if signals.get("consistency") is False else 1.0,
-        AGREEMENT_FACTORS[signals.get("agreement")],
+        _agreement_factor(signals),
     )
     result = 1.0
     for factor in factors:

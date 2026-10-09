@@ -16,7 +16,7 @@ import type {
   PageSummary,
 } from "../lib/types";
 import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
-import { documentsUrl } from "./format";
+import { documentsUrl, moneyText } from "./format";
 
 const LIST_URL = documentsUrl({ status: "", q: "", offset: 0 });
 const DOC_ID = "5b0d8a3e-6b43-4c86-9f73-0b5b0f1f0a11";
@@ -234,6 +234,16 @@ describe("document detail", () => {
     });
     renderApp(`/documents/${DOC_ID}`);
     expect(await screen.findByText("Document not found.")).toBeInTheDocument();
+  });
+});
+
+describe("moneyText", () => {
+  it("pads to the currency's minor units without rounding", () => {
+    expect(moneyText("125.3", "USD")).toBe("125.30");
+    expect(moneyText("1200", "EUR")).toBe("1200.00");
+    expect(moneyText("0.125", "USD")).toBe("0.125");
+    expect(moneyText("1200", "JPY")).toBe("1200");
+    expect(moneyText("-4.5", "GBP")).toBe("-4.50");
   });
 });
 

@@ -120,13 +120,28 @@ export function fieldLabel(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/** "125.3" USD -> "125.30": pads to the currency's minor units, never rounds (the value is exact). */
+export function moneyText(value: string, currency: string): string {
+  let digits = 2;
+  try {
+    digits = new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().minimumFractionDigits ?? 2;
+  } catch {
+    // Not an ISO 4217 code this browser knows: keep two decimals.
+  }
+  const [whole, fraction = ""] = value.split(".");
+  if (fraction.length >= digits) return value;
+  return `${whole ?? value}.${fraction.padEnd(digits, "0")}`;
+}
+
 /** Display value: the reviewer's correction, else the normalized value, else the printed text. */
 export function fieldValue(field: ExtractedField): string {
   if (field.corrected_value !== null) return field.corrected_value === "" ? "(not on document)" : field.corrected_value;
   const normalized = field.normalized_value;
   if (normalized?.vendor) return normalized.vendor.canonical_name;
   if (normalized && normalized.value !== null) {
-    if (field.value_type === "MONEY" && normalized.currency) return `${String(normalized.value)} ${normalized.currency}`;
+    if (field.value_type === "MONEY" && normalized.currency) {
+      return `${moneyText(String(normalized.value), normalized.currency)} ${normalized.currency}`;
+    }
     if (field.value_type === "PERCENT") return `${String(Math.round(Number(normalized.value) * 10000) / 100)}%`;
     if (field.value_type === "DAYS") return `${String(normalized.value)} days`;
     return String(normalized.value);
