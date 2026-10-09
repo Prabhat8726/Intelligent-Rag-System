@@ -77,6 +77,7 @@ class ReviewTaskType(StrEnum):
     DISCREPANCY_REVIEW = "DISCREPANCY_REVIEW"
     EXTRACTION_REVIEW = "EXTRACTION_REVIEW"
     CLASSIFICATION_REVIEW = "CLASSIFICATION_REVIEW"
+    REQUESTED_REVIEW = "REQUESTED_REVIEW"  # a person or the agent asked for a look
 
 
 class ReviewTaskStatus(StrEnum):
@@ -316,3 +317,34 @@ class ReviewTask(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     assigned_to: Mapped[User | None] = relationship(foreign_keys=[assigned_to_id], lazy="joined")
     resolved_by: Mapped[User | None] = relationship(foreign_keys=[resolved_by_id], lazy="joined")
+
+
+class ReviewRequest(UUIDPrimaryKeyMixin, Base):
+    """A request (by a user or an investigation) to have a document version reviewed.
+
+    Requests are review items like rule findings: they keep the version's task open until a
+    person resolves it, survive re-evaluations, and stop counting once a resolution covers them.
+    """
+
+    __tablename__ = "review_requests"
+    __table_args__ = (
+        Index("ix_review_requests_document_version", "document_id", "document_version_id"),
+        Index("ix_review_requests_version_id", "document_version_id"),
+        Index("ix_review_requests_requested_by_id", "requested_by_id"),
+        Index("ix_review_requests_agent_run_id", "agent_run_id"),
+        CheckConstraint("char_length(reason) BETWEEN 1 AND 1000", name="reason_length"),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    document_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_versions.id", ondelete="CASCADE")
+    )
+    requested_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="SET NULL")
+    )
+    priority: Mapped[ReviewPriority] = mapped_column(str_enum(ReviewPriority, "priority"))
+    reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        server_default=func.clock_timestamp(), nullable=False
+    )

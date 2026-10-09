@@ -353,6 +353,41 @@ class MatchingService:
                 continue
             await self._evaluate(document, rules, tolerances, actor)
 
+    async def _assessment(
+        self, document: Document, rules: Sequence[RuleDefinition], tolerances: Tolerances
+    ) -> tuple[DocumentFacts | None, Assessment]:
+        facts = await self._facts_of(document)
+        if facts is None:
+            return None, Assessment()
+        kind = facts.document_type
+        orders, deliveries, candidates = [], [], []
+        if kind in (DocumentType.INVOICE, DocumentType.DELIVERY_NOTE):
+            orders = await self._referencing(document, facts, DocumentType.PURCHASE_ORDER)
+        if kind == DocumentType.INVOICE:
+            deliveries = await self._referencing(document, facts, DocumentType.DELIVERY_NOTE)
+        if duplicate_params(applicable(rules, kind)) is not None:
+            candidates = await self._duplicate_candidates(document, facts)
+        return facts, assess(
+            facts,
+            orders=orders,
+            deliveries=deliveries,
+            candidates=candidates,
+            rules=rules,
+            tolerances=tolerances,
+            reference_date=date.today(),
+            identical_file=await self._identical_file(document),
+        )
+
+    async def dry_run(self, document: Document) -> tuple[DocumentFacts | None, Assessment]:
+        """What matching and the rules decide for `document` now, without storing anything
+        (the agent's run_business_rules). Related documents come from the document's
+        department, exactly as in `refresh`; callers filter what the reader may see."""
+        rules = await load_rules(self._session)
+        tolerances = tolerances_from_rules(
+            rules, min_confidence=self._settings.comparison_min_confidence
+        )
+        return await self._assessment(document, rules, tolerances)
+
     async def _evaluate(
         self,
         document: Document,
@@ -360,27 +395,7 @@ class MatchingService:
         tolerances: Tolerances,
         actor: User | None,
     ) -> None:
-        facts = await self._facts_of(document)
-        assessment = Assessment()
-        if facts is not None:
-            kind = facts.document_type
-            orders, deliveries, candidates = [], [], []
-            if kind in (DocumentType.INVOICE, DocumentType.DELIVERY_NOTE):
-                orders = await self._referencing(document, facts, DocumentType.PURCHASE_ORDER)
-            if kind == DocumentType.INVOICE:
-                deliveries = await self._referencing(document, facts, DocumentType.DELIVERY_NOTE)
-            if duplicate_params(applicable(rules, kind)) is not None:
-                candidates = await self._duplicate_candidates(document, facts)
-            assessment = assess(
-                facts,
-                orders=orders,
-                deliveries=deliveries,
-                candidates=candidates,
-                rules=rules,
-                tolerances=tolerances,
-                reference_date=date.today(),
-                identical_file=await self._identical_file(document),
-            )
+        facts, assessment = await self._assessment(document, rules, tolerances)
         comparison, duplicates, results = (
             assessment.comparison,
             assessment.duplicates,

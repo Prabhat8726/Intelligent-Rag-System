@@ -48,6 +48,14 @@ class AuditAction(StrEnum):
     KNOWLEDGE_PROCESSING_FAILED = "knowledge.processing.failed"
     KNOWLEDGE_ARCHIVED = "knowledge.archived"
     KNOWLEDGE_QUERIED = "knowledge.queried"
+    REVIEW_REQUESTED = "review.requested"
+    ANALYSIS_REQUESTED = "analysis.requested"
+    ANALYSIS_COMPLETED = "analysis.completed"
+    ANALYSIS_FAILED = "analysis.failed"
+    API_TOKEN_CREATED = "api_token.created"  # noqa: S105 - an action name
+    API_TOKEN_REVOKED = "api_token.revoked"  # noqa: S105 - an action name
+    MCP_AUTH_FAILED = "mcp.auth_failed"
+    MCP_TOOL_CALLED = "mcp.tool_called"
 
 
 @dataclass(frozen=True, slots=True)

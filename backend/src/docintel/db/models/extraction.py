@@ -246,6 +246,7 @@ class LLMCall(UUIDPrimaryKeyMixin, Base):
     __table_args__ = (
         Index("ix_llm_calls_provider_created", "provider", "created_at"),
         Index("ix_llm_calls_document_id", "document_id"),
+        Index("ix_llm_calls_agent_run_id", "agent_run_id"),
         CheckConstraint(
             "estimated_cost_usd IS NULL OR estimated_cost_usd >= 0", name="cost_non_negative"
         ),
@@ -259,6 +260,9 @@ class LLMCall(UUIDPrimaryKeyMixin, Base):
     purpose: Mapped[str] = mapped_column(String(60))
     document_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("documents.id", ondelete="SET NULL")
+    )
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="SET NULL")
     )
     prompt_version: Mapped[str | None] = mapped_column(String(40))
     status: Mapped[LLMCallStatus] = mapped_column(str_enum(LLMCallStatus, "status"))

@@ -57,6 +57,7 @@ class LLMCallEntry:
     latency_ms: float
     document_id: object | None = None
     prompt_version: str | None = None
+    agent_run_id: object | None = None
     error_code: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -144,6 +145,7 @@ class AccountedLLMProvider:
                     latency_ms=round((time.perf_counter() - started) * 1000, 2),
                     document_id=request.document_id,
                     prompt_version=request.prompt_version,
+                    agent_run_id=request.agent_run_id,
                     error_code=type(exc).__name__,
                 )
             )
@@ -158,6 +160,7 @@ class AccountedLLMProvider:
                 latency_ms=usage.latency_ms,
                 document_id=request.document_id,
                 prompt_version=request.prompt_version,
+                agent_run_id=request.agent_run_id,
                 input_tokens=usage.input_tokens,
                 output_tokens=usage.output_tokens,
                 thinking_tokens=usage.thinking_tokens,
@@ -225,6 +228,7 @@ class DatabaseLLMCallLog:
                     purpose=entry.purpose[:60],
                     document_id=entry.document_id,
                     prompt_version=entry.prompt_version,
+                    agent_run_id=entry.agent_run_id,
                     status=entry.status,
                     error_code=entry.error_code,
                     input_tokens=entry.input_tokens,

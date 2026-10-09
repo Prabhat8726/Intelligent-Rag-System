@@ -23,6 +23,7 @@ CATEGORY_TASK: dict[str, ReviewTaskType] = {
     "EXTRACTION": ReviewTaskType.EXTRACTION_REVIEW,
     "CONTENT": ReviewTaskType.EXTRACTION_REVIEW,
     "CLASSIFICATION": ReviewTaskType.CLASSIFICATION_REVIEW,
+    "REQUESTED": ReviewTaskType.REQUESTED_REVIEW,
 }
 _TASK_ORDER = list(dict.fromkeys(CATEGORY_TASK.values()))
 
@@ -99,6 +100,16 @@ class ReviewItem:
             "message": self.message,
         }
 
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> ReviewItem:
+        return cls(
+            key=str(data["key"]),
+            category=str(data["category"]),
+            code=str(data["code"]),
+            severity=RuleSeverity(data["severity"]),
+            message=str(data["message"]),
+        )
+
 
 def _key(*parts: str) -> str:
     key = ":".join(part for part in parts if part)
@@ -153,6 +164,25 @@ def rule_items(results: Iterable[RuleResult]) -> list[ReviewItem]:
             )
         )
     return items
+
+
+REQUEST_SEVERITY: dict[ReviewPriority, RuleSeverity] = {
+    ReviewPriority.HIGH: RuleSeverity.HIGH,
+    ReviewPriority.NORMAL: RuleSeverity.MEDIUM,
+    ReviewPriority.LOW: RuleSeverity.LOW,
+}
+REQUEST_CODE = "REVIEW_REQUESTED"
+
+
+def request_item(request_id: str, priority: ReviewPriority, message: str) -> ReviewItem:
+    """A review request (by a person or an investigation) as an item of the document's task."""
+    return ReviewItem(
+        key=_key("request", request_id),
+        category="REQUESTED",
+        code=REQUEST_CODE,
+        severity=REQUEST_SEVERITY.get(priority, RuleSeverity.MEDIUM),
+        message=message,
+    )
 
 
 def document_reasons(processing: Sequence[str], items: Sequence[ReviewItem]) -> list[str]:

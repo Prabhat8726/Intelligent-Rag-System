@@ -1,5 +1,15 @@
 """ORM models. Importing this package registers every table on `Base.metadata`."""
 
+from docintel.db.models.agent import (
+    FINISHED_RUN_STATUSES,
+    AgentRun,
+    AgentRunStatus,
+    AgentRunType,
+    AgentToolCall,
+    ApiToken,
+    ToolCallStatus,
+    ToolChannel,
+)
 from docintel.db.models.audit import ActorType, AuditLog, AuditOutcome
 from docintel.db.models.documents import (
     Document,
@@ -46,6 +56,7 @@ from docintel.db.models.matching import (
     ComparisonRole,
     ComparisonType,
     ReviewPriority,
+    ReviewRequest,
     ReviewResolution,
     ReviewTask,
     ReviewTaskStatus,
@@ -66,9 +77,15 @@ from docintel.db.models.understanding import (
 )
 
 __all__ = [
+    "FINISHED_RUN_STATUSES",
     "HUMAN_RESOLUTIONS",
     "OPEN_TASK_STATUSES",
     "ActorType",
+    "AgentRun",
+    "AgentRunStatus",
+    "AgentRunType",
+    "AgentToolCall",
+    "ApiToken",
     "AuditLog",
     "AuditOutcome",
     "BusinessRule",
@@ -111,6 +128,7 @@ __all__ = [
     "ReviewLevelValue",
     "ReviewPriority",
     "ReviewReason",
+    "ReviewRequest",
     "ReviewResolution",
     "ReviewTask",
     "ReviewTaskStatus",
@@ -122,6 +140,8 @@ __all__ = [
     "Sensitivity",
     "TableMethod",
     "TableRow",
+    "ToolCallStatus",
+    "ToolChannel",
     "User",
     "Vendor",
 ]

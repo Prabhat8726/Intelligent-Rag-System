@@ -53,6 +53,7 @@ class LLMRequest:
     # Accounting context (llm_calls): never sent to the provider.
     document_id: uuid.UUID | None = None
     prompt_version: str | None = None
+    agent_run_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

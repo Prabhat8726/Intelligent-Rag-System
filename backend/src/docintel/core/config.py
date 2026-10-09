@@ -228,6 +228,25 @@ class Settings(BaseSettings):
     rag_generation_enabled: bool = True
     rag_max_output_tokens: int = Field(default=1024, ge=128, le=8192)
 
+    # ---------------------------------------------------------------- agent (Phase 7)
+    # The investigation graph plans and analyses with the configured LLM when one is allowed;
+    # false = deterministic planning and analysis only (tools and rules are always used).
+    agent_llm_enabled: bool = True
+    agent_max_tool_calls: int = Field(default=30, ge=4, le=200)
+    agent_max_llm_calls: int = Field(default=4, ge=0, le=20)
+    agent_max_documents: int = Field(default=3, ge=1, le=10)
+    agent_timeout_seconds: float = Field(default=180.0, ge=10, le=1800)
+    agent_tool_timeout_seconds: float = Field(default=30.0, ge=1, le=600)
+    agent_tool_max_output_bytes: int = Field(default=64 * 1024, ge=4096, le=1024 * 1024)
+    agent_max_output_tokens: int = Field(default=1536, ge=256, le=8192)
+    # Queued or running investigations per user (more are refused with 429).
+    agent_max_active_runs_per_user: int = Field(default=3, ge=1, le=100)
+
+    # ---------------------------------------------------------------- MCP & API tokens
+    api_token_max_days: int = Field(default=90, ge=1, le=365)
+    # The token the stdio MCP server acts with (the person running the client). Never logged.
+    mcp_api_token: SecretStr | None = None
+
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None
 
@@ -247,7 +266,7 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return value
 
-    @field_validator("gemini_api_key", "s3_secret_access_key", mode="before")
+    @field_validator("gemini_api_key", "s3_secret_access_key", "mcp_api_token", mode="before")
     @classmethod
     def _empty_key_is_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from docintel.audit.service import AuditAction, RequestMeta, record_audit_event
+from docintel.auth.policies import visible_documents
 from docintel.core.config import Settings
 from docintel.core.errors import ConflictError, NotFoundError, UnprocessableContentError
 from docintel.db.models import (
@@ -18,6 +20,8 @@ from docintel.db.models import (
     AuditOutcome,
     Document,
     DocumentStatus,
+    ReviewPriority,
+    ReviewRequest,
     ReviewResolution,
     ReviewTask,
     ReviewTaskStatus,
@@ -25,10 +29,13 @@ from docintel.db.models import (
     User,
 )
 from docintel.matching.store import lock_department
-from docintel.review.items import ReviewItem, ordered, priority, task_type
+from docintel.review.items import ReviewItem, ordered, priority, request_item, task_type
 
 # Statuses a document can be in when its review state is (re)decided.
 _REVIEWABLE = (DocumentStatus.PROCESSING, DocumentStatus.COMPLETED, DocumentStatus.REVIEW_REQUIRED)
+# Documents a review can be requested for: processed (a running job would supersede the task).
+_REQUESTABLE = (DocumentStatus.COMPLETED, DocumentStatus.REVIEW_REQUIRED)
+REQUESTABLE_PRIORITIES = (ReviewPriority.HIGH, ReviewPriority.NORMAL, ReviewPriority.LOW)
 CLEARED_NOTE = "Every finding was cleared (a correction, a new related document or a rule change)."
 
 
@@ -45,6 +52,21 @@ async def open_task(session: AsyncSession, document_id: uuid.UUID) -> ReviewTask
     return task
 
 
+async def requested_items(session: AsyncSession, document: Document) -> list[ReviewItem]:
+    """Review requests for the document's current version, as review items."""
+    if document.current_version_id is None:
+        return []
+    rows = await session.scalars(
+        select(ReviewRequest)
+        .where(
+            ReviewRequest.document_id == document.id,
+            ReviewRequest.document_version_id == document.current_version_id,
+        )
+        .order_by(ReviewRequest.created_at)
+    )
+    return [request_item(str(row.id), row.priority, row.reason) for row in rows]
+
+
 def _close(task: ReviewTask, status: ReviewTaskStatus, now: datetime) -> None:
     task.status = status
     task.resolved_at = now
@@ -59,8 +81,10 @@ async def sync_review(
     settings: Settings,
     actor: User | None = None,
 ) -> ReviewTask | None:
-    """Make the document's open task (and status) reflect `items`. Returns the open task."""
+    """Make the document's open task (and status) reflect `items` plus the review requests for
+    its current version. Returns the open task."""
     now = _now()
+    items = [*items, *await requested_items(session, document)]
     version_id = document.current_version_id
     task = await open_task(session, document.id)
     if task is not None and task.document_version_id != version_id:
@@ -256,3 +280,115 @@ class ReviewService:
             },
         )
         return task
+
+
+@dataclass(slots=True)
+class RequestOutcome:
+    task: ReviewTask | None  # None: a person already resolved this very request
+    request: ReviewRequest
+    created: bool  # False: the same request was already on file
+
+
+class ReviewRequestService:
+    """Ask for a human review of a document (REST users and the agent's create_review_task)."""
+
+    def __init__(self, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
+        self._settings = settings
+
+    async def request(
+        self,
+        actor: User,
+        document_id: uuid.UUID,
+        *,
+        reason: str,
+        priority_level: ReviewPriority,
+        meta: RequestMeta,
+        agent_run_id: uuid.UUID | None = None,
+    ) -> RequestOutcome:
+        """Add the request to the document's open task (or open one). The caller commits."""
+        reason = " ".join(reason.split())
+        if not reason:
+            msg = "A review request needs a reason."
+            raise UnprocessableContentError(msg)
+        if priority_level not in REQUESTABLE_PRIORITIES:
+            msg = "Request a review with priority HIGH, NORMAL or LOW."
+            raise UnprocessableContentError(msg)
+        # Same lock order as matching: department, then the document.
+        found = (
+            await self._session.execute(
+                select(Document.id, Document.department_id).where(
+                    Document.id == document_id, visible_documents(actor)
+                )
+            )
+        ).first()
+        if found is None:
+            raise NotFoundError("Document not found.")
+        await lock_department(self._session, found.department_id)
+        document = await self._session.scalar(
+            select(Document)
+            .where(Document.id == document_id, visible_documents(actor))
+            .with_for_update(of=Document)
+            .execution_options(populate_existing=True)
+        )
+        if document is None:
+            raise NotFoundError("Document not found.")
+        if document.status not in _REQUESTABLE or document.current_version_id is None:
+            msg = f"{document.display_filename} has not been processed yet."
+            raise UnprocessableContentError(msg)
+
+        existing = await self._session.scalar(
+            select(ReviewRequest).where(
+                ReviewRequest.document_id == document.id,
+                ReviewRequest.document_version_id == document.current_version_id,
+                ReviewRequest.requested_by_id == actor.id,
+                ReviewRequest.reason == reason,
+            )
+        )
+        task = await open_task(self._session, document.id)
+        if existing is not None:
+            covered = task is not None and request_item(
+                str(existing.id), existing.priority, existing.reason
+            ).key in (task.reason_keys or [])
+            return RequestOutcome(task if covered else None, existing, created=False)
+
+        request = ReviewRequest(
+            document_id=document.id,
+            document_version_id=document.current_version_id,
+            requested_by_id=actor.id,
+            agent_run_id=agent_run_id,
+            priority=priority_level,
+            reason=reason,
+            created_at=_now(),
+        )
+        self._session.add(request)
+        await self._session.flush()
+        # The open task already lists the document's current findings; without one, every
+        # finding was resolved by a person (or there are none), so only the requests remain.
+        current = [
+            ReviewItem.from_json(item)
+            for item in (task.reasons if task is not None else [])
+            if item.get("category") != "REQUESTED"
+        ]
+        task = await sync_review(
+            self._session, document, current, settings=self._settings, actor=actor
+        )
+        await self._session.flush()
+        record_audit_event(
+            self._session,
+            action=AuditAction.REVIEW_REQUESTED,
+            outcome=AuditOutcome.SUCCESS,
+            meta=meta,
+            actor=actor,
+            entity_type="document",
+            entity_id=document.id,
+            details={
+                "review_request_id": str(request.id),
+                "review_task_id": str(task.id) if task else None,
+                "priority": priority_level.value,
+                "agent_run_id": str(agent_run_id) if agent_run_id else None,
+                # The reason may quote document content: only its size is kept here.
+                "reason_chars": len(reason),
+            },
+        )
+        return RequestOutcome(task, request, created=True)
