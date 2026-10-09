@@ -24,6 +24,7 @@ from docintel.db.models import (
     Role,
     User,
 )
+from docintel.matching.store import lock_department
 from docintel.review.items import ReviewItem, ordered, priority, task_type
 
 # Statuses a document can be in when its review state is (re)decided.
@@ -208,14 +209,25 @@ class ReviewService:
         if resolution == ReviewResolution.REJECTED and not (note and note.strip()):
             msg = "A rejection needs a note explaining why."
             raise UnprocessableContentError(msg)
+        # Same lock order as matching: department, document, then the task.
+        department_id = await self._session.scalar(
+            select(Document.department_id)
+            .join(ReviewTask, ReviewTask.document_id == Document.id)
+            .where(ReviewTask.id == task_id)
+        )
+        await lock_department(self._session, department_id)
+        document = await self._session.scalar(
+            select(Document)
+            .join(ReviewTask, ReviewTask.document_id == Document.id)
+            .where(ReviewTask.id == task_id)
+            .with_for_update(of=Document)
+            .execution_options(populate_existing=True)
+        )
         task = await self._locked(task_id)
         self._require_open(task)
         if task.assigned_to_id not in (None, actor.id) and not self._may_override(actor):
             msg = "The task is claimed by someone else."
             raise ConflictError(msg)
-        document = await self._session.scalar(
-            select(Document).where(Document.id == task.document_id).with_for_update(of=Document)
-        )
         if document is None:  # pragma: no cover - cascades with the task
             raise NotFoundError("Document not found.")
         now = _now()

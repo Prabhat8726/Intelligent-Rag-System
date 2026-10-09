@@ -20,6 +20,9 @@ from docintel.db.models import (
     ExtractionMethod,
     JobStatus,
     JobType,
+    ReviewPriority,
+    ReviewTaskStatus,
+    ReviewTaskType,
     Sensitivity,
     TableMethod,
 )
@@ -62,6 +65,17 @@ class ProcessingJobRead(ResponseModel):
         return int((self.finished_at - self.started_at).total_seconds() * 1000)
 
 
+class ReviewTaskBrief(ResponseModel):
+    """The open review task of a document (inbox and detail)."""
+
+    id: uuid.UUID
+    task_type: ReviewTaskType
+    status: ReviewTaskStatus
+    priority: ReviewPriority
+    due_at: datetime | None
+    assigned_to: UserSummary | None
+
+
 class DocumentRead(ResponseModel):
     id: uuid.UUID
     display_filename: str
@@ -84,6 +98,11 @@ class DocumentRead(ResponseModel):
     current_version: DocumentVersionRead | None
     vendor: VendorSummary | None = Field(
         default=None, description="Vendor master entry the extracted vendor resolved to"
+    )
+    review: ReviewTaskBrief | None = Field(
+        default=None,
+        validation_alias="open_review_task",
+        description="The open review task (present exactly while the status is REVIEW_REQUIRED)",
     )
 
 

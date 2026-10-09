@@ -17,6 +17,7 @@ from docintel.api.deps import (
     StorageDep,
     require_permission,
 )
+from docintel.api.routers.comparisons import comparison_summary
 from docintel.api.schemas.common import PROBLEM_RESPONSES, ProblemDetail
 from docintel.api.schemas.documents import (
     ClassificationCorrection,
@@ -24,6 +25,7 @@ from docintel.api.schemas.documents import (
     DocumentDetail,
     DocumentPage,
     DocumentRead,
+    DocumentVersionRead,
     PageDetail,
     PageSummary,
     ProcessingJobRead,
@@ -35,13 +37,24 @@ from docintel.api.schemas.extraction import (
     FieldCorrection,
     FieldEvidence,
 )
+from docintel.api.schemas.matching import (
+    DuplicateRead,
+    FindingsRead,
+    ReviewTaskRead,
+    RuleResultRead,
+    VersionComparisonRead,
+    VersionRead,
+)
 from docintel.api.schemas.vendors import VendorSummary
 from docintel.auth.permissions import Permission
+from docintel.comparisons.service import ComparisonService
 from docintel.db.models import DocumentStatus, DocumentType, Sensitivity, User
 from docintel.documents.content import DocumentContentService
 from docintel.documents.extraction import ExtractionService
+from docintel.documents.findings import FindingsService
 from docintel.documents.service import DocumentFilters, DocumentService
 from docintel.documents.validation import SUPPORTED_EXTENSIONS
+from docintel.documents.versions import VersionService
 
 router = APIRouter(
     prefix="/documents",
@@ -394,3 +407,109 @@ async def reprocess_document(
     )
     await session.refresh(job)
     return ProcessingJobRead.model_validate(job)
+
+
+# ------------------------------------------------------------------------------ Phase 5
+@router.get(
+    "/{document_id}/findings",
+    response_model=FindingsRead,
+    summary="Comparisons, rule results, duplicates and review history of a document",
+)
+async def get_findings(
+    document_id: uuid.UUID,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+) -> FindingsRead:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    findings = await FindingsService(session).findings(user, document)
+    documents = await ComparisonService(session, settings).documents(findings.comparisons)
+    return FindingsRead(
+        comparisons=[comparison_summary(item, documents) for item in findings.comparisons],
+        rule_results=[RuleResultRead.model_validate(item) for item in findings.rule_results],
+        duplicates=[
+            DuplicateRead(
+                kind=item.kind,
+                document_id=item.document.id,
+                display_filename=item.document.display_filename,
+                direction=item.direction,
+                evidence=item.evidence,
+            )
+            for item in findings.duplicates
+        ],
+        open_task=ReviewTaskRead.model_validate(findings.open_task) if findings.open_task else None,
+        review_history=[ReviewTaskRead.model_validate(task) for task in findings.history],
+    )
+
+
+@router.get(
+    "/{document_id}/versions",
+    response_model=list[VersionRead],
+    summary="File versions of a document, newest first",
+)
+async def list_versions(
+    document_id: uuid.UUID,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+) -> list[VersionRead]:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    return [
+        VersionRead(
+            **DocumentVersionRead.model_validate(info.version).model_dump(),
+            processed=info.processed,
+            is_current=info.is_current,
+        )
+        for info in await VersionService(session).versions(document)
+    ]
+
+
+@router.post(
+    "/{document_id}/versions",
+    status_code=status.HTTP_201_CREATED,
+    response_model=DocumentRead,
+    summary="Upload a new version of the document (e.g. a revised contract)",
+    description="The new file becomes the current version and is processed; earlier versions "
+    "stay available for comparison. Rejected while the document is being processed, or if the "
+    "file is identical to the current version (409).",
+    responses={
+        409: {"model": ProblemDetail, "description": "Processing, or identical file"},
+        413: {"model": ProblemDetail, "description": "File too large"},
+        415: {"model": ProblemDetail, "description": "Unsupported or mismatched file type"},
+    },
+)
+async def upload_version(
+    document_id: uuid.UUID,
+    user: Uploader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    meta: RequestMetaDep,
+    file: Annotated[UploadFile, File(description="The new version of the file")],
+) -> DocumentRead:
+    document = await DocumentService(session, storage, settings).upload_version(
+        actor=user, document_id=document_id, upload=file, meta=meta
+    )
+    return DocumentRead.model_validate(document)
+
+
+@router.get(
+    "/{document_id}/versions/compare",
+    response_model=VersionComparisonRead,
+    summary="Clause-by-clause differences between two versions (added, removed, modified)",
+    responses={409: {"model": ProblemDetail, "description": "A version is not processed yet"}},
+)
+async def compare_versions(
+    document_id: uuid.UUID,
+    user: Reader,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    from_version: Annotated[int, Query(alias="from", ge=1, le=10_000)],
+    to_version: Annotated[int, Query(alias="to", ge=1, le=10_000)],
+) -> VersionComparisonRead:
+    document = await DocumentService(session, storage, settings).get(user, document_id)
+    result = await VersionService(session).compare(document, from_version, to_version)
+    return VersionComparisonRead.model_validate(result)

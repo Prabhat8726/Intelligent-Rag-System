@@ -36,6 +36,8 @@ class Env:
     reviewer: User
     viewer: User
     outsider: User
+    manager: User
+    admin: User
 
     def worker(self, services: ProcessingServices | None = None) -> Worker:
         return Worker(
@@ -92,13 +94,17 @@ async def env(engine: AsyncEngine, database_url: str, tmp_path: Path) -> AsyncIt
                 full_name=f"Test {role_name}",
                 password_hash="not-used",
                 role=role,
-                department_id=(legal if role_name == "outsider" else finance).id,
+                department_id=None
+                if role_name == "admin"
+                else (legal if role_name == "outsider" else finance).id,
             )
             for role_name, role in (
                 ("analyst", Role.ANALYST),
                 ("reviewer", Role.REVIEWER),
                 ("viewer", Role.VIEWER),
                 ("outsider", Role.REVIEWER),
+                ("manager", Role.MANAGER),
+                ("admin", Role.ADMIN),
             )
         }
         session.add_all([finance, legal, *users.values()])
@@ -115,4 +121,6 @@ async def env(engine: AsyncEngine, database_url: str, tmp_path: Path) -> AsyncIt
                 users["reviewer"],
                 users["viewer"],
                 users["outsider"],
+                users["manager"],
+                users["admin"],
             )

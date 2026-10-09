@@ -145,13 +145,23 @@ class BodySizeLimitMiddleware:
         *,
         default_limit: int,
         overrides: dict[tuple[str, str], int] | None = None,
+        pattern_overrides: list[tuple[str, re.Pattern[str], int]] | None = None,
     ) -> None:
         self.app = app
         self.default_limit = default_limit
         self.overrides = dict(overrides or {})
+        # (method, full-match path pattern, limit) for paths with ids in them.
+        self.pattern_overrides = list(pattern_overrides or [])
 
     def _limit_for(self, method: str, path: str) -> int:
-        return self.overrides.get((method, path.rstrip("/") or "/"), self.default_limit)
+        path = path.rstrip("/") or "/"
+        exact = self.overrides.get((method, path))
+        if exact is not None:
+            return exact
+        for pattern_method, pattern, limit in self.pattern_overrides:
+            if pattern_method == method and pattern.fullmatch(path):
+                return limit
+        return self.default_limit
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope.get("method") not in self._METHODS:

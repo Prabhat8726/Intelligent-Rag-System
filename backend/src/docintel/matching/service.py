@@ -246,6 +246,8 @@ class MatchingService:
         if document.duplicate_reason == EXACT_FILE and document.duplicate_of_id is not None:
             original = await self._session.get(Document, document.duplicate_of_id)
             if original is not None and original.deleted_at is None:
+                # One entry per original document: the identical file is the strongest reason.
+                matches = [match for match in matches if match.document_id != str(original.id)]
                 matches.insert(
                     0,
                     DuplicateMatch(
@@ -373,3 +375,23 @@ class MatchingService:
         document.review_reasons = document_reasons(processing, items)
         await sync_review(self._session, document, items, settings=self._settings, actor=actor)
         await self._session.flush()
+
+
+async def rematch(
+    session: AsyncSession, settings: Settings, document_id: uuid.UUID, actor: User | None = None
+) -> bool:
+    """Re-run matching for one processed document in the caller's transaction (False: skipped)."""
+    department_id = await session.scalar(
+        select(Document.department_id).where(Document.id == document_id)
+    )
+    await lock_department(session, department_id)
+    document = await session.scalar(
+        select(Document)
+        .where(Document.id == document_id)
+        .with_for_update(of=Document)
+        .execution_options(populate_existing=True)
+    )
+    if document is None or document.deleted_at is not None or document.status not in PROCESSED:
+        return False
+    await MatchingService(session, settings).refresh(document, actor=actor)
+    return True

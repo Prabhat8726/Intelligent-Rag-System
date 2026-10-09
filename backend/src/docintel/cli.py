@@ -40,8 +40,16 @@ from docintel.auth.service import UserService
 from docintel.core.config import LLMProviderName, LogFormat, Settings, get_settings
 from docintel.core.errors import ConflictError
 from docintel.core.logging import configure_logging, get_logger
-from docintel.db.models import LLMCall, LLMCallStatus, Role
+from docintel.db.models import (
+    OPEN_TASK_STATUSES,
+    Document,
+    LLMCall,
+    LLMCallStatus,
+    ReviewTask,
+    Role,
+)
 from docintel.db.session import create_engine, create_sessionmaker
+from docintel.matching.service import PROCESSED, rematch
 from docintel.processing.ocr import OCRUnavailableError, TesseractOCRProvider
 from docintel.processing.services import build_processing_services, load_corrections
 from docintel.storage import build_storage
@@ -246,6 +254,37 @@ async def _check_ai(settings: Settings) -> int:
     else:
         embeddings_ok = await _check_embeddings(settings)
     return EXIT_OK if llm_ok and embeddings_ok else EXIT_FAILURE
+
+
+async def _match(settings: Settings) -> int:
+    """Re-run comparisons, duplicate detection, rules and review tasks for every processed
+    document (after an upgrade, or after rule changes), one short transaction each."""
+    engine = create_engine(settings)
+    sessionmaker = create_sessionmaker(engine)
+    try:
+        async with sessionmaker() as session:
+            ids = list(
+                await session.scalars(
+                    select(Document.id)
+                    .where(Document.deleted_at.is_(None), Document.status.in_(PROCESSED))
+                    .order_by(Document.created_at)
+                )
+            )
+        done = 0
+        for document_id in ids:
+            async with sessionmaker() as session:
+                done += await rematch(session, settings, document_id)
+                await session.commit()
+        async with sessionmaker() as session:
+            open_tasks = await session.scalar(
+                select(func.count())
+                .select_from(ReviewTask)
+                .where(ReviewTask.status.in_(OPEN_TASK_STATUSES))
+            )
+        _ok(f"matched {done} processed document(s); {open_tasks} open review task(s)")
+        return EXIT_OK
+    finally:
+        await engine.dispose()
 
 
 async def _llm_usage(settings: Settings, days: int) -> int:
@@ -504,6 +543,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--password-stdin", action="store_true", help="read the password from stdin"
     )
     commands.add_parser("check-ai", help="verify AI provider credentials and models")
+    commands.add_parser(
+        "match", help="Re-run matching, rules and review tasks for all processed documents"
+    )
     usage = commands.add_parser("llm-usage", help="LLM calls, tokens and estimated cost")
     usage.add_argument("--days", type=int, default=7, help="look back this many days (default 7)")
     commands.add_parser("check-ocr", help="verify the OCR engine and configured languages")
@@ -563,6 +605,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_check_ai(settings))
         case "llm-usage":
             return asyncio.run(_llm_usage(settings, args.days))
+        case "match":
+            return asyncio.run(_match(settings))
         case "check-ocr":
             return asyncio.run(_check_ocr(settings))
         case "worker":

@@ -121,7 +121,9 @@ class DocumentService:
             raise UnprocessableContentError(msg)
         return requested
 
-    async def _find_exact_duplicate(self, actor: User, sha256: str) -> uuid.UUID | None:
+    async def _find_exact_duplicate(
+        self, actor: User, sha256: str, exclude: uuid.UUID | None = None
+    ) -> uuid.UUID | None:
         statement = (
             select(Document.id)
             .join(DocumentVersion, DocumentVersion.document_id == Document.id)
@@ -129,6 +131,8 @@ class DocumentService:
             .order_by(Document.created_at)
             .limit(1)
         )
+        if exclude is not None:
+            statement = statement.where(Document.id != exclude)
         found: uuid.UUID | None = await self._session.scalar(statement)
         return found
 
@@ -253,6 +257,124 @@ class DocumentService:
             duplicate=duplicate_of is not None,
         )
         return await self.get(actor, document_id)
+
+    async def upload_version(
+        self, *, actor: User, document_id: uuid.UUID, upload: UploadFile, meta: RequestMeta
+    ) -> Document:
+        """Add a new file version (e.g. a revised contract); it becomes current and is processed.
+
+        Earlier versions keep their pages and stay comparable (GET .../versions/compare).
+        """
+        document = await self.get(actor, document_id)
+        if document.status in (DocumentStatus.PENDING, DocumentStatus.PROCESSING):
+            msg = "The document is being processed; add the new version when it has finished."
+            raise ConflictError(msg)
+        workdir = Path(tempfile.mkdtemp(prefix="docintel-upload-"))
+        try:
+            spooled = workdir / "upload.bin"
+            await self._spool(upload, spooled)
+            validated = await validate_upload(
+                spooled,
+                filename=upload.filename,
+                content_type=upload.content_type,
+                limits=self._limits,
+            )
+            current = document.current_version
+            if current is not None and current.sha256 == validated.sha256:
+                msg = "The file is identical to the current version."
+                raise ConflictError(msg)
+            return await self._store_version(actor, document, validated, spooled, meta)
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
+
+    async def _store_version(
+        self,
+        actor: User,
+        document: Document,
+        validated: ValidatedUpload,
+        source_path: Path,
+        meta: RequestMeta,
+    ) -> Document:
+        latest = await self._session.scalar(
+            select(func.max(DocumentVersion.version_number)).where(
+                DocumentVersion.document_id == document.id
+            )
+        )
+        number = (latest or 0) + 1
+        version_id = uuid.uuid4()
+        key = document_object_key(document.id, number, validated.storage_extension)
+        await self._storage.put_file(key, source_path, content_type=validated.mime_type)
+        try:
+            locked = await self._session.scalar(
+                select(Document)
+                .where(Document.id == document.id)
+                .with_for_update(of=Document)
+                .execution_options(populate_existing=True)
+            )
+            if locked is None or locked.deleted_at is not None:
+                raise NotFoundError(NOT_FOUND)
+            if locked.status in (DocumentStatus.PENDING, DocumentStatus.PROCESSING):
+                msg = "The document is being processed; add the new version when it has finished."
+                raise ConflictError(msg)
+            version = DocumentVersion(
+                id=version_id,
+                document_id=locked.id,
+                version_number=number,
+                storage_backend=self._storage.backend,
+                storage_key=key,
+                original_filename=validated.display_filename,
+                file_kind=validated.kind.value,
+                mime_type=validated.mime_type,
+                size_bytes=validated.size_bytes,
+                sha256=validated.sha256,
+                page_count=validated.page_count,
+                uploaded_by_id=actor.id,
+            )
+            self._session.add(version)
+            await self._session.flush()
+            locked.current_version_id = version_id
+            locked.status = DocumentStatus.PENDING
+            locked.processing_error = None
+            duplicate_of = await self._find_exact_duplicate(actor, validated.sha256, locked.id)
+            if duplicate_of is not None:
+                locked.duplicate_of_id, locked.duplicate_reason = duplicate_of, "EXACT_FILE_HASH"
+            elif locked.duplicate_reason == "EXACT_FILE_HASH":
+                locked.duplicate_of_id, locked.duplicate_reason = None, None
+            job = await enqueue_job(
+                self._session,
+                job_type=JobType.DOCUMENT_PROCESSING,
+                max_attempts=self._settings.job_max_attempts,
+                document_id=locked.id,
+                document_version_id=version_id,
+                requested_by_id=actor.id,
+                payload={"reason": "new version"},
+            )
+            record_audit_event(
+                self._session,
+                action=AuditAction.DOCUMENT_VERSION_UPLOADED,
+                outcome=AuditOutcome.SUCCESS,
+                meta=meta,
+                actor=actor,
+                entity_type="document",
+                entity_id=locked.id,
+                details={
+                    "version_id": str(version_id),
+                    "version_number": number,
+                    "job_id": str(job.id),
+                    "sha256": validated.sha256,
+                    "size_bytes": validated.size_bytes,
+                    "page_count": validated.page_count,
+                },
+            )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            try:
+                await self._storage.delete(key)
+            except StorageError:
+                logger.exception("document.version.orphaned_blob", storage_key=key)
+            raise
+        return await self.get(actor, document.id)
 
     # ------------------------------------------------------------------------ reads
     def _visible(self, actor: User) -> Select[Document]:

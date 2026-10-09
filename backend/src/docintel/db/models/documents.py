@@ -29,6 +29,7 @@ from docintel.db.models.types import str_enum
 
 if TYPE_CHECKING:
     from docintel.db.models.extraction import Vendor
+    from docintel.db.models.matching import ReviewTask
 
 
 class DocumentStatus(StrEnum):
@@ -173,6 +174,15 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         foreign_keys=[current_version_id], post_update=True, lazy="joined"
     )
     vendor: Mapped[Vendor | None] = relationship(lazy="joined")
+    # The open review task, if any (Phase 5): REVIEW_REQUIRED exactly while there is one.
+    open_review_task: Mapped[ReviewTask | None] = relationship(
+        "ReviewTask",
+        primaryjoin="and_(ReviewTask.document_id == Document.id, "
+        "ReviewTask.status.in_(['OPEN', 'IN_PROGRESS']))",
+        viewonly=True,
+        uselist=False,
+        lazy="selectin",
+    )
 
 
 class DocumentVersion(UUIDPrimaryKeyMixin, Base):

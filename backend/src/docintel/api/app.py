@@ -5,6 +5,7 @@ Run with:  uvicorn docintel.api.app:create_app --factory
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -18,7 +19,7 @@ from docintel.api.middleware import (
     SecurityHeadersMiddleware,
 )
 from docintel.api.problems import register_exception_handlers
-from docintel.api.routers import auth, documents, health, vendors
+from docintel.api.routers import auth, comparisons, documents, health, reviews, rules, vendors
 from docintel.core.config import Settings, get_settings
 from docintel.core.logging import configure_logging, get_logger
 from docintel.db.session import create_engine, create_sessionmaker
@@ -69,6 +70,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api_v1.include_router(auth.router)
     api_v1.include_router(documents.router)
     api_v1.include_router(vendors.router)
+    api_v1.include_router(comparisons.router)
+    api_v1.include_router(rules.router)
+    api_v1.include_router(reviews.router)
     app.include_router(health.router)
     app.include_router(api_v1)
 
@@ -89,6 +93,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ("POST", f"{API_V1_PREFIX}/documents"): settings.upload_max_bytes
             + MULTIPART_OVERHEAD_BYTES
         },
+        pattern_overrides=[
+            (
+                "POST",
+                re.compile(rf"{API_V1_PREFIX}/documents/[0-9a-fA-F-]{{36}}/versions"),
+                settings.upload_max_bytes + MULTIPART_OVERHEAD_BYTES,
+            )
+        ],
     )
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.hsts_enabled)
