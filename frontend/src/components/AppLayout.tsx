@@ -2,11 +2,14 @@ import { NavLink, Outlet } from "react-router";
 
 import { useAuth } from "../auth/useAuth";
 
-// Only screens that exist are listed; feature screens are added in their phases.
-const NAV_ITEMS = [
+// Only screens that exist are listed, and only to roles that may use them (the API enforces it
+// either way); feature screens are added in their phases.
+const NAV_ITEMS: { to: string; label: string; permission?: string }[] = [
   { to: "/documents", label: "Documents" },
+  { to: "/reviews", label: "Review queue", permission: "reviews:work" },
+  { to: "/rules", label: "Rules", permission: "rules:read" },
   { to: "/status", label: "System status" },
-] as const;
+];
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -18,7 +21,7 @@ export function AppLayout() {
           <div className="flex items-center gap-8">
             <span className="text-base font-semibold text-blue-950">Document Intelligence</span>
             <nav aria-label="Main" className="flex gap-1">
-              {NAV_ITEMS.map((item) => (
+              {NAV_ITEMS.filter((item) => !item.permission || user?.permissions.includes(item.permission)).map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}

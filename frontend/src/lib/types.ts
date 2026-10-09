@@ -86,6 +86,8 @@ export interface DocumentSummary {
   updated_at: string;
   current_version: DocumentVersion | null;
   vendor?: VendorSummary | null;
+  /** The open review task: present exactly while the status is REVIEW_REQUIRED. */
+  review?: ReviewTaskBrief | null;
 }
 
 export interface VendorSummary {
@@ -298,4 +300,188 @@ export interface Highlight {
   page: number;
   bbox: number[];
   label: string;
+}
+
+// ------------------------------------------------------------------ Phase 5: matching & review
+export type ItemStatus = "MATCH" | "MISMATCH" | "MISSING" | "UNCERTAIN";
+export type ComparisonRole = "INVOICE" | "PURCHASE_ORDER" | "DELIVERY_NOTE";
+export type ComparisonType = "INVOICE_PO" | "INVOICE_DELIVERY" | "INVOICE_PO_DELIVERY" | "PO_DELIVERY";
+export type RuleOutcome = "PASS" | "FAIL" | "WARN" | "ERROR" | "NOT_APPLICABLE";
+export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type ReviewPriority = "URGENT" | "HIGH" | "NORMAL" | "LOW";
+export type ReviewTaskType = "DUPLICATE_REVIEW" | "DISCREPANCY_REVIEW" | "EXTRACTION_REVIEW" | "CLASSIFICATION_REVIEW";
+export type ReviewTaskStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+export type ReviewResolution = "APPROVED" | "CORRECTED" | "REJECTED" | "CLEARED";
+
+export interface UserRef {
+  id: string;
+  full_name: string;
+}
+
+export interface ComparisonSide {
+  role: ComparisonRole;
+  document_id: string | null;
+  document_label: string;
+  value: string | null;
+  printed: string | null;
+  field_id: string | null;
+  page: number | null;
+  source_text: string | null;
+  bbox: number[] | null;
+  confidence: number | null;
+  corrected: boolean;
+}
+
+export interface ComparisonItem {
+  id: string;
+  position: number;
+  item_key: string;
+  category: "HEADER" | "LINE_ITEM";
+  check_name: string;
+  line_key: string | null;
+  status: ItemStatus;
+  left_value: string | null;
+  right_value: string | null;
+  difference: Record<string, string> | null;
+  tolerance: Record<string, string> | null;
+  explanation: string;
+  left: ComparisonSide[];
+  right: ComparisonSide[];
+}
+
+export interface ComparisonDocument {
+  document_id: string;
+  role: ComparisonRole;
+  position: number;
+  document_version_id: string | null;
+  extraction_id: string | null;
+  display_filename: string;
+  document_type: DocumentType | null;
+}
+
+export interface ComparisonSummary {
+  id: string;
+  comparison_type: ComparisonType;
+  origin: "AUTO" | "MANUAL";
+  subject_document_id: string;
+  summary: Record<ItemStatus, number>;
+  created_at: string;
+  requested_by: UserRef | null;
+  documents: ComparisonDocument[];
+}
+
+export interface Comparison extends ComparisonSummary {
+  settings: Record<string, unknown>;
+  items: ComparisonItem[];
+}
+
+export interface Rule {
+  id: string;
+  code: string;
+  rule_type: string;
+  name: string;
+  description: string;
+  applies_to: DocumentType[];
+  params: Record<string, unknown>;
+  severity: Severity;
+  is_enabled: boolean;
+  version: number;
+  updated_by: UserRef | null;
+  updated_at: string;
+  params_schema: Record<string, unknown>;
+}
+
+export interface RuleResult {
+  id: string;
+  rule_code: string;
+  rule_version: number;
+  outcome: RuleOutcome;
+  severity: Severity;
+  message: string;
+  evidence: Record<string, unknown>;
+  items: string[];
+  comparison_id: string | null;
+  evaluated_at: string;
+}
+
+export interface ReviewReason {
+  key: string;
+  category: string;
+  code: string;
+  severity: Severity;
+  message: string;
+}
+
+export interface ReviewTaskBrief {
+  id: string;
+  task_type: ReviewTaskType;
+  status: ReviewTaskStatus;
+  priority: ReviewPriority;
+  due_at: string | null;
+  assigned_to: UserRef | null;
+}
+
+export interface ReviewTask extends ReviewTaskBrief {
+  document_id: string;
+  document_version_id: string | null;
+  reasons: ReviewReason[];
+  claimed_at: string | null;
+  resolution: ReviewResolution | null;
+  resolution_note: string | null;
+  resolved_by: UserRef | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  overdue: boolean;
+}
+
+export interface ReviewTaskListItem extends ReviewTask {
+  document: { id: string; display_filename: string; document_type: DocumentType | null; status: DocumentStatus };
+}
+
+export interface Duplicate {
+  kind: string;
+  document_id: string;
+  display_filename: string;
+  direction: "original" | "copy";
+  evidence: Record<string, unknown>;
+}
+
+export interface Findings {
+  comparisons: ComparisonSummary[];
+  rule_results: RuleResult[];
+  duplicates: Duplicate[];
+  open_task: ReviewTask | null;
+  review_history: ReviewTask[];
+}
+
+export interface VersionInfo extends DocumentVersion {
+  processed: boolean;
+  is_current: boolean;
+}
+
+export interface Clause {
+  key: string;
+  number: string | null;
+  title: string;
+  text: string;
+  page: number | null;
+}
+
+export interface ClauseDiff {
+  change: "UNCHANGED" | "MODIFIED" | "ADDED" | "REMOVED";
+  title: string;
+  old: Clause | null;
+  new: Clause | null;
+  similarity: number;
+  renumbered: boolean;
+  operations: { op: "equal" | "insert" | "delete" | "replace"; old: string; new: string }[];
+}
+
+export interface VersionComparison {
+  document_id: string;
+  from_version: number;
+  to_version: number;
+  summary: Record<ClauseDiff["change"], number>;
+  clauses: ClauseDiff[];
 }

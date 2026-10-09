@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { useAuth } from "../auth/useAuth";
 import { apiRequest } from "../lib/api";
 import type { DocumentStatus, DocumentSummary, Page } from "../lib/types";
+import { PriorityBadge } from "../review/Badges";
 import {
   ACTIVE_STATUSES,
   DOCUMENT_TYPE_LABELS,
@@ -145,6 +146,11 @@ export function DocumentsPage() {
                   </td>
                   <td className="py-2">
                     <DocumentStatusBadge status={document.status} />
+                    {document.review && (
+                      <span className="ml-1.5">
+                        <PriorityBadge priority={document.review.priority} />
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 text-slate-700">
                     {document.document_type ? (

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type SubmitEvent, useState } from "react";
+import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../auth/useAuth";
 import { ApiError, apiRequest } from "../lib/api";
@@ -113,11 +113,13 @@ function FieldRow({
   documentId,
   field,
   canReview,
+  focused,
   onShow,
 }: {
   documentId: string;
   field: ExtractedField;
   canReview: boolean;
+  focused: boolean;
   onShow: (highlight: Highlight) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -126,7 +128,10 @@ function FieldRow({
   const printed = field.original_value;
   const shown = fieldValue(field);
   return (
-    <tr className={found && confidence < ATTENTION_BELOW ? "bg-amber-50/60" : undefined}>
+    <tr
+      aria-current={focused || undefined}
+      className={focused ? "bg-blue-50 ring-2 ring-blue-300" : found && confidence < ATTENTION_BELOW ? "bg-amber-50/60" : undefined}
+    >
       <td className="py-2 pr-3 align-top">
         {fieldLabel(field.field_name)}
         {field.is_required && (
@@ -209,9 +214,11 @@ function FieldRow({
 
 function RowsTable({
   fields,
+  focusFieldId,
   onShow,
 }: {
   fields: ExtractedField[];
+  focusFieldId: string | null;
   onShow: (highlight: Highlight) => void;
 }) {
   const columns = [...new Set(fields.map((field) => field.field_name))];
@@ -242,8 +249,13 @@ function RowsTable({
                 {columns.map((column) => {
                   const cell = row.get(column);
                   const weak = cell !== undefined && Number(cell.confidence) < ATTENTION_BELOW;
+                  const focused = cell !== undefined && cell.id === focusFieldId;
                   return (
-                    <td key={column} className={`py-1.5 pr-3 ${weak ? "bg-amber-50" : ""}`}>
+                    <td
+                      key={column}
+                      aria-current={focused || undefined}
+                      className={`py-1.5 pr-3 ${focused ? "bg-blue-50 ring-2 ring-blue-300" : weak ? "bg-amber-50" : ""}`}
+                    >
                       {cell ? (
                         <button
                           type="button"
@@ -272,9 +284,12 @@ function RowsTable({
 
 export function ExtractionSection({
   documentId,
+  focusFieldId = null,
   onShow,
 }: {
   documentId: string;
+  /** A field to point at (links from comparisons carry ?field=<id>): highlighted and shown on its page. */
+  focusFieldId?: string | null;
   onShow: (highlight: Highlight) => void;
 }) {
   const { token, user } = useAuth();
@@ -284,6 +299,16 @@ export function ExtractionSection({
     queryFn: ({ signal }) => apiRequest<Extraction>(`/api/v1/documents/${documentId}/extraction`, { token, signal }),
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2,
   });
+  const focused = focusFieldId ? extraction.data?.fields.find((field) => field.id === focusFieldId) : undefined;
+  const shownFocus = useRef<string | null>(null);
+  useEffect(() => {
+    // Once per focused field: onShow changes identity on every parent render.
+    if (!focused || shownFocus.current === focused.id) return;
+    shownFocus.current = focused.id;
+    if (focused.bbox && focused.page_number !== null) {
+      onShow({ page: focused.page_number, bbox: focused.bbox, label: fieldLabel(focused.field_name) });
+    }
+  }, [focused, onShow]);
 
   if (extraction.isPending) {
     return null;
@@ -353,7 +378,14 @@ export function ExtractionSection({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {header.map((field) => (
-            <FieldRow key={field.id} documentId={documentId} field={field} canReview={canReview} onShow={onShow} />
+            <FieldRow
+              key={field.id}
+              documentId={documentId}
+              field={field}
+              canReview={canReview}
+              focused={field.id === focusFieldId}
+              onShow={onShow}
+            />
           ))}
         </tbody>
       </table>
@@ -361,7 +393,11 @@ export function ExtractionSection({
       {groups.map((group) => (
         <div key={group} className="mt-5">
           <h3 className="text-xs uppercase text-slate-500">{fieldLabel(group)}</h3>
-          <RowsTable fields={data.fields.filter((field) => field.group_name === group)} onShow={onShow} />
+          <RowsTable
+            fields={data.fields.filter((field) => field.group_name === group)}
+            focusFieldId={focusFieldId}
+            onShow={onShow}
+          />
         </div>
       ))}
 

@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { useAuth } from "../auth/useAuth";
 import { ApiError, apiRequest, downloadFile } from "../lib/api";
 import type { DocumentDetail, Highlight, ProcessingJob } from "../lib/types";
+import { PriorityBadge } from "../review/Badges";
 import { ClassificationCard } from "./ClassificationCard";
 import { ExtractionSection } from "./ExtractionSection";
+import { FindingsSection } from "./FindingsSection";
 import {
   ACTIVE_STATUSES,
   formatBytes,
@@ -18,6 +20,7 @@ import {
 import { PageViewer } from "./PageViewer";
 import { DocumentStatusBadge } from "./StatusBadge";
 import { TablesSection } from "./TablesSection";
+import { VersionsSection } from "./VersionsSection";
 
 const ACTIVE_REFRESH_MS = 2000;
 
@@ -36,6 +39,7 @@ function errorText(error: unknown): string {
 
 export function DocumentDetailPage() {
   const { documentId = "" } = useParams();
+  const [search] = useSearchParams();
   const { token, user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -162,14 +166,25 @@ export function DocumentDetailPage() {
           Processing failed: {document.processing_error}
         </p>
       )}
-      {document.review_reasons.length > 0 && (
+      {document.status === "REVIEW_REQUIRED" && (
         <div role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <p className="font-medium">Needs review</p>
+          <p className="font-medium">
+            Needs review
+            {document.review && (
+              <>
+                {" · "}
+                <PriorityBadge priority={document.review.priority} />
+              </>
+            )}
+          </p>
           <ul className="mt-1 list-disc pl-5">
             {document.review_reasons.map((reason) => (
               <li key={reason}>{REVIEW_REASON_LABELS[reason] ?? reason}</li>
             ))}
           </ul>
+          <a href="#findings-heading" className="mt-1 inline-block text-amber-900 underline">
+            See the findings and record a decision
+          </a>
         </div>
       )}
       {document.duplicate_of_id && (
@@ -219,6 +234,7 @@ export function DocumentDetailPage() {
       {processed && (
         <ExtractionSection
           documentId={document.id}
+          focusFieldId={search.get("field")}
           onShow={(target) => {
             setHighlight(target);
             setSelectedPage(target.page);
@@ -243,6 +259,10 @@ export function DocumentDetailPage() {
       )}
 
       {document.pages.length > 0 && <TablesSection documentId={document.id} />}
+
+      {processed && <FindingsSection documentId={document.id} />}
+
+      <VersionsSection documentId={document.id} busy={ACTIVE_STATUSES.has(document.status)} />
 
       <section aria-labelledby="processing-heading" className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 id="processing-heading" className="font-medium">

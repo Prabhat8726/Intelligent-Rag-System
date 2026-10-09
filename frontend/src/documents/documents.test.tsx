@@ -11,6 +11,7 @@ import type {
   DocumentTable,
   ExtractedField,
   Extraction,
+  Findings,
   Page,
   PageDetail,
   PageSummary,
@@ -21,6 +22,18 @@ import { documentsUrl, moneyText } from "./format";
 const LIST_URL = documentsUrl({ status: "", q: "", offset: 0 });
 const DOC_ID = "5b0d8a3e-6b43-4c86-9f73-0b5b0f1f0a11";
 const EXTRACTION_URL = `/api/v1/documents/${DOC_ID}/extraction`;
+const FINDINGS_URL = `/api/v1/documents/${DOC_ID}/findings`;
+const VERSIONS_URL = `/api/v1/documents/${DOC_ID}/versions`;
+const NO_FINDINGS: Findings = { comparisons: [], rule_results: [], duplicates: [], open_task: null, review_history: [] };
+
+/** The detail page also loads findings and versions (covered in review.test.tsx): empty by default. */
+function mockApi(handlers: Parameters<typeof mockFetch>[0]) {
+  return mockFetch({
+    [FINDINGS_URL]: () => jsonResponse(NO_FINDINGS),
+    [VERSIONS_URL]: () => jsonResponse([]),
+    ...handlers,
+  });
+}
 
 function document(overrides: Partial<DocumentSummary> = {}): DocumentSummary {
   return {
@@ -69,7 +82,7 @@ function signedIn(permissions: string[] = ANALYST_PERMISSIONS) {
 describe("documents inbox", () => {
   it("lists documents with status, pages and duplicate flag", async () => {
     const user = signedIn();
-    mockFetch({
+    mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [LIST_URL]: () =>
         jsonResponse(
@@ -94,7 +107,7 @@ describe("documents inbox", () => {
   it("uploads a file as multipart form data and refreshes the list", async () => {
     const user = signedIn();
     let listCalls = 0;
-    const fetchMock = mockFetch({
+    const fetchMock = mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [LIST_URL]: () => {
         listCalls += 1;
@@ -125,7 +138,7 @@ describe("documents inbox", () => {
 
   it("shows the server's reason when an upload is rejected", async () => {
     const user = signedIn();
-    mockFetch({
+    mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [LIST_URL]: () => jsonResponse(page([])),
       "/api/v1/documents": () => problem(415, "The file extension does not match the file content."),
@@ -143,7 +156,7 @@ describe("documents inbox", () => {
 
   it("hides the upload form from users without upload permission", async () => {
     const viewer = signedIn(["documents:read"]);
-    mockFetch({
+    mockApi({
       "/api/v1/auth/me": () => jsonResponse(viewer),
       [LIST_URL]: () => jsonResponse(page([document()])),
     });
@@ -188,7 +201,7 @@ describe("document detail", () => {
 
   it("shows file facts, processing timings and per-page inspection", async () => {
     const user = signedIn();
-    mockFetch({
+    mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [`/api/v1/documents/${DOC_ID}`]: () => jsonResponse(detail),
       [EXTRACTION_URL]: () => problem(404, "No extraction for this document."),
@@ -209,7 +222,7 @@ describe("document detail", () => {
 
   it("requests reprocessing and reports conflicts", async () => {
     const user = signedIn();
-    const fetchMock = mockFetch({
+    const fetchMock = mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [`/api/v1/documents/${DOC_ID}`]: () => jsonResponse(detail),
       [EXTRACTION_URL]: () => problem(404, "No extraction for this document."),
@@ -228,7 +241,7 @@ describe("document detail", () => {
 
   it("shows not found for inaccessible documents", async () => {
     const user = signedIn();
-    mockFetch({
+    mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [`/api/v1/documents/${DOC_ID}`]: () => problem(404, "Document not found."),
     });
@@ -344,7 +357,7 @@ describe("document understanding", () => {
 
   it("shows type, evidence, review reasons, page text and preview, and tables", async () => {
     const user = signedIn();
-    mockFetch({ "/api/v1/auth/me": () => jsonResponse(user), ...understandingRoutes() });
+    mockApi({ "/api/v1/auth/me": () => jsonResponse(user), ...understandingRoutes() });
     renderApp(`/documents/${DOC_ID}`);
 
     const card = await screen.findByRole("region", { name: "Document type" });
@@ -376,7 +389,7 @@ describe("document understanding", () => {
     };
     let current: DocumentDetail = understood;
     const routes = understandingRoutes();
-    const fetchMock = mockFetch({
+    const fetchMock = mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       ...routes,
       [`/api/v1/documents/${DOC_ID}`]: () => jsonResponse(current),
@@ -413,7 +426,7 @@ describe("document understanding", () => {
 
   it("hides the correction from users without review permission", async () => {
     const viewer = signedIn(["documents:read"]);
-    mockFetch({ "/api/v1/auth/me": () => jsonResponse(viewer), ...understandingRoutes() });
+    mockApi({ "/api/v1/auth/me": () => jsonResponse(viewer), ...understandingRoutes() });
     renderApp(`/documents/${DOC_ID}`);
     await screen.findByRole("region", { name: "Document type" });
     expect(screen.queryByRole("button", { name: "Correct type" })).not.toBeInTheDocument();
@@ -422,7 +435,7 @@ describe("document understanding", () => {
   it("shows the type in the inbox and filters by it", async () => {
     const user = signedIn();
     const typed = document({ document_type: "INVOICE", type_confidence: "0.9600" });
-    const fetchMock = mockFetch({
+    const fetchMock = mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [LIST_URL]: () => jsonResponse(page([typed])),
       [documentsUrl({ status: "", type: "INVOICE", q: "", offset: 0 })]: () => jsonResponse(page([typed])),
@@ -626,7 +639,7 @@ describe("extracted data", () => {
 
   it("shows values with their evidence, confidence, failed checks and review level", async () => {
     const user = signedIn();
-    mockFetch({ "/api/v1/auth/me": () => jsonResponse(user), ...extractionRoutes() });
+    mockApi({ "/api/v1/auth/me": () => jsonResponse(user), ...extractionRoutes() });
     renderApp(`/documents/${DOC_ID}`);
 
     const region = await screen.findByRole("region", { name: "Extracted data" });
@@ -656,7 +669,7 @@ describe("extracted data", () => {
   it("highlights a value's source on the page preview", async () => {
     const user = signedIn();
     const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
-    mockFetch({ "/api/v1/auth/me": () => jsonResponse(user), ...extractionRoutes() });
+    mockApi({ "/api/v1/auth/me": () => jsonResponse(user), ...extractionRoutes() });
     const actor = userEvent.setup();
     renderApp(`/documents/${DOC_ID}`);
 
@@ -672,10 +685,20 @@ describe("extracted data", () => {
     expect(within(fieldRow("Due date")).queryByRole("button", { name: "Show" })).not.toBeInTheDocument();
   });
 
+  it("points at the field a comparison links to (?field=)", async () => {
+    const user = signedIn();
+    mockApi({ "/api/v1/auth/me": () => jsonResponse(user), ...extractionRoutes() });
+    renderApp(`/documents/${DOC_ID}?field=fld-total`);
+
+    expect(await screen.findByRole("img", { name: "Source of Total" })).toBeInTheDocument();
+    expect(fieldRow("Total")).toHaveAttribute("aria-current", "true");
+    expect(fieldRow("Invoice number")).not.toHaveAttribute("aria-current");
+  });
+
   it("lets a reviewer correct a value and shows who corrected it", async () => {
     const user = signedIn(ANALYST_WITH_REVIEW);
     let current = extraction;
-    const fetchMock = mockFetch({
+    const fetchMock = mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       ...extractionRoutes(() => current),
       [`${EXTRACTION_URL}/fields/fld-invoice_number`]: () => {
@@ -719,7 +742,7 @@ describe("extracted data", () => {
 
   it("hides corrections from users without review permission", async () => {
     const viewer = signedIn(["documents:read"]);
-    mockFetch({ "/api/v1/auth/me": () => jsonResponse(viewer), ...extractionRoutes() });
+    mockApi({ "/api/v1/auth/me": () => jsonResponse(viewer), ...extractionRoutes() });
     renderApp(`/documents/${DOC_ID}`);
     const region = await screen.findByRole("region", { name: "Extracted data" });
     expect(within(region).queryByRole("button", { name: "Correct" })).not.toBeInTheDocument();
@@ -728,7 +751,7 @@ describe("extracted data", () => {
 
   it("explains when the document type has no extraction schema", async () => {
     const user = signedIn();
-    mockFetch({
+    mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       ...extractionRoutes(),
       [EXTRACTION_URL]: () => problem(404, "No extraction for this document."),
@@ -740,7 +763,7 @@ describe("extracted data", () => {
 
   it("shows the matched vendor in the inbox", async () => {
     const user = signedIn();
-    mockFetch({
+    mockApi({
       "/api/v1/auth/me": () => jsonResponse(user),
       [LIST_URL]: () => jsonResponse(page([document({ vendor: KESTREL }), document({ id: "d2", vendor: null })])),
     });

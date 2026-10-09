@@ -86,6 +86,8 @@ export const REVIEW_REASON_LABELS: Record<string, string> = {
   MISSING_REQUIRED_FIELDS: "Required fields are missing",
   EXTRACTION_UNCERTAIN: "Some extracted values are uncertain",
   EXTRACTION_INCONSISTENT: "Extracted amounts or dates do not add up",
+  RULE_VIOLATION: "A business rule failed or could not be verified",
+  DUPLICATE_SUSPECTED: "It may duplicate another document",
 };
 
 export const REVIEW_LEVEL_LABELS: Record<ReviewLevel, string> = {
