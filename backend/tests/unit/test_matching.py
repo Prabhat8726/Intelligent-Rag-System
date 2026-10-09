@@ -127,6 +127,24 @@ def test_lines_are_uncertain_when_no_line_was_read_on_the_other_side() -> None:
     assert "no line items could be read on the invoice" in open_line.explanation
 
 
+def test_unpaired_lines_with_a_weak_item_code_are_uncertain() -> None:
+    # OCR read the order's code as VLV-BLO5O: the lines do not pair, but that may be the misread.
+    misread = line(1, "VLV-BLO5O", 2, "38.40", description="Brass valve", confidence=0.7)
+    order = purchase_order([ORDER[0], misread])
+    bill = invoice([line(0, "BRG-6204", 10, "4.85"), line(1, "VLV-BL050", 2, "38.40")])
+    outcome = compare_invoice(bill, order, [], TOL)
+    extra = item(outcome, "line:VLV-BL050:line_on_order")
+    assert extra.status == ItemStatus.UNCERTAIN
+    assert extra.explanation == (
+        "VLV-BL050 is on the invoice but not on the purchase order (an item code was read with "
+        "low confidence, so the lines may belong together)."
+    )
+    assert item(outcome, "line:VLV-BLO5O:line_fulfilled").status == ItemStatus.UNCERTAIN
+    # Every code read reliably: a real discrepancy.
+    clean = compare_invoice(bill, purchase_order([ORDER[0]]), [], TOL)
+    assert item(clean, "line:VLV-BL050:line_on_order").status == ItemStatus.MISSING
+
+
 def test_lines_without_sku_pair_by_description() -> None:
     bill = invoice([line(0, None, 10, "4.85", description="Deep groove ball bearing 6204")])
     order = purchase_order(

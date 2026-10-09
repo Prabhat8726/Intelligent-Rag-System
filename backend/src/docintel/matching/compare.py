@@ -11,7 +11,7 @@ delivery notes for the same order.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -385,10 +385,10 @@ class _Builder:
         facts: DocumentFacts,
         side: str,
         what: str,
-        unread: bool = False,
+        uncertain: bool = False,
     ) -> None:
-        """A line on one side only. `unread`: no line at all was read on the other side, which
-        is an extraction gap (an order without lines does not exist), not a discrepancy."""
+        """A line on one side only; `uncertain` when a reading problem may explain it (see
+        `_unpaired`)."""
         cell = line.get("sku") or line.get("description")
         present = [_side(facts, cell, line.label)]
         left, right = (present, []) if side == "left" else ([], present)
@@ -397,7 +397,7 @@ class _Builder:
                 key=f"line:{line.label}:{check}",
                 category=Category.LINE_ITEM,
                 check=check,
-                status=ItemStatus.UNCERTAIN if unread else ItemStatus.MISSING,
+                status=ItemStatus.UNCERTAIN if uncertain else ItemStatus.MISSING,
                 left=left,
                 right=right,
                 left_value=line.label if side == "left" else None,
@@ -406,6 +406,40 @@ class _Builder:
                 line=line.label,
             )
         )
+
+    def weak_key(self, lines: Iterable[LineFacts]) -> bool:
+        """Whether any of these lines' item code (or description) is a weak reading."""
+        for line in lines:
+            cell = line.get("sku") or line.get("description")
+            if cell is not None and cell.uncertain(self.tolerances.min_confidence):
+                return True
+        return False
+
+
+_MAYBE_MISREAD = " (an item code was read with low confidence, so the lines may belong together)"
+
+
+def _unpaired(
+    builder: _Builder,
+    line: LineFacts,
+    candidates: Sequence[LineFacts],
+    *,
+    present: str,
+    gone: str,
+    unread: str,
+    empty: bool,
+) -> tuple[str, bool]:
+    """Explanation, and whether it is only uncertain, for a line without a twin.
+
+    Uncertain when no line at all was read on the other document (an order without lines does
+    not exist: that is an extraction gap), or when this line or a line left unpaired on the
+    other document has a weakly read item code: a misread may be why the two did not pair.
+    """
+    if empty:
+        return f"{present} but {unread}.", True
+    if builder.weak_key([line, *candidates]):
+        return f"{present} but {gone}{_MAYBE_MISREAD}.", True
+    return f"{present} but {gone}.", False
 
 
 # ------------------------------------------------------------------------------ comparisons
@@ -500,32 +534,40 @@ def _against_order(
             unit=unit,
         )
     for line in extra:
-        absent = (
-            f"no line items could be read on the {order_name}"
-            if not order.lines
-            else f"not on the {order_name}"
+        what, uncertain = _unpaired(
+            builder,
+            line,
+            open_lines,
+            present=f"{line.label} is on the {subject_name}",
+            gone=f"not on the {order_name}",
+            unread=f"no line items could be read on the {order_name}",
+            empty=not order.lines,
         )
         builder.missing_line(
             check=LINE_ON_ORDER,
             line=line,
             facts=subject,
             side="left",
-            what=f"{line.label} is on the {subject_name} but {absent}.",
-            unread=not order.lines,
+            what=what,
+            uncertain=uncertain,
         )
     for line in open_lines:
-        absent = (
-            f"no line items could be read on the {subject_name}"
-            if not subject.lines
-            else f"is not on the {subject_name}"
+        what, uncertain = _unpaired(
+            builder,
+            line,
+            extra,
+            present=f"{line.label} was ordered",
+            gone=f"is not on the {subject_name}",
+            unread=f"no line items could be read on the {subject_name}",
+            empty=not subject.lines,
         )
         builder.missing_line(
             check=LINE_FULFILLED,
             line=line,
             facts=order,
             side="right",
-            what=f"{line.label} was ordered but {absent}.",
-            unread=not subject.lines,
+            what=what,
+            uncertain=uncertain,
         )
 
 
@@ -533,24 +575,33 @@ def _against_deliveries(
     builder: _Builder, invoice: DocumentFacts, deliveries: Sequence[DocumentFacts]
 ) -> None:
     tolerances = builder.tolerances
-    unread = not any(note.lines for note in deliveries)
-    absent = "no line items could be read on the delivery note" if unread else "on no delivery note"
     delivered: dict[int, list[tuple[DocumentFacts, LineFacts]]] = {}
+    undelivered: list[LineFacts] = []  # delivery note lines no invoice line paired with
     for note in deliveries:
-        pairs, _, _ = match_lines(invoice.lines, note.lines, tolerances.description_similarity)
+        pairs, _, free = match_lines(invoice.lines, note.lines, tolerances.description_similarity)
+        undelivered.extend(free)
         for line, twin in pairs:
             delivered.setdefault(line.index, []).append((note, twin))
     for line in invoice.lines:
         label = line.label
         matches = delivered.get(line.index)
         if not matches:
+            what, uncertain = _unpaired(
+                builder,
+                line,
+                undelivered,
+                present=f"{label} is invoiced",
+                gone="on no delivery note",
+                unread="no line items could be read on the delivery note",
+                empty=not any(note.lines for note in deliveries),
+            )
             builder.missing_line(
                 check=LINE_DELIVERED,
                 line=line,
                 facts=invoice,
                 side="left",
-                what=f"{label} is invoiced but {absent}.",
-                unread=unread,
+                what=what,
+                uncertain=uncertain,
             )
             continue
         builder.numeric(
