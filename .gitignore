@@ -28,7 +28,10 @@ evaluation/reports/*
 !evaluation/reports/.gitkeep
 !evaluation/reports/*.md
 !evaluation/reports/*.json
-storage/
+# Local document storage (STORAGE_LOCAL_ROOT=storage) - anchored so it never matches source
+# packages such as backend/src/docintel/storage/.
+/storage/
+/backend/storage/
 
 # Editors / OS
 .idea/
