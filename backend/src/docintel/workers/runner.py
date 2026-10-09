@@ -25,6 +25,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from docintel.agent.graph import AgentDeps
+from docintel.agent.runner import AgentAnalysisHandler, build_agent_deps
 from docintel.ai.errors import ProviderError
 from docintel.core.config import Settings
 from docintel.core.logging import get_logger
@@ -96,9 +98,13 @@ class Worker:
         storage: DocumentStorage,
         worker_id: str | None = None,
         services: ProcessingServices | None = None,
+        agent: AgentDeps | None = None,
     ) -> None:
         self._settings = settings
         self.services = services or build_processing_services(settings, sessionmaker=sessionmaker)
+        agent = agent or build_agent_deps(
+            settings, sessionmaker, llm=self.services.llm, embedder=self.services.embedder
+        )
         self._sessionmaker = sessionmaker
         self._queue = JobQueue(
             worker_id=worker_id or default_worker_id(),
@@ -112,6 +118,7 @@ class Worker:
             JobType.KNOWLEDGE_PROCESSING: KnowledgeProcessingHandler(
                 storage, self.services, self.services.embedder, self.services.chunking
             ),
+            JobType.AGENT_ANALYSIS: AgentAnalysisHandler(agent),
         }
         self._wakeup = asyncio.Event()
         self._heartbeat_file = settings.worker_heartbeat_file

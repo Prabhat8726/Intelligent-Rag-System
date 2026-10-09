@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import Field, computed_field
 
-from docintel.api.schemas.common import RequestModel, ResponseModel
+from docintel.api.schemas.common import QueryText, RequestModel, ResponseModel
 from docintel.api.schemas.documents import UserSummary
 from docintel.db.models import (
     ComparisonCategory,
@@ -273,3 +273,19 @@ class VersionComparisonRead(ResponseModel):
     to_version_id: uuid.UUID
     summary: dict[str, int]
     clauses: list[ClauseDiffRead]
+
+
+class ReviewRequestCreate(RequestModel):
+    document_id: uuid.UUID
+    reason: QueryText = Field(
+        min_length=5, max_length=1000, description="What a reviewer should check, and why"
+    )
+    priority: ReviewPriority = ReviewPriority.NORMAL
+
+
+class ReviewRequestRead(ResponseModel):
+    review_request_id: uuid.UUID
+    created: bool = Field(description="False: the same request was already on file")
+    task_id: uuid.UUID | None
+    task_status: ReviewTaskStatus | None
+    task_priority: ReviewPriority | None

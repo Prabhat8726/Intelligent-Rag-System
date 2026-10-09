@@ -434,6 +434,44 @@ async def _worker(settings: Settings, *, until_idle: bool) -> int:
         await engine.dispose()
 
 
+async def _mcp(settings: Settings, args: argparse.Namespace) -> int:
+    """The MCP server over stdio (one local user, MCP_API_TOKEN) or streamable HTTP (bearer
+    tokens per request)."""
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    from docintel.agent.mcp_server import authenticate, build_server, http_app, stdio_identity
+    from docintel.agent.runner import build_agent_deps
+
+    engine = create_engine(settings)
+    sessionmaker = create_sessionmaker(engine)
+    # Tools only: MCP clients bring their own model, so none is built here.
+    agent = build_agent_deps(settings.model_copy(update={"agent_llm_enabled": False}), sessionmaker)
+    try:
+        if args.transport == "stdio":
+            if settings.mcp_api_token is None:
+                print(
+                    "MCP_API_TOKEN is not set (create one: POST /api/v1/auth/tokens)",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+            secret = settings.mcp_api_token.get_secret_value()
+            if await authenticate(sessionmaker, settings, secret) is None:
+                print("MCP_API_TOKEN is invalid, expired or revoked", file=sys.stderr)
+                return EXIT_FAILURE
+            server = build_server(agent.registry, stdio_identity(sessionmaker, settings, secret))
+            async with stdio_server() as (read_stream, write_stream):
+                await server.run(read_stream, write_stream, server.create_initialization_options())
+            return EXIT_OK
+        app = http_app(agent.registry, sessionmaker, settings, host=args.host, port=args.port)
+        config = uvicorn.Config(app, host=args.host, port=args.port, log_config=None)
+        await uvicorn.Server(config).serve()
+        return EXIT_OK
+    finally:
+        await agent.registry.environment.rag.aclose()
+        await engine.dispose()
+
+
 def _worker_health(settings: Settings) -> int:
     path = settings.worker_heartbeat_file
     if path is None:
@@ -668,6 +706,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--until-idle", action="store_true", help="process runnable jobs, then exit"
     )
     commands.add_parser("worker-health", help="exit 0 if the worker heartbeat is fresh")
+    mcp = commands.add_parser("mcp", help="serve the controlled tools to MCP clients")
+    mcp.add_argument("--transport", choices=["stdio", "http"], default="stdio")
+    mcp.add_argument("--host", default="127.0.0.1", help="HTTP: interface to listen on")
+    mcp.add_argument("--port", type=int, default=8001, help="HTTP: port (default 8001)")
     generate = commands.add_parser("generate-documents", help="create a synthetic dataset")
     generate.add_argument("--output", default="synthetic_data/generated")
     generate.add_argument("--seed", type=int, default=42)
@@ -745,6 +787,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_worker(settings, until_idle=args.until_idle))
         case "worker-health":
             return _worker_health(settings)
+        case "mcp":
+            configure_logging(
+                level=settings.log_level,
+                log_format=settings.effective_log_format,
+                stream=sys.stderr,
+            )
+            return asyncio.run(_mcp(settings, args))
         case _:  # argparse enforces the choices
             return EXIT_USAGE
 

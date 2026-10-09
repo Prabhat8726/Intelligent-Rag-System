@@ -246,12 +246,18 @@ class Settings(BaseSettings):
     api_token_max_days: int = Field(default=90, ge=1, le=365)
     # The token the stdio MCP server acts with (the person running the client). Never logged.
     mcp_api_token: SecretStr | None = None
+    # Streamable HTTP: the URL clients use (protected-resource metadata) and the Host headers
+    # accepted (DNS-rebinding protection), e.g. "mcp.example.com,127.0.0.1:*".
+    mcp_public_url: str | None = None
+    mcp_allowed_hosts: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["127.0.0.1:*", "localhost:*"]
+    )
 
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None
 
     # ---------------------------------------------------------------- validators
-    @field_validator("cors_allowed_origins", mode="before")
+    @field_validator("cors_allowed_origins", "mcp_allowed_hosts", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
         if isinstance(value, str):

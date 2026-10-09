@@ -5,12 +5,14 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from docintel.api.deps import RequestMetaDep, SessionDep, SettingsDep, require_permission
 from docintel.api.schemas.common import PROBLEM_RESPONSES, ProblemDetail
 from docintel.api.schemas.matching import (
     ReviewDocument,
+    ReviewRequestCreate,
+    ReviewRequestRead,
     ReviewResolve,
     ReviewTaskListItem,
     ReviewTaskPage,
@@ -19,7 +21,7 @@ from docintel.api.schemas.matching import (
 from docintel.auth.permissions import Permission
 from docintel.db.models import Document, ReviewPriority, ReviewTask, ReviewTaskType, User
 from docintel.review.queue import ReviewFilters, ReviewQueue
-from docintel.review.service import ReviewService
+from docintel.review.service import ReviewRequestService, ReviewService
 
 router = APIRouter(
     prefix="/review-tasks",
@@ -127,3 +129,36 @@ async def resolve_review_task(
     await ReviewQueue(session).get(user, task_id)
     await ReviewService(session, settings).resolve(user, task_id, body.resolution, body.note, meta)
     return await _after(session, user, task_id)
+
+
+@router.post(
+    "/requests",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ReviewRequestRead,
+    summary="Ask for a human review of a processed document",
+    description="The request joins the document's open review task (or opens one) and stays "
+    "on it through re-evaluations until a reviewer resolves the task. Repeating the same "
+    "request returns the existing one (200).",
+)
+async def request_review(
+    body: ReviewRequestCreate,
+    response: Response,
+    user: Worker,
+    session: SessionDep,
+    settings: SettingsDep,
+    meta: RequestMetaDep,
+) -> ReviewRequestRead:
+    outcome = await ReviewRequestService(session, settings).request(
+        user, body.document_id, reason=body.reason, priority_level=body.priority, meta=meta
+    )
+    await session.commit()
+    if not outcome.created:
+        response.status_code = status.HTTP_200_OK
+    task = outcome.task
+    return ReviewRequestRead(
+        review_request_id=outcome.request.id,
+        created=outcome.created,
+        task_id=task.id if task else None,
+        task_status=task.status if task else None,
+        task_priority=task.priority if task else None,
+    )

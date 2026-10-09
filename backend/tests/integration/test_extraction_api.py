@@ -307,7 +307,10 @@ async def test_llm_calls_are_accounted_and_the_daily_budget_holds(env: Env, tmp_
     content, truth = _synthetic(tmp_path, Scenario.CLEAN_MATCH, "-INV", seed=33)
     second, _ = _synthetic(tmp_path / "b", Scenario.CLEAN_MATCH, "-PO", seed=34)
     async with env.maker() as session:
-        before = len(list(await session.scalars(select(LLMCall.id))))
+        # The budget is per provider: count the calls this provider already made today.
+        before = len(
+            list(await session.scalars(select(LLMCall.id).where(LLMCall.provider == "fake")))
+        )
     settings = env.settings.model_copy(
         update={
             "extraction_llm_mode": "always",

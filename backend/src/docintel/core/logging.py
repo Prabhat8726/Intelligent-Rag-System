@@ -13,7 +13,7 @@ import logging
 import re
 import sys
 from collections.abc import Mapping, MutableMapping
-from typing import Any
+from typing import Any, TextIO
 
 import structlog
 from structlog.types import EventDict, Processor, WrappedLogger
@@ -54,8 +54,11 @@ def redact_sensitive(_logger: WrappedLogger, _method: str, event_dict: EventDict
     return dict(redacted)
 
 
-def configure_logging(*, level: str, log_format: LogFormat) -> None:
-    """Configure structlog and the standard library logging tree. Safe to call repeatedly."""
+def configure_logging(*, level: str, log_format: LogFormat, stream: TextIO | None = None) -> None:
+    """Configure structlog and the standard library logging tree. Safe to call repeatedly.
+
+    `stream` defaults to stdout; the stdio MCP server logs to stderr (stdout is its protocol)."""
+    output = stream or sys.stdout
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
@@ -71,7 +74,7 @@ def configure_logging(*, level: str, log_format: LogFormat) -> None:
         final_processors.append(structlog.processors.format_exc_info)
         renderer = structlog.processors.JSONRenderer()
     else:
-        renderer = structlog.dev.ConsoleRenderer(colors=sys.stdout.isatty())
+        renderer = structlog.dev.ConsoleRenderer(colors=output.isatty())
     final_processors.append(renderer)
 
     structlog.configure(
@@ -85,7 +88,7 @@ def configure_logging(*, level: str, log_format: LogFormat) -> None:
         foreign_pre_chain=shared_processors,
         processors=final_processors,
     )
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(output)
     handler.setFormatter(formatter)
 
     root = logging.getLogger()

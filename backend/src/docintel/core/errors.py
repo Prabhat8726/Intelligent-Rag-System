@@ -73,3 +73,8 @@ class UnprocessableContentError(AppError):
 
     status_code = 422
     title = "Unprocessable Content"
+
+
+class TooManyRequestsError(AppError):
+    status_code = 429
+    title = "Too Many Requests"

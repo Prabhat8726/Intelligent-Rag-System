@@ -49,6 +49,7 @@ _CLAIM_SQL = text(
         LIMIT 1
     )
     RETURNING j.id, j.job_type, j.document_id, j.document_version_id, j.knowledge_document_id,
+              j.agent_run_id,
               j.payload, j.attempts, j.max_attempts, j.requested_by_id
     """
 )
@@ -65,6 +66,7 @@ class ClaimedJob:
     max_attempts: int
     requested_by_id: uuid.UUID | None
     knowledge_document_id: uuid.UUID | None = None
+    agent_run_id: uuid.UUID | None = None
 
 
 def backoff_seconds(attempt: int, base_seconds: float) -> float:
@@ -82,6 +84,7 @@ async def enqueue_job(
     document_version_id: uuid.UUID | None = None,
     requested_by_id: uuid.UUID | None = None,
     knowledge_document_id: uuid.UUID | None = None,
+    agent_run_id: uuid.UUID | None = None,
     payload: dict[str, Any] | None = None,
     priority: int = 0,
 ) -> ProcessingJob:
@@ -94,6 +97,7 @@ async def enqueue_job(
         document_id=document_id,
         document_version_id=document_version_id,
         knowledge_document_id=knowledge_document_id,
+        agent_run_id=agent_run_id,
         requested_by_id=requested_by_id,
         payload=payload or {},
         priority=priority,
@@ -166,6 +170,7 @@ class JobQueue:
             max_attempts=row["max_attempts"],
             requested_by_id=row["requested_by_id"],
             knowledge_document_id=row["knowledge_document_id"],
+            agent_run_id=row["agent_run_id"],
         )
 
     async def cancel(self, session: AsyncSession, job_id: uuid.UUID, *, reason: str) -> bool:
