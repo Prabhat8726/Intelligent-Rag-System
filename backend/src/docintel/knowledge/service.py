@@ -167,9 +167,6 @@ class KnowledgeService:
                     "every version must keep the scope of the first one."
                 )
                 raise ConflictError(msg)
-            if version.status == KnowledgeStatus.PROCESSING:
-                msg = "A version of this document is being processed; try again when it is done."
-                raise ConflictError(msg)
             if version.sha256 == validated.sha256 and version.status != KnowledgeStatus.FAILED:
                 msg = f"This file is already in the knowledge base ({version.title})."
                 raise ConflictError(msg)

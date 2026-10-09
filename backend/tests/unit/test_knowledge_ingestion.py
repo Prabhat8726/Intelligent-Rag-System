@@ -185,11 +185,18 @@ def version(
 
 
 def test_newer_versions() -> None:
-    assert is_newer(date(2026, 1, 1), date(2025, 1, 1))
-    assert is_newer(date(2026, 1, 1), date(2026, 1, 1))  # a same-day correction replaces
-    assert not is_newer(date(2025, 1, 1), date(2026, 1, 1))  # a historical upload
-    assert is_newer(None, date(2026, 1, 1))
-    assert is_newer(date(2026, 1, 1), None)
+    def upload(effective: date | None, uploaded_hour: int) -> KnowledgeDocument:
+        return KnowledgeDocument(
+            effective_from=effective, created_at=datetime(2026, 3, 1, uploaded_hour, tzinfo=UTC)
+        )
+
+    assert is_newer(upload(date(2026, 1, 1), 9), upload(date(2025, 1, 1), 10))
+    assert not is_newer(upload(date(2025, 1, 1), 10), upload(date(2026, 1, 1), 9))  # historical
+    # Same or unknown dates: the later upload replaces (a correction).
+    assert is_newer(upload(date(2026, 1, 1), 10), upload(date(2026, 1, 1), 9))
+    assert not is_newer(upload(date(2026, 1, 1), 9), upload(date(2026, 1, 1), 10))
+    assert is_newer(upload(None, 10), upload(date(2026, 1, 1), 9))
+    assert not is_newer(upload(None, 9), upload(date(2026, 1, 1), 10))
 
 
 def test_retrieval_windows() -> None:

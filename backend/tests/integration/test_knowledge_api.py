@@ -293,11 +293,13 @@ async def test_archiving_the_active_version_restores_the_previous_one(env: Env) 
 async def test_version_conflicts(env: Env) -> None:
     key = unique_key()
     text = policy(key=key)
-    await upload(env, text)
-    # The first version is still processing.
-    await upload(env, policy(key=key, version="2"), expect=409)
+    first = await upload(env, text)
+    # A second version may be uploaded while the first is processing: the later upload wins.
+    second = await upload(env, policy(key=key, version="2", body="Paid within 45 days."))
+    await upload(env, text, expect=409)  # identical file, even while processing
     await hashing_worker(env).run_until_idle()
-    await upload(env, text, expect=409)  # identical file
+    assert (await detail(env, first["id"]))["status"] == "SUPERSEDED"
+    assert (await detail(env, second["id"]))["status"] == "ACTIVE"
     # Same key restricted to a department: a version may not change its audience.
     await upload(
         env,

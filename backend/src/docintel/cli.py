@@ -518,7 +518,15 @@ async def _ingest(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------- evaluation
-SUITES = ("ocr", "classification", "tables", "extraction", "discrepancies", "versions")
+SUITES = (
+    "ocr",
+    "classification",
+    "tables",
+    "extraction",
+    "discrepancies",
+    "versions",
+    "retrieval",
+)
 
 
 async def _evaluate(args: argparse.Namespace) -> int:
@@ -528,6 +536,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
         from docintel.evaluation.discrepancy_suite import run_discrepancy_suite
         from docintel.evaluation.extraction_suite import run_extraction_suite
         from docintel.evaluation.ocr_suite import run_ocr_suite
+        from docintel.evaluation.retrieval_suite import run_retrieval_suite
         from docintel.evaluation.tables_suite import run_tables_suite
         from docintel.evaluation.versions_suite import run_versions_suite
     except ImportError as exc:  # reportlab is not installed in the runtime image
@@ -549,6 +558,19 @@ async def _evaluate(args: argparse.Namespace) -> int:
             elif suite == "discrepancies":
                 report = await run_discrepancy_suite(
                     output, quick=args.quick, languages=args.languages
+                )
+            elif suite == "retrieval":
+                database_url = args.database_url or os.environ.get(
+                    "TEST_DATABASE_URL", os.environ.get("DATABASE_URL")
+                )
+                if not database_url:
+                    _fail(
+                        "the retrieval suite needs a PostgreSQL server: pass --database-url "
+                        "or set TEST_DATABASE_URL (a scratch database is created and dropped)"
+                    )
+                    return EXIT_USAGE
+                report = await run_retrieval_suite(
+                    output, database_url=database_url, quick=args.quick
                 )
             elif suite == "versions":
                 report = await run_versions_suite(
@@ -619,6 +641,10 @@ def _build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--output", default="../evaluation/reports")
     evaluate.add_argument("--quick", action="store_true", help="small datasets (smoke test)")
     evaluate.add_argument("--languages", default="eng", help="Tesseract languages")
+    evaluate.add_argument(
+        "--database-url",
+        help="PostgreSQL server for the retrieval suite (default: TEST_DATABASE_URL)",
+    )
     ingest.add_argument(
         "--require-completed",
         action="store_true",

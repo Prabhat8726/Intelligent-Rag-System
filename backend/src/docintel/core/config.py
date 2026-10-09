@@ -224,6 +224,9 @@ class Settings(BaseSettings):
     rag_min_term_coverage: float = Field(default=0.25, ge=0, le=1)
     rag_min_dense_similarity: float = Field(default=0.5, ge=-1, le=1)
     rag_max_context_tokens: int = Field(default=3000, ge=200, le=100_000)
+    # Answers with citations need an LLM; false = retrieval only (passages, no generated text).
+    rag_generation_enabled: bool = True
+    rag_max_output_tokens: int = Field(default=1024, ge=128, le=8192)
 
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None

@@ -32,6 +32,7 @@ from docintel.api.routers import (
 from docintel.core.config import Settings, get_settings
 from docintel.core.logging import configure_logging, get_logger
 from docintel.db.session import create_engine, create_sessionmaker
+from docintel.knowledge.rag import build_rag_engines
 from docintel.storage import build_storage
 
 API_V1_PREFIX = "/api/v1"
@@ -51,10 +52,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.sessionmaker = create_sessionmaker(engine)
         app.state.storage = build_storage(settings)
+        app.state.rag = build_rag_engines(settings, app.state.sessionmaker)
         logger.info("app.started", env=settings.app_env.value, version=__version__)
         try:
             yield
         finally:
+            await app.state.rag.aclose()
             await engine.dispose()
             logger.info("app.stopped")
 

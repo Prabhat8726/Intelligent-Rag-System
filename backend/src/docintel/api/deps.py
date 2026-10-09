@@ -17,6 +17,7 @@ from docintel.core.config import Settings
 from docintel.core.errors import AuthenticationError, PermissionDeniedError
 from docintel.core.logging import get_logger
 from docintel.db.models import AuditOutcome, User
+from docintel.knowledge.rag import RagEngines
 from docintel.storage import DocumentStorage
 
 logger = get_logger(__name__)
@@ -48,7 +49,13 @@ def get_request_meta(request: Request) -> RequestMeta:
     )
 
 
+def get_rag_engines(request: Request) -> RagEngines:
+    engines: RagEngines = request.app.state.rag
+    return engines
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+RagDep = Annotated[RagEngines, Depends(get_rag_engines)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 RequestMetaDep = Annotated[RequestMeta, Depends(get_request_meta)]
 StorageDep = Annotated[DocumentStorage, Depends(get_storage)]

@@ -5,9 +5,12 @@ versions of one document. At most one is ACTIVE (a partial unique index). When a
 processed:
 
 * no active version            -> it becomes ACTIVE;
-* it is not older than the active one (by effective_from) -> it becomes ACTIVE, the previous
-  one SUPERSEDED (a correction uploaded with the same date also replaces it);
-* it is older                  -> it is stored as a historical (SUPERSEDED) version.
+* it takes effect later than the active one, or on the same (or an unknown) date but was
+  uploaded later -> it becomes ACTIVE, the previous one SUPERSEDED;
+* otherwise                    -> it is stored as a historical (SUPERSEDED) version.
+
+So several versions may be uploaded at once: whatever order the worker finishes them in, the
+result is the same.
 
 Retrieval as of a date D (default: today) uses each version's *retrieval window*, copied onto
 its chunks so the filter runs inside the index scan:
@@ -33,11 +36,13 @@ from docintel.db.models import KnowledgeChunk, KnowledgeDocument, KnowledgeStatu
 RETRIEVABLE_STATUSES = (KnowledgeStatus.ACTIVE, KnowledgeStatus.SUPERSEDED)
 
 
-def is_newer(candidate_from: date | None, active_from: date | None) -> bool:
-    """Whether an uploaded version replaces the active one (dates unknown: it does)."""
-    if candidate_from is None or active_from is None:
-        return True
-    return candidate_from >= active_from
+def is_newer(candidate: KnowledgeDocument, active: KnowledgeDocument) -> bool:
+    """Whether a processed version replaces the active one: a later effective date wins; with
+    the same (or an unknown) date, the later upload wins."""
+    start, active_start = candidate.effective_from, active.effective_from
+    if start is not None and active_start is not None and start != active_start:
+        return start > active_start
+    return candidate.created_at >= active.created_at
 
 
 def window_start(document: KnowledgeDocument) -> date | None:

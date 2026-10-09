@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -141,3 +142,27 @@ def expected_calibration_error(predictions: Sequence[Prediction], bins: int = 10
         confidence = mean(p.confidence for p in members)
         error += len(members) / len(predictions) * abs(accuracy - confidence)
     return error
+
+
+# ------------------------------------------------------------------------------ ranking
+def hit_at_k(relevant: Sequence[bool], k: int) -> float:
+    """1 if any of the first k results is relevant."""
+    return 1.0 if any(relevant[:k]) else 0.0
+
+
+def precision_at_k(relevant: Sequence[bool], k: int) -> float:
+    """Relevant results among the first k (missing results count as not relevant)."""
+    return sum(1 for flag in relevant[:k] if flag) / k
+
+
+def reciprocal_rank(relevant: Sequence[bool]) -> float:
+    return next((1.0 / rank for rank, flag in enumerate(relevant, start=1) if flag), 0.0)
+
+
+def ndcg_at_k(relevant: Sequence[bool], total_relevant: int, k: int) -> float:
+    """Binary-relevance nDCG@k; the ideal ranking puts min(k, total_relevant) hits first."""
+    ideal = sum(1.0 / math.log2(rank + 1) for rank in range(1, min(k, total_relevant) + 1))
+    if ideal == 0:
+        return 0.0
+    dcg = sum(1.0 / math.log2(rank + 1) for rank, flag in enumerate(relevant[:k], start=1) if flag)
+    return dcg / ideal

@@ -303,7 +303,7 @@ class KnowledgeProcessingHandler:
         superseded: KnowledgeDocument | None = None
         if current is None:
             document.status = KnowledgeStatus.ACTIVE
-        elif is_newer(document.effective_from, current.effective_from):
+        elif is_newer(document, current):
             current.status = KnowledgeStatus.SUPERSEDED
             await session.flush()  # free the one-active-version index first
             document.status = KnowledgeStatus.ACTIVE

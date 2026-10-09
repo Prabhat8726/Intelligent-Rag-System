@@ -48,7 +48,6 @@ class AuditAction(StrEnum):
     KNOWLEDGE_PROCESSING_FAILED = "knowledge.processing.failed"
     KNOWLEDGE_ARCHIVED = "knowledge.archived"
     KNOWLEDGE_QUERIED = "knowledge.queried"
-    SEARCH_PERFORMED = "search.performed"
 
 
 @dataclass(frozen=True, slots=True)

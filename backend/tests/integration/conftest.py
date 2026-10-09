@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -38,6 +39,7 @@ class Env:
     outsider: User
     manager: User
     admin: User
+    app: FastAPI
 
     def worker(self, services: ProcessingServices | None = None) -> Worker:
         return Worker(
@@ -123,4 +125,5 @@ async def env(engine: AsyncEngine, database_url: str, tmp_path: Path) -> AsyncIt
                 users["outsider"],
                 users["manager"],
                 users["admin"],
+                app,
             )
