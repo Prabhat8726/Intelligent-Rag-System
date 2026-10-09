@@ -1,0 +1,989 @@
+{
+  "suite": "discrepancies",
+  "title": "Discrepancy and duplicate detection",
+  "created_at": "2026-10-09T07:45:38+00:00",
+  "git_revision": "fa1fcce71bb1",
+  "environment": {
+    "python": "3.13.16",
+    "pypdfium2": "5.14.0",
+    "pillow": "12.3.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "rapidfuzz": "3.14.6",
+    "reportlab": "5.0.1",
+    "tesseract": "tesseract 5.3.4"
+  },
+  "dataset": {
+    "name": "synthetic-core",
+    "generator_version": "1.0",
+    "seed": 53,
+    "bundles_per_scenario": 4,
+    "scenarios": [
+      "CLEAN_MATCH",
+      "DUPLICATE_INVOICE",
+      "LONG_MULTIPAGE",
+      "MISSING_PO_REFERENCE",
+      "QUANTITY_MISMATCH",
+      "SCANNED_DOCUMENTS",
+      "SHORT_DELIVERY",
+      "TAX_RATE_MISMATCH",
+      "TOTAL_ARITHMETIC_ERROR",
+      "UNIT_PRICE_MISMATCH",
+      "VENDOR_MISMATCH",
+      "VENDOR_NAME_VARIANT"
+    ],
+    "documents_per_input": 148,
+    "quick": false
+  },
+  "config": {
+    "rules": "default rule set (19 rules, default parameters)",
+    "comparison_min_confidence": 0.85,
+    "reference_date": "2026-10-01",
+    "llm_mode": "never",
+    "expected_rules": {
+      "UNIT_PRICE_MISMATCH": [
+        "INV_PO_UNIT_PRICE"
+      ],
+      "QUANTITY_MISMATCH": [
+        "INV_DELIVERED_QUANTITY",
+        "INV_PO_QUANTITY"
+      ],
+      "BILLED_QUANTITY_EXCEEDS_DELIVERED": [
+        "INV_DELIVERED_QUANTITY"
+      ],
+      "MISSING_PO_REFERENCE": [
+        "INV_MISSING_PO"
+      ],
+      "TOTAL_MISMATCH": [
+        "DOC_ARITHMETIC"
+      ],
+      "TAX_RATE_MISMATCH": [
+        "INV_PO_TAX_RATE"
+      ],
+      "VENDOR_MISMATCH": [
+        "INV_PO_VENDOR"
+      ],
+      "DUPLICATE_INVOICE": [
+        "INV_DUPLICATE"
+      ]
+    },
+    "ocr_languages": "eng"
+  },
+  "metrics": {
+    "as generated": {
+      "documents": 148,
+      "fail": {
+        "by_defect": {
+          "BILLED_QUANTITY_EXCEEDS_DELIVERED": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "DUPLICATE_INVOICE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "MISSING_PO_REFERENCE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "QUANTITY_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "TAX_RATE_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "TOTAL_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "UNIT_PRICE_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "VENDOR_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          }
+        },
+        "by_rule": {
+          "DOC_ARITHMETIC": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_DELIVERED_QUANTITY": {
+            "flagged": 8,
+            "correct": 8,
+            "precision": 1.0
+          },
+          "INV_DUPLICATE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_MISSING_PO": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_QUANTITY": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_TAX_RATE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_UNIT_PRICE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_VENDOR": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          }
+        },
+        "pairs": {
+          "tp": 36,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "routing": {
+          "defect_free_documents_flagged": {
+            "documents": 116,
+            "rate": 0.0
+          },
+          "defective_documents_flagged": {
+            "documents": 32,
+            "rate": 1.0
+          }
+        },
+        "unexpected_alarms": []
+      },
+      "fail_or_warn": {
+        "by_defect": {
+          "BILLED_QUANTITY_EXCEEDS_DELIVERED": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "DUPLICATE_INVOICE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "MISSING_PO_REFERENCE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "QUANTITY_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "TAX_RATE_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "TOTAL_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "UNIT_PRICE_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "VENDOR_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          }
+        },
+        "by_rule": {
+          "DOC_ARITHMETIC": {
+            "flagged": 5,
+            "correct": 4,
+            "precision": 0.8
+          },
+          "DOC_UNKNOWN_VENDOR": {
+            "flagged": 1,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "INV_DELIVERED_QUANTITY": {
+            "flagged": 9,
+            "correct": 8,
+            "precision": 0.8889
+          },
+          "INV_DUPLICATE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_MISSING_PO": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_QUANTITY": {
+            "flagged": 5,
+            "correct": 4,
+            "precision": 0.8
+          },
+          "INV_PO_TAX_RATE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_UNIT_PRICE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_VENDOR": {
+            "flagged": 5,
+            "correct": 4,
+            "precision": 0.8
+          }
+        },
+        "pairs": {
+          "tp": 36,
+          "fp": 5,
+          "fn": 0,
+          "precision": 0.878,
+          "recall": 1.0,
+          "f1": 0.9351
+        },
+        "routing": {
+          "defect_free_documents_flagged": {
+            "documents": 116,
+            "rate": 0.0172
+          },
+          "defective_documents_flagged": {
+            "documents": 32,
+            "rate": 1.0
+          }
+        },
+        "unexpected_alarms": [
+          {
+            "document": "B0047-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "INV_PO_VENDOR",
+            "outcome": "WARN",
+            "message": "Could not be verified: Vendor differs (invoice Germany, purchase order Altamira Components GmbH), but a value was read with low confidence."
+          },
+          {
+            "document": "B0047-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "DOC_UNKNOWN_VENDOR",
+            "outcome": "WARN",
+            "message": "Vendor 'Germany' is not in the vendor master."
+          },
+          {
+            "document": "B0048-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "INV_PO_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of TNR-K310 (invoice vs ordered): invoice 9 poe, purchase order 12 poe (difference -3); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0048-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of TNR-K310 (invoiced vs delivered): invoice 9 poe, delivery note 12 poe (difference -3); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0048-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "WARN",
+            "message": "Could not be verified (a value involved was read with low confidence): line 1: quantity x unit price = amount: expected 634.86, printed 846.48."
+          }
+        ]
+      },
+      "extraction_review": {
+        "defect_free_documents": {
+          "documents": 116,
+          "rate": 0.069
+        },
+        "defective_documents": {
+          "documents": 32,
+          "rate": 0.125
+        }
+      },
+      "duplicates": {
+        "resent_invoices": 4,
+        "strong": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "strong_or_possible": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "wrong_pairs": []
+      },
+      "rule_errors": []
+    },
+    "all scanned": {
+      "documents": 148,
+      "fail": {
+        "by_defect": {
+          "BILLED_QUANTITY_EXCEEDS_DELIVERED": {
+            "documents": 4,
+            "detected": 0,
+            "recall": 0.0
+          },
+          "DUPLICATE_INVOICE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "MISSING_PO_REFERENCE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "QUANTITY_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "TAX_RATE_MISMATCH": {
+            "documents": 4,
+            "detected": 2,
+            "recall": 0.5
+          },
+          "TOTAL_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "UNIT_PRICE_MISMATCH": {
+            "documents": 4,
+            "detected": 3,
+            "recall": 0.75
+          },
+          "VENDOR_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          }
+        },
+        "by_rule": {
+          "DN_PO_QUANTITY": {
+            "flagged": 1,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "DOC_ARITHMETIC": {
+            "flagged": 8,
+            "correct": 4,
+            "precision": 0.5
+          },
+          "DOC_MANDATORY_FIELDS": {
+            "flagged": 1,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "INV_DELIVERED_QUANTITY": {
+            "flagged": 4,
+            "correct": 3,
+            "precision": 0.75
+          },
+          "INV_DUPLICATE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_MISSING_PO": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_QUANTITY": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_TAX_RATE": {
+            "flagged": 2,
+            "correct": 2,
+            "precision": 1.0
+          },
+          "INV_PO_UNIT_PRICE": {
+            "flagged": 3,
+            "correct": 3,
+            "precision": 1.0
+          },
+          "INV_PO_VENDOR": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          }
+        },
+        "pairs": {
+          "tp": 28,
+          "fp": 7,
+          "fn": 8,
+          "precision": 0.8,
+          "recall": 0.7778,
+          "f1": 0.7887
+        },
+        "routing": {
+          "defect_free_documents_flagged": {
+            "documents": 116,
+            "rate": 0.0431
+          },
+          "defective_documents_flagged": {
+            "documents": 32,
+            "rate": 0.8125
+          }
+        },
+        "unexpected_alarms": [
+          {
+            "document": "B0005-INV",
+            "scenario": "UNIT_PRICE_MISMATCH",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: sum of line amounts = subtotal: expected 701.88, printed 764.67."
+          },
+          {
+            "document": "B0006-INV",
+            "scenario": "UNIT_PRICE_MISMATCH",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: sum of line amounts = subtotal: expected 2086.75, printed 2147.45."
+          },
+          {
+            "document": "B0021-PO",
+            "scenario": "TOTAL_ARITHMETIC_ERROR",
+            "rule": "DOC_MANDATORY_FIELDS",
+            "outcome": "FAIL",
+            "message": "Mandatory fields missing: po_date."
+          },
+          {
+            "document": "B0041-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "FAIL",
+            "message": "Billed quantity exceeds the delivered quantity: Quantity of CAL-150D-L01 (invoiced vs delivered): invoice 100 pcs, delivery note 1 pcs (difference +99, +9900.0%); Quantity of GLV-CUT5-L01 (invoiced vs delivered): invoice 50 pair, delivery note 25 pair (difference +25, +100.0%)."
+          },
+          {
+            "document": "B0043-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: line 4: quantity x unit price = amount: expected 231.75, printed 231."
+          },
+          {
+            "document": "B0044-PO",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: sum of line amounts = subtotal: expected 6800.91, printed 27117.7."
+          },
+          {
+            "document": "B0044-DN",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "DN_PO_QUANTITY",
+            "outcome": "FAIL",
+            "message": "Delivered quantity exceeds the ordered quantity: Quantity of BRG-6204-L01 (delivery note vs ordered): delivery note 150 pcs, purchase order 1 pcs (difference +149, +14900.0%); Quantity of FLT-AIR3-L01 (delivery note vs ordered): delivery note 50 pcs, purchase order 25 pcs (difference +25, +100.0%); Quantity of FLT-AIR3-L02 (delivery note vs ordered): delivery note 50 pcs, purchase order 40 pcs (difference +10, +25.0%)."
+          }
+        ]
+      },
+      "fail_or_warn": {
+        "by_defect": {
+          "BILLED_QUANTITY_EXCEEDS_DELIVERED": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "DUPLICATE_INVOICE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "MISSING_PO_REFERENCE": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "QUANTITY_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "TAX_RATE_MISMATCH": {
+            "documents": 4,
+            "detected": 3,
+            "recall": 0.75
+          },
+          "TOTAL_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          },
+          "UNIT_PRICE_MISMATCH": {
+            "documents": 4,
+            "detected": 3,
+            "recall": 0.75
+          },
+          "VENDOR_MISMATCH": {
+            "documents": 4,
+            "detected": 4,
+            "recall": 1.0
+          }
+        },
+        "by_rule": {
+          "DN_LINE_NOT_ORDERED": {
+            "flagged": 5,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "DN_PO_QUANTITY": {
+            "flagged": 3,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "DN_PO_VENDOR": {
+            "flagged": 4,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "DOC_ARITHMETIC": {
+            "flagged": 10,
+            "correct": 4,
+            "precision": 0.4
+          },
+          "DOC_MANDATORY_FIELDS": {
+            "flagged": 1,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "DOC_UNKNOWN_VENDOR": {
+            "flagged": 5,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "INV_DELIVERED_QUANTITY": {
+            "flagged": 16,
+            "correct": 8,
+            "precision": 0.5
+          },
+          "INV_DUPLICATE": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_LINE_NOT_ORDERED": {
+            "flagged": 4,
+            "correct": 0,
+            "precision": 0.0
+          },
+          "INV_MISSING_PO": {
+            "flagged": 4,
+            "correct": 4,
+            "precision": 1.0
+          },
+          "INV_PO_QUANTITY": {
+            "flagged": 7,
+            "correct": 4,
+            "precision": 0.5714
+          },
+          "INV_PO_TAX_RATE": {
+            "flagged": 3,
+            "correct": 3,
+            "precision": 1.0
+          },
+          "INV_PO_UNIT_PRICE": {
+            "flagged": 4,
+            "correct": 3,
+            "precision": 0.75
+          },
+          "INV_PO_VENDOR": {
+            "flagged": 5,
+            "correct": 4,
+            "precision": 0.8
+          }
+        },
+        "pairs": {
+          "tp": 34,
+          "fp": 41,
+          "fn": 2,
+          "precision": 0.4533,
+          "recall": 0.9444,
+          "f1": 0.6126
+        },
+        "routing": {
+          "defect_free_documents_flagged": {
+            "documents": 116,
+            "rate": 0.1638
+          },
+          "defective_documents_flagged": {
+            "documents": 32,
+            "rate": 0.9688
+          }
+        },
+        "unexpected_alarms": [
+          {
+            "document": "B0001-DN",
+            "scenario": "CLEAN_MATCH",
+            "rule": "DN_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: 1GLV-CUT5 is on the delivery note but no line items could be read on the purchase order; ZNTRQ-2050 is on the delivery note but no line items could be read on the purchase order."
+          },
+          {
+            "document": "B0001-INV",
+            "scenario": "CLEAN_MATCH",
+            "rule": "INV_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: GLV-CUT5 is on the invoice but no line items could be read on the purchase order; TRQ-2050 is on the invoice but no line items could be read on the purchase order."
+          },
+          {
+            "document": "B0005-INV",
+            "scenario": "UNIT_PRICE_MISMATCH",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: sum of line amounts = subtotal: expected 701.88, printed 764.67."
+          },
+          {
+            "document": "B0006-INV",
+            "scenario": "UNIT_PRICE_MISMATCH",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: sum of line amounts = subtotal: expected 2086.75, printed 2147.45."
+          },
+          {
+            "document": "B0008-DN",
+            "scenario": "UNIT_PRICE_MISMATCH",
+            "rule": "DN_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: PLT-EUR is on the delivery note but not on the purchase order (an item code was read with low confidence, so the lines may belong together)."
+          },
+          {
+            "document": "B0008-INV",
+            "scenario": "UNIT_PRICE_MISMATCH",
+            "rule": "INV_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: PLT-EUR is on the invoice but not on the purchase order (an item code was read with low confidence, so the lines may belong together)."
+          },
+          {
+            "document": "B0012-DN",
+            "scenario": "QUANTITY_MISMATCH",
+            "rule": "DN_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: die er is on the delivery note but not on the purchase order (an item code was read with low confidence, so the lines may belong together)."
+          },
+          {
+            "document": "B0013-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DOC_UNKNOWN_VENDOR",
+            "outcome": "WARN",
+            "message": "Vendor 'DN-SPT-969648' is not in the vendor master."
+          },
+          {
+            "document": "B0013-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DN_PO_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of GLV-CUT5 (delivery note vs ordered): delivery note 2 pair, purchase order 4 pair (difference -2); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0013-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DN_PO_VENDOR",
+            "outcome": "WARN",
+            "message": "Could not be verified: Vendor differs (delivery note DN-SPT-969648, purchase order Sundaram Precision Tools Pvt. Ltd.), but a value was read with low confidence."
+          },
+          {
+            "document": "B0014-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DOC_UNKNOWN_VENDOR",
+            "outcome": "WARN",
+            "message": "Vendor 'DN-ACG-765412' is not in the vendor master."
+          },
+          {
+            "document": "B0014-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DN_PO_VENDOR",
+            "outcome": "WARN",
+            "message": "Could not be verified: Vendor differs (delivery note DN-ACG-765412, purchase order Altamira Components GmbH), but a value was read with low confidence."
+          },
+          {
+            "document": "B0016-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DOC_UNKNOWN_VENDOR",
+            "outcome": "WARN",
+            "message": "Vendor 'DN-BOS-450484' is not in the vendor master."
+          },
+          {
+            "document": "B0016-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DN_PO_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of PAP-A4-80 (delivery note vs ordered): delivery note 12 ream, purchase order 20 ream (difference -8); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0016-DN",
+            "scenario": "SHORT_DELIVERY",
+            "rule": "DN_PO_VENDOR",
+            "outcome": "WARN",
+            "message": "Could not be verified: Vendor differs (delivery note DN-BOS-450484, purchase order Bluepeak Office Solutions LLC), but a value was read with low confidence."
+          },
+          {
+            "document": "B0021-PO",
+            "scenario": "TOTAL_ARITHMETIC_ERROR",
+            "rule": "DOC_MANDATORY_FIELDS",
+            "outcome": "FAIL",
+            "message": "Mandatory fields missing: po_date."
+          },
+          {
+            "document": "B0021-DN",
+            "scenario": "TOTAL_ARITHMETIC_ERROR",
+            "rule": "DN_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: GLV-CUT5 is on the delivery note but no line items could be read on the purchase order; CAL-150D is on the delivery note but no line items could be read on the purchase order."
+          },
+          {
+            "document": "B0021-INV",
+            "scenario": "TOTAL_ARITHMETIC_ERROR",
+            "rule": "INV_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: GLV-CUT5 is on the invoice but no line items could be read on the purchase order; CAL-150D is on the invoice but no line items could be read on the purchase order."
+          },
+          {
+            "document": "B0023-INV",
+            "scenario": "TOTAL_ARITHMETIC_ERROR",
+            "rule": "INV_PO_UNIT_PRICE",
+            "outcome": "WARN",
+            "message": "Could not be verified: Unit price of BRG-6204: invoice 21.00 USD, purchase order 5.21 USD (difference +15.79); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0023-INV",
+            "scenario": "TOTAL_ARITHMETIC_ERROR",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: BRG-6204 is invoiced but on no delivery note (an item code was read with low confidence, so the lines may belong together)."
+          },
+          {
+            "document": "B0031-INV",
+            "scenario": "VENDOR_MISMATCH",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: VLV-BLO50 is invoiced but no line items could be read on the delivery note; GSK-150A is invoiced but no line items could be read on the delivery note; HYD-HS12 is invoiced but no line items could be read on the delivery note (and 1 more)."
+          },
+          {
+            "document": "B0032-DN",
+            "scenario": "VENDOR_MISMATCH",
+            "rule": "DOC_UNKNOWN_VENDOR",
+            "outcome": "WARN",
+            "message": "Vendor 'DN-BOS-856477' is not in the vendor master."
+          },
+          {
+            "document": "B0032-DN",
+            "scenario": "VENDOR_MISMATCH",
+            "rule": "DN_PO_VENDOR",
+            "outcome": "WARN",
+            "message": "Could not be verified: Vendor differs (delivery note DN-BOS-856477, purchase order Bluepeak Office Solutions LLC), but a value was read with low confidence."
+          },
+          {
+            "document": "B0037-INV",
+            "scenario": "DUPLICATE_INVOICE",
+            "rule": "INV_PO_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of CHR-ERG2 (invoice vs ordered): invoice 7 pcs, purchase order 2 pcs (difference +5); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0037-INV",
+            "scenario": "DUPLICATE_INVOICE",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of CHR-ERG2 (invoiced vs delivered): invoice 7 pcs, delivery note 2 pcs (difference +5); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0037-INV",
+            "scenario": "DUPLICATE_INVOICE",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "WARN",
+            "message": "Could not be verified (a value involved was read with low confidence): line 1: quantity x unit price = amount: expected 1264.76, printed 361.36."
+          },
+          {
+            "document": "B0041-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "FAIL",
+            "message": "Billed quantity exceeds the delivered quantity: Quantity of CAL-150D-L01 (invoiced vs delivered): invoice 100 pcs, delivery note 1 pcs (difference +99, +9900.0%); Quantity of GLV-CUT5-L01 (invoiced vs delivered): invoice 50 pair, delivery note 25 pair (difference +25, +100.0%)."
+          },
+          {
+            "document": "B0042-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: GLV-CUT5-LO7 is invoiced but on no delivery note (an item code was read with low confidence, so the lines may belong together); DRL-HSS8-LO8 is invoiced but on no delivery note (an item code was read with low confidence, so the lines may belong together); CAL-150D-L08 is invoiced but on no delivery note (an item code was read with low confidence, so the lines may belong together) (and 15 more)."
+          },
+          {
+            "document": "B0043-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "INV_PO_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of HYD-HS12-L02 (invoice vs ordered): invoice 450 m, purchase order 150 m (difference +300); a value was read with low confidence, so this may be a misread; Quantity of GSK-150A-LO3 (invoice vs ordered): invoice 4100 pes., purchase order 100 pes. (difference +4000); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0043-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of FLT-AIR3-LO1 (invoiced vs delivered): invoice 4 pes, delivery note 2 pes (difference +2); a value was read with low confidence, so this may be a misread; Quantity of HYD-HS12-L02 (invoiced vs delivered): invoice 450 m, delivery note 150 m (difference +300); a value was read with low confidence, so this may be a misread; Quantity of Hex bolt M10x40 zinc, box of 100 (lot 2) (invoiced vs delivered): invoice 2 box, delivery note 40 box (difference -38); a value was read with low confidence, so this may be a misread (and 5 more)."
+          },
+          {
+            "document": "B0043-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "INV_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: VLV-BLO5O-LOS is on the invoice but not on the purchase order (an item code was read with low confidence, so the lines may belong together)."
+          },
+          {
+            "document": "B0043-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: line 4: quantity x unit price = amount: expected 231.75, printed 231."
+          },
+          {
+            "document": "B0044-PO",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "FAIL",
+            "message": "Amounts do not add up: sum of line amounts = subtotal: expected 6800.91, printed 27117.7."
+          },
+          {
+            "document": "B0044-DN",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "DN_PO_QUANTITY",
+            "outcome": "FAIL",
+            "message": "Delivered quantity exceeds the ordered quantity: Quantity of BRG-6204-L01 (delivery note vs ordered): delivery note 150 pcs, purchase order 1 pcs (difference +149, +14900.0%); Quantity of FLT-AIR3-L01 (delivery note vs ordered): delivery note 50 pcs, purchase order 25 pcs (difference +25, +100.0%); Quantity of FLT-AIR3-L02 (delivery note vs ordered): delivery note 50 pcs, purchase order 40 pcs (difference +10, +25.0%)."
+          },
+          {
+            "document": "B0044-DN",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "DN_LINE_NOT_ORDERED",
+            "outcome": "WARN",
+            "message": "Could not be verified: VLV-BLO50-L01 is on the delivery note but not on the purchase order (an item code was read with low confidence, so the lines may belong together); GSK-150A-L01 is on the delivery note but not on the purchase order (an item code was read with low confidence, so the lines may belong together); BRG-6204-L02 is on the delivery note but not on the purchase order (an item code was read with low confidence, so the lines may belong together) (and 9 more)."
+          },
+          {
+            "document": "B0044-INV",
+            "scenario": "LONG_MULTIPAGE",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of 31BRG-6204-L06 (invoiced vs delivered): invoice 1 pcs, delivery note 150 pcs (difference -149); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0047-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "INV_PO_VENDOR",
+            "outcome": "WARN",
+            "message": "Could not be verified: Vendor differs (invoice Germany, purchase order Altamira Components GmbH), but a value was read with low confidence."
+          },
+          {
+            "document": "B0047-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "DOC_UNKNOWN_VENDOR",
+            "outcome": "WARN",
+            "message": "Vendor 'Germany' is not in the vendor master."
+          },
+          {
+            "document": "B0048-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "INV_PO_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of TNR-K310 (invoice vs ordered): invoice 9 poe, purchase order 12 poe (difference -3); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0048-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "INV_DELIVERED_QUANTITY",
+            "outcome": "WARN",
+            "message": "Could not be verified: Quantity of TNR-K310 (invoiced vs delivered): invoice 9 poe, delivery note 12 poe (difference -3); a value was read with low confidence, so this may be a misread."
+          },
+          {
+            "document": "B0048-INV",
+            "scenario": "SCANNED_DOCUMENTS",
+            "rule": "DOC_ARITHMETIC",
+            "outcome": "WARN",
+            "message": "Could not be verified (a value involved was read with low confidence): line 1: quantity x unit price = amount: expected 634.86, printed 846.48."
+          }
+        ]
+      },
+      "extraction_review": {
+        "defect_free_documents": {
+          "documents": 116,
+          "rate": 0.9828
+        },
+        "defective_documents": {
+          "documents": 32,
+          "rate": 1.0
+        }
+      },
+      "duplicates": {
+        "resent_invoices": 4,
+        "strong": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "strong_or_possible": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "wrong_pairs": []
+      },
+      "rule_errors": []
+    }
+  },
+  "notes": [
+    "Every bundle of an input is matched in one department: the invoice must find its own order and delivery note by reference, and duplicate alarms can come from any bundle. Documents are matched with all others on file (the state after the last upload, whatever the arrival order).",
+    "FAIL is a confirmed discrepancy; WARN means a difference involves a value read with low confidence (or the referenced order is not on file). Both send the document to the review queue; the columns show which of the two raised the alarm.",
+    "A defect counts as detected when one of its rules raised it. Pair precision / recall count (document, rule) pairs, so a quantity billed above the order needs both quantity rules.",
+    "'Defect-free in extraction review' is the extraction's own routing (uncertain or missing values), independent of the rules; the review queue takes both.",
+    "Alarms without a planted defect: 46 in total, the first 30 listed; the JSON report has all of them.",
+    "Byte-identical re-uploads are caught by the file hash at upload (exact, not measured here); this suite measures resent invoices with a different layout and date format."
+  ]
+}

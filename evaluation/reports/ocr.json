@@ -1,8 +1,8 @@
 {
   "suite": "ocr",
   "title": "OCR evaluation (synthetic-noisy)",
-  "created_at": "2026-10-09T01:30:25+00:00",
-  "git_revision": "8ceaf1a0a0ac",
+  "created_at": "2026-10-09T07:27:13+00:00",
+  "git_revision": "a22f1b8afcf8",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",
@@ -65,7 +65,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 94.79,
-        "seconds_per_page": 1.449,
+        "seconds_per_page": 1.769,
         "orientation_corrected_share": 0.0
       }
     },
@@ -94,7 +94,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.89,
-        "seconds_per_page": 1.996,
+        "seconds_per_page": 2.362,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -121,7 +121,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 92.33,
-        "seconds_per_page": 1.118,
+        "seconds_per_page": 1.298,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -148,7 +148,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 94.01,
-        "seconds_per_page": 1.78,
+        "seconds_per_page": 2.102,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -175,7 +175,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.43,
-        "seconds_per_page": 2.617,
+        "seconds_per_page": 3.191,
         "orientation_corrected_share": 0.0
       }
     },
@@ -204,7 +204,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 89.25,
-        "seconds_per_page": 1.966,
+        "seconds_per_page": 2.283,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -231,7 +231,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 88.32,
-        "seconds_per_page": 1.014,
+        "seconds_per_page": 1.214,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -258,7 +258,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 89.34,
-        "seconds_per_page": 1.577,
+        "seconds_per_page": 1.977,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -285,7 +285,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 87.83,
-        "seconds_per_page": 2.535,
+        "seconds_per_page": 3.189,
         "orientation_corrected_share": 0.0
       }
     },
@@ -314,7 +314,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.75,
-        "seconds_per_page": 0.97,
+        "seconds_per_page": 1.224,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -341,7 +341,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 78.94,
-        "seconds_per_page": 0.504,
+        "seconds_per_page": 0.672,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -368,7 +368,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.75,
-        "seconds_per_page": 0.972,
+        "seconds_per_page": 1.219,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -395,7 +395,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.34,
-        "seconds_per_page": 1.197,
+        "seconds_per_page": 1.478,
         "orientation_corrected_share": 0.0
       }
     },
@@ -424,7 +424,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.52,
-        "seconds_per_page": 1.997,
+        "seconds_per_page": 2.466,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -451,7 +451,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.44,
-        "seconds_per_page": 1.197,
+        "seconds_per_page": 1.426,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -478,7 +478,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 90.62,
-        "seconds_per_page": 1.531,
+        "seconds_per_page": 1.875,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -505,7 +505,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.52,
-        "seconds_per_page": 2.562,
+        "seconds_per_page": 3.311,
         "orientation_corrected_share": 0.0
       }
     },
@@ -534,7 +534,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.7,
-        "seconds_per_page": 4.729,
+        "seconds_per_page": 6.052,
         "orientation_corrected_share": 1.0
       }
     }

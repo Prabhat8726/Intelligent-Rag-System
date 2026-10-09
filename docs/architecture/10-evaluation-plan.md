@@ -55,9 +55,14 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 | Classification (accuracy, macro-F1, per class, confusion, ECE, auto-accept error) | Phase 3 | [`evaluation/reports/classification.md`](../../evaluation/reports/classification.md) | held-out corpus text (seed 1001), corpus rendered to PDF and scanned (seed 2002), synthetic-core (seed 42) |
 | Line-item tables (found, row P/R, cell accuracy per column) | Phase 3 | [`evaluation/reports/tables.md`](../../evaluation/reports/tables.md) | synthetic-core (seed 11), native, re-rendered as scans and the dataset's own scans |
 | Structured extraction, layout extractor (field exact / normalized match, P/R/F1 per field, line-item row P/R and cell accuracy, vendor and date normalization of printed variants, consistency checks, auto-accept share and **error inside the auto bucket**) | Phase 4 | [`evaluation/reports/extraction.md`](../../evaluation/reports/extraction.md) | synthetic-core POs, invoices and delivery notes (seed 31), native, re-rendered as scans and the dataset's own scans; document type from ground truth |
+| Discrepancies and duplicates (recall per planted defect, precision per rule, (document, rule) P/R/F1 at FAIL and at FAIL-or-WARN, alarms on defect-free documents, resent-invoice detection) — extraction as the worker does it, then `matching.service.assess`, all bundles of an input in one department | Phase 5 | [`evaluation/reports/discrepancies.md`](../../evaluation/reports/discrepancies.md) | synthetic-core, all 12 scenarios × 4 bundles (seed 53, 148 documents), as generated and with every native PDF re-rendered as a scan |
+| Contract versions (clause segmentation; added / removed / modified P/R; steps exactly right) | Phase 5 | [`evaluation/reports/versions.md`](../../evaluation/reports/versions.md) | 20 synthetic contract families × 3 versions (seed 61), native and re-rendered as scans |
 
 Not yet measured: the **LLM extraction path** (no API key or local model in the build
 environment; its merge, evidence and gating logic is covered by tests), provenance metrics
-(page accuracy, bbox IoU), contracts, receipts, resumes, bank statements and policies
-(no generator ground truth yet), comparison, RAG, agent and system latency. All current
+(page accuracy, bbox IoU), field extraction for contracts, receipts, resumes, bank statements
+and policies (no generator ground truth yet), contract/policy comparison (Phase 7), RAG, agent
+and system latency. Comparison and rules are deterministic: besides the suite, every planted
+discrepancy on native documents is a unit test (`tests/unit/test_rules.py`), so CI catches a
+regression without running the evaluation. All current
 datasets are synthetic; reports say so next to the numbers.

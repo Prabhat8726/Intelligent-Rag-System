@@ -201,6 +201,42 @@ async def test_review_lifecycle(env: Env, tmp_path: Path) -> None:
 
 
 # ------------------------------------------------------------------------------ duplicates
+async def test_a_manager_takes_over_a_claimed_task_and_a_corrected_version_supersedes_it(
+    env: Env, tmp_path: Path
+) -> None:
+    docs = bundle(tmp_path, Scenario.UNIT_PRICE_MISMATCH)
+    ids = {
+        suffix: await env.upload(docs[suffix][0], f"{suffix}.pdf") for suffix in ("PO", "DN", "INV")
+    }
+    await env.worker().run_until_idle()
+    first = (await env.detail(ids["INV"]))["review"]
+    url = f"/api/v1/review-tasks/{first['id']}"
+    claim = await env.client.post(f"{url}/claim", headers=auth_headers(env.reviewer))
+    assert claim.status_code == 200
+    release = await env.client.post(f"{url}/release", headers=auth_headers(env.analyst))
+    assert release.status_code == 409  # someone else's claim
+    taken = await env.client.post(f"{url}/claim", headers=auth_headers(env.manager))
+    assert taken.status_code == 200
+    assert taken.json()["assigned_to"]["id"] == str(env.manager.id)
+
+    # The supplier sends a corrected invoice as version 2 (same seed: same order, right prices).
+    corrected = bundle(tmp_path, Scenario.CLEAN_MATCH)["INV"][0]
+    uploaded = await env.client.post(
+        f"/api/v1/documents/{ids['INV']}/versions",
+        files={"file": ("INV-v2.pdf", corrected, "application/pdf")},
+        headers=auth_headers(env.analyst),
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    await env.worker().run_until_idle()
+    data = await findings(env, ids["INV"])
+    (old,) = data["review_history"]
+    assert (old["id"], old["status"], old["resolution"]) == (first["id"], "CANCELLED", None)
+    assert old["resolution_note"] == "Superseded by a new version of the document."
+    assert data["open_task"] is None
+    assert outcomes(data)["INV_PO_UNIT_PRICE"] == "PASS"
+    assert (await env.detail(ids["INV"]))["status"] == "COMPLETED"
+
+
 async def test_a_resent_invoice_is_held_as_a_duplicate_until_the_original_goes(
     env: Env, tmp_path: Path
 ) -> None:

@@ -1,6 +1,6 @@
 # Structured extraction (layout extractor, no LLM)
 
-Generated 2026-10-09T01:38:42+00:00 from commit `44c14e2ea276` by `docintel evaluate --suite extraction`. Do not edit by hand.
+Generated 2026-10-09T07:32:47+00:00 from commit `a22f1b8afcf8` by `docintel evaluate --suite extraction`. Do not edit by hand.
 
 ## Summary by input
 

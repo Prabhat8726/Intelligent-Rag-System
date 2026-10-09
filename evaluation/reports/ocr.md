@@ -1,38 +1,38 @@
 # OCR evaluation (synthetic-noisy)
 
-Generated 2026-10-09T01:30:25+00:00 from commit `8ceaf1a0a0ac` by `docintel evaluate --suite ocr`. Do not edit by hand.
+Generated 2026-10-09T07:27:13+00:00 from commit `a22f1b8afcf8` by `docintel evaluate --suite ocr`. Do not edit by hand.
 
 ## Default pipeline
 
 | Degradation | Variant | Pages | CER | WER | Word F1 | OCR conf | s/page |
 |---|---|---|---|---|---|---|---|
-| clean_300dpi | default | 35 | 1.2% | 1.5% | 0.989 | 94.8 | 1.45 |
-| light_scan_150dpi | default | 35 | 2.3% | 3.2% | 0.980 | 93.9 | 2.00 |
-| heavy_scan_150dpi | default | 35 | 10.4% | 14.9% | 0.891 | 89.2 | 1.97 |
-| low_res_100dpi | default | 35 | 1.8% | 3.5% | 0.972 | 93.8 | 0.97 |
-| skew_3deg | default | 35 | 2.0% | 3.2% | 0.977 | 93.5 | 2.00 |
-| sideways_90deg | default | 35 | 2.7% | 3.5% | 0.980 | 93.7 | 4.73 |
+| clean_300dpi | default | 35 | 1.2% | 1.5% | 0.989 | 94.8 | 1.77 |
+| light_scan_150dpi | default | 35 | 2.3% | 3.2% | 0.980 | 93.9 | 2.36 |
+| heavy_scan_150dpi | default | 35 | 10.4% | 14.9% | 0.891 | 89.2 | 2.28 |
+| low_res_100dpi | default | 35 | 1.8% | 3.5% | 0.972 | 93.8 | 1.22 |
+| skew_3deg | default | 35 | 2.0% | 3.2% | 0.977 | 93.5 | 2.47 |
+| sideways_90deg | default | 35 | 2.7% | 3.5% | 0.980 | 93.7 | 6.05 |
 
 ## Preprocessing ablation
 
 | Degradation | Variant | Pages | CER | WER | Word F1 | OCR conf | s/page |
 |---|---|---|---|---|---|---|---|
-| light_scan_150dpi | default | 35 | 2.3% | 3.2% | 0.980 | 93.9 | 2.00 |
-| light_scan_150dpi | no_upscale | 35 | 3.1% | 5.3% | 0.965 | 92.3 | 1.12 |
-| light_scan_150dpi | no_deskew | 35 | 2.2% | 3.4% | 0.979 | 94.0 | 1.78 |
-| light_scan_150dpi | remove_ruling_lines | 35 | 2.4% | 3.5% | 0.976 | 93.4 | 2.62 |
-| heavy_scan_150dpi | default | 35 | 10.4% | 14.9% | 0.891 | 89.2 | 1.97 |
-| heavy_scan_150dpi | no_upscale | 35 | 8.7% | 15.4% | 0.882 | 88.3 | 1.01 |
-| heavy_scan_150dpi | no_deskew | 35 | 11.3% | 16.0% | 0.884 | 89.3 | 1.58 |
-| heavy_scan_150dpi | remove_ruling_lines | 35 | 14.9% | 20.2% | 0.853 | 87.8 | 2.54 |
-| low_res_100dpi | default | 35 | 1.8% | 3.5% | 0.972 | 93.8 | 0.97 |
-| low_res_100dpi | no_upscale | 35 | 7.1% | 18.7% | 0.843 | 78.9 | 0.50 |
-| low_res_100dpi | no_deskew | 35 | 1.8% | 3.5% | 0.972 | 93.8 | 0.97 |
-| low_res_100dpi | remove_ruling_lines | 35 | 2.1% | 3.9% | 0.970 | 93.3 | 1.20 |
-| skew_3deg | default | 35 | 2.0% | 3.2% | 0.977 | 93.5 | 2.00 |
-| skew_3deg | no_upscale | 35 | 1.9% | 3.0% | 0.977 | 93.4 | 1.20 |
-| skew_3deg | no_deskew | 35 | 3.7% | 9.8% | 0.926 | 90.6 | 1.53 |
-| skew_3deg | remove_ruling_lines | 35 | 2.0% | 3.2% | 0.977 | 93.5 | 2.56 |
+| light_scan_150dpi | default | 35 | 2.3% | 3.2% | 0.980 | 93.9 | 2.36 |
+| light_scan_150dpi | no_upscale | 35 | 3.1% | 5.3% | 0.965 | 92.3 | 1.30 |
+| light_scan_150dpi | no_deskew | 35 | 2.2% | 3.4% | 0.979 | 94.0 | 2.10 |
+| light_scan_150dpi | remove_ruling_lines | 35 | 2.4% | 3.5% | 0.976 | 93.4 | 3.19 |
+| heavy_scan_150dpi | default | 35 | 10.4% | 14.9% | 0.891 | 89.2 | 2.28 |
+| heavy_scan_150dpi | no_upscale | 35 | 8.7% | 15.4% | 0.882 | 88.3 | 1.21 |
+| heavy_scan_150dpi | no_deskew | 35 | 11.3% | 16.0% | 0.884 | 89.3 | 1.98 |
+| heavy_scan_150dpi | remove_ruling_lines | 35 | 14.9% | 20.2% | 0.853 | 87.8 | 3.19 |
+| low_res_100dpi | default | 35 | 1.8% | 3.5% | 0.972 | 93.8 | 1.22 |
+| low_res_100dpi | no_upscale | 35 | 7.1% | 18.7% | 0.843 | 78.9 | 0.67 |
+| low_res_100dpi | no_deskew | 35 | 1.8% | 3.5% | 0.972 | 93.8 | 1.22 |
+| low_res_100dpi | remove_ruling_lines | 35 | 2.1% | 3.9% | 0.970 | 93.3 | 1.48 |
+| skew_3deg | default | 35 | 2.0% | 3.2% | 0.977 | 93.5 | 2.47 |
+| skew_3deg | no_upscale | 35 | 1.9% | 3.0% | 0.977 | 93.4 | 1.43 |
+| skew_3deg | no_deskew | 35 | 3.7% | 9.8% | 0.926 | 90.6 | 1.88 |
+| skew_3deg | remove_ruling_lines | 35 | 2.0% | 3.2% | 0.977 | 93.5 | 3.31 |
 
 ## Notes
 

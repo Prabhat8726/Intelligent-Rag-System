@@ -13,7 +13,7 @@ architecture decisions are validated by running code immediately.
 | **2 — Document ingestion** ✅ | Upload, validation, storage abstraction, versions, job queue, worker, synthetic generator v1 | `POST/GET/DELETE /documents`, `LocalStorage` + S3-compatible storage, PG job queue + worker, `make generate-documents` | Valid files stored + job queued atomically; invalid/oversized/spoofed rejected (security tests); worker processes jobs with retries/leases |
 | **3 — OCR & understanding** ✅ | Per-page inspection, native text, Tesseract OCR, layout blocks, tables, classification, sensitivity gate | `document_pages`, `document_tables`, classifier + LLM fallback, page preview images | Mixed PDFs handled per page; CER/WER measured on synthetic-noisy; classification metrics reported |
 | **4 — Structured extraction** ✅ | Schemas, extraction, repair, evidence, normalization, confidence, LLM usage tracking, Ollama provider | `document_extractions`, `extracted_fields`, `llm_calls`, `/extraction`, `/evidence` | Field metrics measured; malformed JSON handled; every field has provenance or is flagged |
-| 5 — Comparison & rules | Comparison engine, rule engine, duplicates, versions diff, review queue | `/comparisons`, `/rules`, `/review-tasks`, contract version diff | Discrepancy P/R/F1 on scenarios; rules configurable; CI regression suite |
+| **5 — Comparison & rules** ✅ | Comparison engine, rule engine, duplicates, versions diff, review queue | `/comparisons`, `/rules`, `/review-tasks`, `/documents/{id}/findings`, `/versions`, contract version diff | Discrepancy P/R/F1 on scenarios; rules configurable; CI regression suite |
 | 6 — Knowledge & RAG | KB ingestion, chunking, embeddings, hybrid retrieval, citations, semantic search, fastembed local provider | `/knowledge/*`, `/search` | Retrieval metrics measured with ablations; access filters proven by tests |
 | 7 — Agent | LangGraph graph, tool registry, planner, guardrails, MCP server, API tokens | `/analysis`, `mcp` entrypoint | Agent scenario success/tool-selection measured; injection tests pass |
 | 8 — Workflow automation | Workflows, HITL state machine, executors, reports, audit API, user management | `/workflows/*`, `/reports`, `/audit-logs`, `/users` | Maker-checker enforced; transitions audited; reports reproducible |
@@ -172,3 +172,44 @@ Delivery
 - ⏳ Cost per document: no prices are shipped (`LLM_PRICING`), and the Gemini pricing page was not reachable from the build environment
 
 Not in Phase 4 (by design): comparison of documents against each other, near-duplicate detection, review tasks (Phase 5); calibration of the confidence factors on held-out data (Phase 10).
+
+## 5. Phase 5 acceptance criteria
+
+Status as of 2026-10-09, same legend as §1. Metrics live in `evaluation/reports/discrepancies.md`
+and `versions.md`.
+
+Comparison and duplicates
+- ✅ Invoice ↔ purchase order ↔ delivery notes (two- and three-way, delivered quantities summed over notes) and delivery note ↔ order; lines paired by item code then description; MATCH / MISMATCH / MISSING / UNCERTAIN with difference, tolerance and evidence from both documents; differing currencies, weak readings, misread item codes and documents without readable lines are UNCERTAIN (`unit/test_matching.py`)
+- ✅ Duplicates: same vendor and number (strong), vendor + amount + date within the window (possible), byte-identical files; only older documents are originals (`unit/test_matching.py`, `unit/test_rules.py`, `integration/test_matching_api.py::test_a_resent_invoice_is_held_as_a_duplicate_until_the_original_goes`)
+- ✅ Matching runs in the processing transaction under a per-department lock and re-evaluates related documents, so arrival order does not matter (`integration/test_matching_api.py::test_an_invoice_is_matched_when_its_order_arrives_later`); never across departments (`security/test_matching_security.py`)
+
+Rules
+- ✅ 19 default rules seeded by migration 0005 with typed parameters (`extra=forbid`); a broken rule reports ERROR and the others still run; disabled rules do not run; tolerances come from the rules (`unit/test_rules.py`)
+- ✅ Every planted discrepancy in generated bundles, extracted from the real PDFs, fails exactly its rule — as a FAIL, not a warning — and clean bundles pass (`unit/test_rules.py::test_generated_bundles_raise_exactly_their_discrepancy`, `::test_a_resent_invoice_is_a_duplicate`)
+- ✅ Rules readable by every role, changed only by administrators (validated, versioned, audited before/after), re-evaluated on request (`integration/test_matching_api.py::test_rules_are_read_by_all_changed_by_admins_and_re_evaluated`)
+
+Review queue
+- ✅ One open task per document; reasons with stable keys, priority from severity, SLA due dates; claim, release, override only by managers and admins; approve / correct / reject (note required); accepted findings stay closed for the version, new findings reopen; tasks clear by themselves; a new version cancels the old task; viewers cannot work the queue (`integration/test_matching_api.py::test_review_lifecycle`, `::test_a_manager_takes_over_a_claimed_task_and_a_corrected_version_supersedes_it`, `unit/test_review_items.py`)
+- ✅ Migration 0005 round-trips, matches the models, seeds the 19 rules and opens tasks for documents already in review (`integration/test_database.py::test_phase5_migration_opens_tasks_for_documents_waiting_for_review`)
+
+Versions
+- ✅ New versions uploaded with the same validation; 409 while processing or for an identical file; clause segmentation and alignment by title, number and text; renumbering is not a change (`unit/test_versions.py`, `integration/test_matching_api.py::test_contract_versions_are_compared_clause_by_clause`)
+
+Frontend
+- ✅ Review queue, comparison view with evidence links that open the field on its page, rules (read-only and admin editing with JSON validation), document findings with claim/resolve, versions with upload and clause diff, inbox priority (`frontend/src/review/review.test.tsx`, `frontend/src/documents/documents.test.tsx`)
+
+Evaluation (synthetic data only, layout extractor without LLM, commit `fa1fcce`)
+- ✅ Discrepancy P/R/F1 measured per defect type, per rule and over (document, rule) pairs: as generated FAIL precision and recall 100% (36 planted findings, 148 documents), no false FAIL; re-rendered scans FAIL 80.0% / 77.8%, FAIL-or-warning recall 94.4% at 45.3% precision
+- ✅ Resent invoices: 4 of 4 found, no wrong pair (native and scanned)
+- ✅ Contract versions: 40 of 40 steps exactly right, native and scanned; segmentation 100%
+- ✅ The suites changed the code: they exposed a reading-order bug in OCR text (a line tail read after its paragraph), false failures from documents without readable lines and from misread item codes, an arithmetic rule that discounted values for the very check they failed, and billed lines on no delivery note that no rule caught — each fixed with a regression test
+
+Delivery
+- ✅ 611 backend tests, ruff, ruff format, mypy --strict; 46 frontend tests, ESLint, `tsc`, production build
+- ✅ Docker stack: `docker compose up --wait` healthy, smoke test passes (an invoice without its order on file is held for review with `INV_MISSING_PO`), the synthetic dataset processes through the stack with every planted discrepancy in the review queue under its rule; built with the sandbox-only base-image shim (`deb.debian.org` blocked)
+- ✅ CI: the quick evaluation includes both new suites; gitleaks clean on history; `actionlint` clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+- ⏳ Rule evaluation with LLM-extracted values (no key or local model in the build environment)
+
+Not in Phase 5 (by design): contract ↔ policy and resume ↔ job comparison (agent tools, Phase 7); workflow actions on review decisions (Phase 8); calibration of the confidence threshold on real documents (Phase 10).
+

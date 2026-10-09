@@ -1,8 +1,8 @@
 {
   "suite": "classification",
   "title": "Document classification",
-  "created_at": "2026-10-09T01:30:59+00:00",
-  "git_revision": "8ceaf1a0a0ac",
+  "created_at": "2026-10-09T07:29:52+00:00",
+  "git_revision": "a22f1b8afcf8",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",

@@ -4,9 +4,10 @@ Multimodal AI for document understanding, verification, RAG, agentic reasoning a
 human-in-the-loop workflow automation — built as a compact, enterprise-grade platform rather
 than an OCR demo or LLM wrapper.
 
-> **Status: Phase 4 complete — ingestion, OCR, layout, tables, classification and structured
-> extraction with evidence.** Comparison, RAG, the agent and workflows are designed
-> (see [`docs/`](docs/README.md)) and are implemented in Phases 5–11. Nothing below claims a
+> **Status: Phase 5 complete — ingestion, OCR, layout, tables, classification, structured
+> extraction with evidence, document comparison, business rules, duplicate detection, the
+> review queue and contract version comparison.** RAG, the agent and workflows are designed
+> (see [`docs/`](docs/README.md)) and are implemented in Phases 6–11. Nothing below claims a
 > capability that has not been built and tested.
 
 ## What the platform will do
@@ -32,7 +33,7 @@ LLM self-assessment; the agent can only *propose* high-impact actions; PostgreSQ
 single stateful service (no Redis, no external vector DB); every AI provider sits behind an
 interface; sensitive documents are never sent to free-tier external AI.
 
-## What works today (Phases 0–4, verified by tests)
+## What works today (Phases 0–5, verified by tests)
 
 | Area | Implemented |
 |---|---|
@@ -51,13 +52,18 @@ interface; sensitive documents are never sent to free-tier external AI.
 | AI safety gate | Content findings (card numbers, SSNs) and type minimums raise the effective sensitivity; above `AI_EXTERNAL_MAX_SENSITIVITY` no text reaches an external model (a self-hosted Ollama model is allowed: content stays in the deployment); uncertain or unreadable documents go to review with a reason |
 | Structured extraction | Versioned schemas for invoices, purchase orders, receipts, delivery notes, contracts, resumes, bank statements and policies. A layout extractor (labels, letterhead, table columns) runs on every document; Gemini or a local Ollama model is consulted only when it is not confident, with schema-constrained output, one repair round-trip and caching. Every value carries page, quote and box and is verified against the page; values are normalized (Decimal amounts, ISO currency, explicit date-order rules, payment terms, vendor resolved against a vendor master by tax ID, alias or fuzzy name) and checked for consistency (line arithmetic, totals, tax, due date, balances) |
 | Confidence & review | Field confidence from measured factors (evidence, normalization, OCR, rule strength, agreement, consistency), never model self-assessment; documents are auto-accepted, sent to analyst review or to mandatory review with reasons; a value only the model read is never auto-accepted on its own; reviewers correct values as printed, corrections are re-scored, survive reprocessing and are audited without values |
+| Comparison (Phase 5) | Every processed invoice is matched with the purchase order it references and that order's delivery notes (two- and three-way match; delivered quantities summed over notes), every delivery note with its order — within the department, whatever the arrival order. Lines pair by item code, then by description. Each check is MATCH, MISMATCH, MISSING or UNCERTAIN with the difference, the tolerance and both documents' evidence (page, quote, box); a difference that rests on a weak reading or a misread item code is UNCERTAIN, not a discrepancy. Users can also compare documents of their choice |
+| Business rules | 19 deterministic rules (prices, quantities ordered and delivered, lines not ordered, vendor, currency, tax rate, payment terms, missing or unknown order, arithmetic, mandatory fields, unknown vendor, delivery notes, contract expiry, payment-terms policy) with typed, validated parameters; tolerances live in the rules; administrators change parameters, severity or on/off (versioned, audited) and re-evaluate documents |
+| Duplicates | Byte-identical files at upload; the same vendor and number (strong) or vendor, amount and a date within 7 days (possible) at matching; only older documents count as originals |
+| Review queue | One task per document with every reason (processing, rule, duplicate), priority from severity, SLA due dates, claim/release, resolve as approved, corrected or rejected (with a note); accepted findings do not come back for that version, new ones do; tasks close by themselves when the findings disappear (e.g. the missing order arrives) |
+| Contract versions | Upload a new version of a document; clause-by-clause comparison of any two processed versions (added, removed, modified with word-level changes; renumbering is not a change) |
 | LLM accounting | Every call recorded in `llm_calls` (tokens, latency, status, purpose, never content), daily request budget, cost estimates from operator-configured prices, `make llm-usage` |
 | Synthetic data | Seeded generator for linked purchase orders, delivery notes and invoices (12 scenarios, incl. price/quantity/tax/vendor defects, duplicates, multi-page and scanned documents) with JSON ground truth; `make process` ingests a dataset through the API |
-| CLI | `docintel seed` (users and vendor master), `create-user`, `check-ai` (real end-to-end verification of the Gemini key or Ollama models), `check-ocr`, `llm-usage`, `worker`, `worker-health`, `generate-documents`, `ingest`, `evaluate` |
-| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, type/status filters, vendor column and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; system status page |
+| CLI | `docintel seed` (users and vendor master), `create-user`, `check-ai` (real end-to-end verification of the Gemini key or Ollama models), `check-ocr`, `llm-usage`, `worker`, `worker-health`, `generate-documents`, `ingest`, `match` (re-run matching for every processed document), `evaluate` |
+| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, type/status filters, vendor column and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; review queue (filters, claim, priority, due dates), each document's checks, comparisons, duplicates and review decision, comparison view whose evidence links open the source field on its page, business rules (read-only, or editable with validation for administrators), versions with upload and clause comparison; system status page |
 | Delivery | Non-root multi-stage images, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, dependency audits, secret scan, container smoke test, synthetic dataset ingest) |
 
-Test suites: 546 backend tests (unit, integration against real PostgreSQL, security) and 31
+Test suites: 611 backend tests (unit, integration against real PostgreSQL, security) and 46
 frontend tests.
 
 ## Quick start
@@ -87,9 +93,9 @@ Details: [local setup](docs/development/local-setup.md) · [configuration](docs/
 
 ## Evaluation
 
-All numbers below come from `make evaluate`, run on a clean checkout: OCR, classification
-and tables at commit `8ceaf1a`, extraction at `44c14e2` (re-run after the last routing fix,
-which the other suites do not use). They are measured on **synthetic data only**. Synthetic layouts are regular and the classifier's training and
+All numbers below come from `make evaluate`, run on a clean checkout: OCR, classification,
+tables and extraction at commit `a22f1b8`, discrepancies and versions at `fa1fcce` (re-run
+after two matching fixes the other suites do not use). They are measured on **synthetic data only**. Synthetic layouts are regular and the classifier's training and
 test generators are related, so these numbers overstate real-world accuracy. Each report
 lists its datasets, seeds, engine versions and caveats.
 
@@ -111,6 +117,11 @@ lists its datasets, seeds, engine versions and caveats.
 | Auto-accepted documents, scanned | 0% — every scanned document goes to review (47 analyst, 23 mandatory) | [extraction](evaluation/reports/extraction.md) |
 | Printed arithmetic errors flagged / correct documents flagged after a misread | 4 of 4 / 1.4% (2 of 140) | [extraction](evaluation/reports/extraction.md) |
 | Field extraction with the LLM (Gemini or Ollama) | Not yet measured (needs a key or a local model) | |
+| Discrepancy detection, dataset as generated (native PDFs + its 8 scans): precision / recall of confirmed failures | 100% / 100% (36 planted findings in 148 documents, 8 defect types); no defect-free document fails a rule, 1.7% get a warning (2 scans) | [discrepancies](evaluation/reports/discrepancies.md) |
+| Discrepancy detection, scanned at 150 DPI: precision / recall | FAIL 80.0% / 77.8%; FAIL or "could not be verified" 45.3% / 94.4% | [discrepancies](evaluation/reports/discrepancies.md) |
+| Defect-free documents raising a rule alarm, scanned | 4.3% FAIL, 16.4% FAIL or warning (98.3% are in review anyway for extraction uncertainty) | [discrepancies](evaluation/reports/discrepancies.md) |
+| Resent invoices (different layout and date format) found as duplicates | 4 of 4, no wrong pair, native and scanned | [discrepancies](evaluation/reports/discrepancies.md) |
+| Contract version changes (added / removed / modified clauses) | 40 of 40 version steps exactly right, native and scanned (20 contract families) | [versions](evaluation/reports/versions.md) |
 | Retrieval Recall@k / MRR / nDCG | Not yet measured | |
 | Agent task success / tool-selection accuracy | Not yet measured | |
 | Latency / throughput / cost per document | Not yet measured | |
@@ -124,6 +135,14 @@ conservative on scans: header fields are 99.3% right, but line-item cells are no
 enough to auto-accept, so a person checks every scanned document. The layout extractor's label
 vocabulary was written with the synthetic templates visible, so these numbers measure the
 pipeline, not generalization to unseen layouts.
+Matching is deterministic, so on native documents it finds exactly the planted defects; on scans
+the 7 remaining false FAILs come from values OCR misread with high confidence (an amount
+without its decimals, a quantity of 1 for 100), table rows lost from long or scanned tables
+and a date it did not find; planted defects that only warn there involve a value or item code
+read with low confidence, which is what a warning means. A warning still puts the document in
+the review queue. The synthetic generator plants one defect per bundle in a fixed
+set of layouts, so these numbers say the rules and their wiring are right, not how often real
+suppliers' documents trip them.
 See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 
 ## Roadmap
@@ -134,8 +153,8 @@ See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 | 2 | Document ingestion: upload validation, storage abstraction, Postgres job queue, worker, synthetic generator | **Complete** |
 | 3 | OCR & understanding: native text + Tesseract OCR on the pages that need it, layout, tables, classification, sensitivity gate | **Complete** |
 | 4 | Structured extraction: schemas, evidence verification, normalization, vendor master, consistency checks, confidence routing, corrections, LLM accounting, Ollama provider, vision for low-confidence pages | **Complete** |
-| 5 | Comparison & rule engine, duplicates, review queue | Next |
-| 6 | Knowledge base & hybrid RAG with citations | Planned |
+| 5 | Comparison & rule engine, duplicates, review queue, contract version comparison | **Complete** |
+| 6 | Knowledge base & hybrid RAG with citations | Next |
 | 7 | LangGraph agent, controlled tools, MCP server | Planned |
 | 8 | Workflows, human approval, reports, audit API | Planned |
 | 9 | Full enterprise UI | Planned |
