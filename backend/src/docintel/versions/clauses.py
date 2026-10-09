@@ -101,7 +101,7 @@ def _normalize(text: str) -> str:
     return " ".join(re.sub(r"[^\w%€$£.,]", " ", folded).split())
 
 
-def _heading(line: str) -> tuple[str, str] | None:
+def parse_heading(line: str) -> tuple[str, str] | None:
     match = _HEADING.match(line)
     if match is None:
         return None
@@ -129,7 +129,7 @@ def segment(pages: Sequence[str]) -> list[Clause]:
                 close()
                 current, body = Clause("signatures", None, "Signatures", "", page_number), [line]
                 continue
-            heading = _heading(line) if current.key != "signatures" else None
+            heading = parse_heading(line) if current.key != "signatures" else None
             if heading is not None:
                 close()
                 number, title = heading

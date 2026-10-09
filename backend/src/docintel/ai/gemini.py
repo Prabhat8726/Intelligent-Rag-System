@@ -320,6 +320,8 @@ class GeminiLLMProvider(_GeminiClient):
 
 
 class GeminiEmbeddingProvider(_GeminiClient):
+    local = False  # an external service: content above AI_EXTERNAL_MAX_SENSITIVITY stays out
+
     def __init__(
         self,
         *,

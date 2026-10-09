@@ -8,6 +8,7 @@ from docintel.ai.accounting import ModelPrice
 from docintel.ai.base import EMBEDDING_DIMENSIONS, EmbeddingProvider, LLMProvider
 from docintel.ai.errors import ProviderConfigurationError
 from docintel.ai.gemini import GeminiEmbeddingProvider, GeminiLLMProvider
+from docintel.ai.local_embeddings import FastEmbedProvider, HashingEmbeddingProvider
 from docintel.ai.ollama import OllamaLLMProvider
 from docintel.ai.rate_limit import AsyncRateLimiter
 from docintel.core.config import EmbeddingProviderName, LLMProviderName, Settings
@@ -63,5 +64,13 @@ def build_embedding_provider(settings: Settings) -> EmbeddingProvider:
                 timeout_seconds=settings.llm_timeout_seconds,
                 max_retries=settings.llm_max_retries,
             )
+        case EmbeddingProviderName.FASTEMBED:
+            return FastEmbedProvider(
+                model=settings.fastembed_model,
+                cache_dir=settings.fastembed_cache_dir,
+                threads=settings.fastembed_threads,
+            )
+        case EmbeddingProviderName.HASHING:
+            return HashingEmbeddingProvider()
         case _:
             assert_never(settings.embedding_provider)

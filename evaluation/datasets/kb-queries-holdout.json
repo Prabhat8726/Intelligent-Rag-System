@@ -1,0 +1,21 @@
+{
+  "name": "kb-queries-holdout",
+  "version": "1.0",
+  "description": "Held-out questions written after the evidence-gate threshold was chosen on kb-queries and never used to tune anything. Same labelling rules as kb-queries.",
+  "queries": [
+    {"id": "h01", "question": "Is it allowed to split an order to stay under an approval limit?", "relevant": [{"document": "procurement-policy", "section": "2.1 When a purchase order is required"}]},
+    {"id": "h02", "question": "What document changes the price or quantity of an approved order?", "relevant": [{"document": "procurement-policy", "section": "2.3 Changing a purchase order"}, {"document": "procurement-glossary", "section": "Change order"}]},
+    {"id": "h03", "question": "What happens when a supplier delivers more than we ordered?", "relevant": [{"document": "procurement-policy", "section": "5. Quantity variance"}]},
+    {"id": "h04", "question": "Which approval is needed for payment terms shorter than 30 days?", "relevant": [{"document": "procurement-policy", "section": "7. Payment terms"}]},
+    {"id": "h05", "question": "Does capital expenditure need a business case?", "relevant": [{"document": "approval-matrix", "section": "2. Purchase approval limits"}]},
+    {"id": "h06", "question": "What does Accounts Payable send to the Finance Manager at month-end?", "relevant": [{"document": "invoice-processing-procedure", "section": "5. Month-end"}]},
+    {"id": "h07", "question": "How much notice do we need to terminate a supplier contract for convenience?", "relevant": [{"document": "contract-management-guidelines", "section": "2.1 Term and termination"}, {"document": "legal-negotiation-playbook", "section": "3. Termination fallback"}]},
+    {"id": "h08", "question": "Is a hotel at 200 dollars a night acceptable?", "relevant": [{"document": "travel-and-expense-policy", "section": "1. Booking travel"}]},
+    {"id": "h09", "question": "How long are candidate resumes kept?", "relevant": [{"document": "records-retention", "section": "2. Retention periods"}]},
+    {"id": "h10", "question": "What is a delivery note also called?", "relevant": [{"document": "procurement-glossary", "section": "Delivery note"}]},
+    {"id": "h11", "question": "What is the dress code at the head office?", "relevant": []},
+    {"id": "h12", "question": "How do I book a meeting room?", "relevant": []},
+    {"id": "h13", "question": "What is the pension contribution rate?", "relevant": []},
+    {"id": "h14", "question": "Which holidays are company holidays this year?", "relevant": []}
+  ]
+}

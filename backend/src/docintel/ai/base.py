@@ -119,6 +119,11 @@ class EmbeddingProvider(Protocol):
     def name(self) -> str: ...
 
     @property
+    def local(self) -> bool:
+        """True if texts never leave the deployment (the sensitivity gate does not apply)."""
+        ...
+
+    @property
     def model(self) -> str: ...
 
     @property

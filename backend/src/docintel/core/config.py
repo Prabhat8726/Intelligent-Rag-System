@@ -35,6 +35,8 @@ class LLMProviderName(StrEnum):
 
 class EmbeddingProviderName(StrEnum):
     GEMINI = "gemini"
+    FASTEMBED = "fastembed"  # local sentence-embedding model (optional dependency)
+    HASHING = "hashing"  # local lexical vectors: offline, deterministic, not semantic
 
 
 class StorageBackendName(StrEnum):
@@ -130,6 +132,10 @@ class Settings(BaseSettings):
     ollama_keep_alive: str | None = None
     embedding_requests_per_minute: int = Field(default=60, ge=1, le=10_000)
     embedding_batch_size: int = Field(default=100, ge=1, le=100)
+    # fastembed (EMBEDDING_PROVIDER=fastembed): downloaded from Hugging Face on first use.
+    fastembed_model: str = "BAAI/bge-base-en-v1.5"
+    fastembed_cache_dir: str | None = None
+    fastembed_threads: int | None = Field(default=None, ge=1, le=256)
 
     # ---------------------------------------------------------------- HTTP limits
     # Request bodies on non-upload endpoints (JSON APIs).
@@ -203,6 +209,20 @@ class Settings(BaseSettings):
         default_factory=lambda: dict(DEFAULT_REVIEW_SLA_HOURS)
     )
 
+    # ---------------------------------------------------------------- knowledge & RAG
+    knowledge_chunk_target_tokens: int = Field(default=500, ge=50, le=4000)
+    knowledge_chunk_max_tokens: int = Field(default=800, ge=50, le=8000)
+    knowledge_chunk_overlap_tokens: int = Field(default=75, ge=0, le=1000)
+    # Candidates taken from each retriever (dense, full-text) before fusion; sources answered with.
+    rag_candidates: int = Field(default=20, ge=1, le=200)
+    rag_top_k: int = Field(default=6, ge=1, le=50)
+    rag_rrf_k: int = Field(default=60, ge=1, le=1000)
+    # Evidence gate: the best retrieved passage must cover this share of the question's terms
+    # (weighted by rarity) or reach this embedding similarity; otherwise "insufficient evidence".
+    rag_min_term_coverage: float = Field(default=0.25, ge=0, le=1)
+    rag_min_dense_similarity: float = Field(default=0.5, ge=-1, le=1)
+    rag_max_context_tokens: int = Field(default=3000, ge=200, le=100_000)
+
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None
 
@@ -239,6 +259,17 @@ class Settings(BaseSettings):
             msg = f"REVIEW_SLA_HOURS must be between 1 and {MAX_REVIEW_SLA_HOURS} hours"
             raise ValueError(msg)
         return merged
+
+    @model_validator(mode="after")
+    def _consistent_chunking(self) -> Self:
+        target, limit = self.knowledge_chunk_target_tokens, self.knowledge_chunk_max_tokens
+        if target > limit:
+            msg = "KNOWLEDGE_CHUNK_TARGET_TOKENS must not exceed KNOWLEDGE_CHUNK_MAX_TOKENS"
+            raise ValueError(msg)
+        if self.knowledge_chunk_overlap_tokens >= target:
+            msg = "KNOWLEDGE_CHUNK_OVERLAP_TOKENS must be below KNOWLEDGE_CHUNK_TARGET_TOKENS"
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _validate_secrets_for_environment(self) -> Self:
@@ -283,6 +314,13 @@ class Settings(BaseSettings):
     @property
     def hsts_enabled(self) -> bool:
         return self.is_deployed
+
+    @property
+    def embedding_configured(self) -> bool:
+        """True if the selected embedding provider can be called (local ones always can)."""
+        if self.embedding_provider == EmbeddingProviderName.GEMINI:
+            return self.gemini_api_key is not None
+        return True
 
     @property
     def llm_configured(self) -> bool:
