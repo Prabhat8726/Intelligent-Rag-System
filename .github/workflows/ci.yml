@@ -156,6 +156,11 @@ jobs:
           make generate-documents
           make process API_URL=http://localhost:8080
 
+      # Policies, procedures and FAQs through the upload API and the worker; every file must
+      # end ACTIVE (or SUPERSEDED by its newer version).
+      - name: Load the knowledge base through the stack
+        run: make seed-knowledge API_URL=http://localhost:8080
+
       - name: Container logs
         if: failure()
         run: docker compose logs --no-color

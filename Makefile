@@ -13,8 +13,9 @@ DATASET ?= ../synthetic_data/generated
 INGEST_FLAGS ?=
 
 .PHONY: help env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
-        reset-db logs seed-docker generate-documents process worker test test-backend \
-        test-frontend lint format check-ai check-ocr llm-usage evaluate match smoke clean
+        reset-db logs seed-docker generate-documents process seed-knowledge reembed worker test \
+        test-backend test-frontend lint format check-ai check-ocr llm-usage evaluate match smoke \
+        clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -72,6 +73,12 @@ generate-documents: ## Generate synthetic POs, invoices and delivery notes with 
 process: require-env ## Upload the synthetic dataset through the API and wait for processing
 	$(BACKEND) docintel ingest $(DATASET) --api-url $(API_URL) $(INGEST_FLAGS)
 
+seed-knowledge: require-env ## Load knowledge_base/ (policies, procedures, FAQs) through the API
+	$(BACKEND) docintel knowledge-ingest ../knowledge_base --api-url $(API_URL) --email admin@docintel.local
+
+reembed: migrate ## Add vectors of the configured embedding model to indexed chunks
+	$(BACKEND) docintel reembed
+
 down: ## Stop the Docker stack (volumes are kept)
 	$(COMPOSE) down
 
@@ -108,8 +115,8 @@ llm-usage: require-env ## LLM requests, tokens and estimated cost per day (last 
 match: migrate ## Re-run comparisons, rules and review tasks for every processed document
 	$(BACKEND) docintel match
 
-evaluate: ## Run OCR, classification, table, extraction, discrepancy and version evaluations -> evaluation/reports (several minutes)
-	cd backend && uv run docintel evaluate --output ../evaluation/reports
+evaluate: db-up ## Run all evaluation suites (OCR ... retrieval) -> evaluation/reports (several minutes)
+	$(BACKEND) docintel evaluate --output ../evaluation/reports
 
 smoke: ## Smoke-test the running Docker stack through nginx
 	./scripts/smoke_test.sh

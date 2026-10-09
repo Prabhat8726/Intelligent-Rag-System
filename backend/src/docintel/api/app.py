@@ -27,6 +27,7 @@ from docintel.api.routers import (
     knowledge,
     reviews,
     rules,
+    search,
     vendors,
 )
 from docintel.core.config import Settings, get_settings
@@ -86,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api_v1.include_router(rules.router)
     api_v1.include_router(reviews.router)
     api_v1.include_router(knowledge.router)
+    api_v1.include_router(search.router)
     app.include_router(health.router)
     app.include_router(api_v1)
 

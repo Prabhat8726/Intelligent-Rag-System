@@ -517,6 +517,51 @@ async def _ingest(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _knowledge_ingest(args: argparse.Namespace) -> int:
+    """HTTP client: uploads a knowledge base directory and waits for processing."""
+    from docintel.tools.ingest import IngestError
+    from docintel.tools.knowledge_ingest import ALREADY_PRESENT, ingest_knowledge
+
+    if args.password_stdin:
+        password = sys.stdin.readline().rstrip("\n")
+    elif os.environ.get("SEED_USER_PASSWORD"):
+        password = os.environ["SEED_USER_PASSWORD"]
+    else:
+        _fail("Provide the password with --password-stdin or SEED_USER_PASSWORD.")
+        return EXIT_USAGE
+    try:
+        items = await ingest_knowledge(
+            Path(args.directory),
+            api_url=args.api_url,
+            email=args.email,
+            password=password,
+            timeout_seconds=args.timeout,
+        )
+    except IngestError as exc:
+        _fail(str(exc))
+        return EXIT_FAILURE
+    for item in items:
+        detail = " ".join(
+            part
+            for part in (
+                item.version and f"v{item.version}",
+                (item.chunks is not None and f"{item.chunks} chunks") or None,
+                item.embedding_model,
+                item.note,
+            )
+            if part
+        )
+        print(f"  {item.status or item.http_status!s:<16} {item.file:<45} {detail}")
+    failed = [
+        item.file for item in items if item.status not in {"ACTIVE", "SUPERSEDED", ALREADY_PRESENT}
+    ]
+    if failed:
+        _fail(f"{len(failed)} file(s) not in the knowledge base: {', '.join(failed)}")
+        return EXIT_FAILURE
+    _ok(f"{len(items)} knowledge file(s) in the knowledge base")
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------------------- evaluation
 SUITES = (
     "ocr",
@@ -632,6 +677,14 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--email", default="analyst@docintel.local")
     ingest.add_argument("--password-stdin", action="store_true")
     ingest.add_argument("--timeout", type=float, default=300.0)
+    knowledge = commands.add_parser(
+        "knowledge-ingest", help="upload a knowledge base directory via the REST API"
+    )
+    knowledge.add_argument("directory")
+    knowledge.add_argument("--api-url", default="http://localhost:8000")
+    knowledge.add_argument("--email", default="admin@docintel.local")
+    knowledge.add_argument("--password-stdin", action="store_true")
+    knowledge.add_argument("--timeout", type=float, default=300.0)
     evaluate = commands.add_parser("evaluate", help="run evaluation suites and write reports")
     evaluate.add_argument(
         "--suite",
@@ -662,6 +715,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ingest":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_ingest(args))
+    if args.command == "knowledge-ingest":
+        configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
+        return asyncio.run(_knowledge_ingest(args))
     if args.command == "evaluate":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_evaluate(args))

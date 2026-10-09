@@ -8,7 +8,7 @@ from datetime import date, datetime
 from pydantic import Field
 
 from docintel.api.schemas.auth import DepartmentRead
-from docintel.api.schemas.common import RequestModel, ResponseModel
+from docintel.api.schemas.common import QueryText, RequestModel, ResponseModel
 from docintel.api.schemas.documents import ProcessingJobRead, UserSummary
 from docintel.db.models import KnowledgeCategory, KnowledgeFormat, KnowledgeStatus, Sensitivity
 from docintel.knowledge.answering import AnswerStatus
@@ -80,12 +80,12 @@ class KnowledgeScopeInput(RequestModel):
 
 
 class KnowledgeSearchRequest(KnowledgeScopeInput):
-    query: str = Field(min_length=1, max_length=1000)
+    query: QueryText = Field(min_length=1, max_length=1000)
     top_k: int | None = Field(default=None, ge=1, le=20)
 
 
 class KnowledgeQueryRequest(KnowledgeScopeInput):
-    question: str = Field(min_length=3, max_length=1000)
+    question: QueryText = Field(min_length=3, max_length=1000)
 
 
 class PassageRead(ResponseModel):
