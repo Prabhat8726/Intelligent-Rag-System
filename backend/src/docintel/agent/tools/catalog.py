@@ -46,6 +46,7 @@ from docintel.documents.findings import FindingsService
 from docintel.fields.store import resolved_from_row
 from docintel.knowledge.rag import KnowledgeQueryService, today
 from docintel.knowledge.retrieval import KnowledgeScope
+from docintel.matching.facts import NUMBER_FIELD
 from docintel.matching.service import PROCESSED, MatchingService
 from docintel.review.service import ReviewRequestService
 from docintel.search.service import DocumentSearchService
@@ -99,6 +100,8 @@ class DocumentHit(ToolOutput):
     document_id: uuid.UUID
     filename: str
     document_type: DocumentType | None
+    document_number: str | None
+    order_reference: str | None = Field(description="Purchase order number it quotes")
     status: DocumentStatus
     vendor_name: str | None
     document_date: date | None
@@ -133,6 +136,8 @@ async def search_documents(scope: ToolScope, args: SearchDocumentsInput) -> Sear
                 document_id=hit.document.id,
                 filename=hit.document.display_filename,
                 document_type=hit.document.document_type,
+                document_number=clip(hit.document_number, 100),
+                order_reference=clip(hit.order_reference, 100),
                 status=hit.document.status,
                 vendor_name=hit.vendor_name,
                 document_date=hit.document_date,
@@ -171,6 +176,7 @@ class DocumentInfo(ToolOutput):
     filename: str
     document_type: DocumentType | None
     type_confidence: float | None
+    document_number: str | None
     status: DocumentStatus
     sensitivity: Sensitivity
     effective_sensitivity: Sensitivity = Field(
@@ -215,6 +221,13 @@ async def get_document(scope: ToolScope, args: DocumentInput) -> DocumentInfo:
     vendor = await extractions.vendor(document)
     findings = await FindingsService(scope.session).findings(scope.actor, document)
     task = findings.open_task
+    number = None
+    if extraction is not None and document.document_type in NUMBER_FIELD:
+        field_row = next(
+            (f for f in extraction.fields if f.field_path == NUMBER_FIELD[document.document_type]),
+            None,
+        )
+        number = resolved_from_row(field_row).display_value if field_row else None
     duplicate = document.duplicate_of_id
     if duplicate is not None and not await _visible_ids(scope, {duplicate}):
         duplicate = None
@@ -223,6 +236,7 @@ async def get_document(scope: ToolScope, args: DocumentInput) -> DocumentInfo:
         filename=document.display_filename,
         document_type=document.document_type,
         type_confidence=float(document.type_confidence) if document.type_confidence else None,
+        document_number=clip(number, 100),
         status=document.status,
         sensitivity=document.sensitivity,
         effective_sensitivity=await effective_sensitivity(scope, document),

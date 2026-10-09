@@ -55,6 +55,12 @@ from docintel.db.models import Role, User
          "invoices from Harbor & Pine Packaging over 2,000"),
         ("Who must approve payment terms longer than 60 days?", Intent.POLICY_QUESTION, None),
         ("What is wrong with this invoice?", Intent.INVESTIGATE_DISCREPANCY, None),
+        ("Above what amount do we need a purchase order?", Intent.POLICY_QUESTION, None),
+        ("How fast must invoices be paid?", Intent.POLICY_QUESTION, None),
+        ("What does Accounts Payable send to the Finance Manager at month-end?",
+         Intent.POLICY_QUESTION, None),
+        ("Anything new from Kestrel Industrial Supply?", Intent.VERIFY_DOCUMENT,
+         "documents from Kestrel Industrial Supply"),
         ("Check PO-55012", Intent.VERIFY_DOCUMENT, "PO-55012"),
     ],
 )  # fmt: skip

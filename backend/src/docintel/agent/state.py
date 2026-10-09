@@ -63,6 +63,8 @@ class Strict(BaseModel):
 class Plan(Strict):
     intent: Intent
     document_query: str | None = Field(default=None, max_length=300)
+    # Document numbers named in the request: identification keeps only exact matches.
+    identifiers: list[str] = Field(default_factory=list, max_length=5)
     knowledge_questions: list[str] = Field(default_factory=list, max_length=3)
     focus_fields: list[str] = Field(default_factory=list, max_length=10)
     source: Literal["model", "rules"] = "rules"

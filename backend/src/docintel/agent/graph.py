@@ -42,6 +42,7 @@ from docintel.audit.service import RequestMeta
 from docintel.core.config import Settings
 from docintel.core.logging import get_logger
 from docintel.db.models import Sensitivity, ToolCallStatus, ToolChannel
+from docintel.matching.facts import reference_key
 from docintel.processing.sensitivity import assess_pages
 
 logger = get_logger(__name__)
@@ -286,12 +287,16 @@ class Investigation:
             found = await self.ctx.tool(
                 "identify_documents",
                 "search_documents",
-                {"query": plan.document_query, "limit": limit},
+                # With a document number, look wider: only exact matches are kept below.
+                {"query": plan.document_query, "limit": 20 if plan.identifiers else limit},
                 calls,
             )
             if found is not None and found.ok and found.output is not None:
-                candidates = [hit["document_id"] for hit in found.output["results"]]
+                hits = self._narrow(found.output["results"], plan, notices)
+                candidates = [hit["document_id"] for hit in hits][:limit]
                 identified_by = "search" if candidates else "none"
+                if len(hits) > limit:
+                    notices.append(f"Only the first {limit} matching documents were investigated.")
             elif found is not None:
                 notices.append(f"Document search failed: {found.error}")
         for document_id in candidates:
@@ -311,6 +316,29 @@ class Investigation:
             "tool_calls": calls,
             "notices": notices,
         }
+
+    @staticmethod
+    def _narrow(hits: list[dict[str, Any]], plan: Plan, notices: list[str]) -> list[dict[str, Any]]:
+        """Keep the documents carrying a number the request names (their own number first,
+        else the order number they quote); without numbers, every hit counts."""
+        if not plan.identifiers:
+            if len(hits) > 1:
+                notices.append(
+                    f"{len(hits)} documents matched the request and were investigated; "
+                    "name a document number to narrow it down."
+                )
+            return hits
+        keys = {key for key in map(reference_key, plan.identifiers) if key}
+        own = [hit for hit in hits if reference_key(hit["document_number"]) in keys]
+        if own:
+            return own
+        quoting = [hit for hit in hits if reference_key(hit["order_reference"]) in keys]
+        names = ", ".join(plan.identifiers)
+        if quoting:
+            notices.append(f"No document is numbered {names}; documents quoting it were used.")
+        else:
+            notices.append(f"No document you can access is numbered {names}.")
+        return quoting
 
     async def inspect_extraction(self, state: InvestigationState) -> dict[str, Any]:
         plan = Plan.model_validate(state["plan"])

@@ -51,12 +51,14 @@ from docintel.db.models import (
 from docintel.fields.normalize import organization_key
 from docintel.knowledge.embedding import ChunkEmbedder
 from docintel.knowledge.retrieval import rrf_fuse, tsquery_literal
+from docintel.matching.facts import NUMBER_FIELD, PO_REFERENCE_FIELD
 from docintel.search.query import Comparison, ParsedQuery, parse_query
 
 TOTAL_FIELDS = ("total", "contract_value")
 DATE_FIELDS = ("invoice_date", "po_date", "delivery_date", "transaction_date", "effective_date")
 VENDOR_FIELDS = ("vendor_name", "merchant_name")
 TERMS_FIELD = "payment_terms_days"
+NUMBER_FIELDS = tuple(dict.fromkeys(NUMBER_FIELD.values()))
 _CANDIDATES = 60
 _NUMBER = r"^-?[0-9]+(\.[0-9]+)?$"
 _ISO_DATE = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
@@ -85,6 +87,8 @@ class SearchHit:
     score: float | None = None
     reasons: list[str] = field(default_factory=list)
     snippet: Snippet | None = None
+    document_number: str | None = None
+    order_reference: str | None = None  # the purchase order number a document quotes
 
 
 @dataclass(slots=True)
@@ -372,6 +376,8 @@ class DocumentSearchService:
                     _field_text(DATE_FIELDS).label("date"),
                     _field_text(TOTAL_FIELDS).label("total"),
                     _field_text([TERMS_FIELD]).label("terms"),
+                    _field_text(NUMBER_FIELDS).label("number"),
+                    _field_text([PO_REFERENCE_FIELD]).label("order"),
                     Vendor.canonical_name,
                 )
                 .outerjoin(Vendor, Vendor.id == Document.vendor_id)
@@ -388,6 +394,8 @@ class DocumentSearchService:
             hit.total = _parse_decimal(row.total)
             terms = _parse_decimal(row.terms)
             hit.payment_terms_days = int(terms) if terms is not None else None
+            hit.document_number = row.number
+            hit.order_reference = row.order
             reasons = []
             if hit.document.document_type is not None and parsed.document_types:
                 reasons.append(f"type {hit.document.document_type.value}")

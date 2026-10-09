@@ -610,12 +610,14 @@ SUITES = (
     "versions",
     "retrieval",
     "search",
+    "agent",
 )
 
 
 async def _evaluate(args: argparse.Namespace) -> int:
     """Offline evaluation with production defaults; needs the dev/synthetic dependency groups."""
     try:
+        from docintel.evaluation.agent_suite import run_agent_suite
         from docintel.evaluation.classification_suite import run_classification_suite
         from docintel.evaluation.discrepancy_suite import run_discrepancy_suite
         from docintel.evaluation.extraction_suite import run_extraction_suite
@@ -644,7 +646,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
                 report = await run_discrepancy_suite(
                     output, quick=args.quick, languages=args.languages
                 )
-            elif suite in ("retrieval", "search"):
+            elif suite in ("retrieval", "search", "agent"):
                 database_url = args.database_url or os.environ.get(
                     "TEST_DATABASE_URL", os.environ.get("DATABASE_URL")
                 )
@@ -654,7 +656,11 @@ async def _evaluate(args: argparse.Namespace) -> int:
                         "or set TEST_DATABASE_URL (a scratch database is created and dropped)"
                     )
                     return EXIT_USAGE
-                run = run_retrieval_suite if suite == "retrieval" else run_search_suite
+                run = {
+                    "retrieval": run_retrieval_suite,
+                    "search": run_search_suite,
+                    "agent": run_agent_suite,
+                }[suite]
                 report = await run(output, database_url=database_url, quick=args.quick)
             elif suite == "versions":
                 report = await run_versions_suite(
@@ -739,7 +745,8 @@ def _build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--languages", default="eng", help="Tesseract languages")
     evaluate.add_argument(
         "--database-url",
-        help="PostgreSQL server for the retrieval suite (default: TEST_DATABASE_URL)",
+        help="PostgreSQL server for the retrieval, search and agent suites "
+        "(default: TEST_DATABASE_URL)",
     )
     ingest.add_argument(
         "--require-completed",

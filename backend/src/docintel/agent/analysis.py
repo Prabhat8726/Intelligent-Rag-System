@@ -52,6 +52,13 @@ _BLANKET = re.compile(
     re.I,
 )
 
+# "The discrepancy is within tolerance": clearing an issue while a rule fails or warns.
+_ISSUE = re.compile(
+    r"\b(discrepanc\w*|differen\w*|mismatch\w*|variance|deviation|issue|problem|error"
+    r"|exception|duplicate)\b",
+    re.I,
+)
+
 SYSTEM_INSTRUCTION = """\
 You review business documents for a finance or procurement team. You receive facts gathered by
 deterministic tools (documents, extracted fields, rule and comparison outcomes) and policy
@@ -509,8 +516,11 @@ def validate_analysis(
         failed_rules = [
             label for label in labels if catalogue.rule_outcomes.get(label) in ("FAIL", "WARN")
         ]
-        if (failed_rules and _CLEARS.search(statement)) or (
-            unresolved and _BLANKET.search(statement)
+        clears = bool(_CLEARS.search(statement))
+        if (
+            (failed_rules and clears)
+            or (unresolved and clears and _ISSUE.search(statement))
+            or (unresolved and _BLANKET.search(statement))
         ):
             dropped += 1
             notices.append("A model statement that contradicted a rule outcome was removed.")
