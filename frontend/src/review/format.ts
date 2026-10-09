@@ -97,12 +97,13 @@ export const CHECK_LABELS: Record<string, string> = {
   line_delivered: "Delivered",
 };
 
-/** "0.0825" -> "8.25%" for tax rates; other values unchanged. */
+/** "0.0825" -> "8.25%" for tax rates, "45" -> "45 days" for payment terms; others unchanged. */
 export function itemValue(check: string, value: string | null): string {
   if (value === null) return "—";
   if (check === "tax_rate" && !Number.isNaN(Number(value))) {
     return `${String(Math.round(Number(value) * 10000) / 100)}%`;
   }
+  if (check === "payment_terms" && /^\d+$/.test(value)) return `${value} days`;
   return value;
 }
 

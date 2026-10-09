@@ -205,7 +205,7 @@ Evaluation (synthetic data only, layout extractor without LLM, commit `fa1fcce`)
 - ✅ The suites changed the code: they exposed a reading-order bug in OCR text (a line tail read after its paragraph), false failures from documents without readable lines and from misread item codes, an arithmetic rule that discounted values for the very check they failed, and billed lines on no delivery note that no rule caught — each fixed with a regression test
 
 Delivery
-- ✅ 611 backend tests, ruff, ruff format, mypy --strict; 46 frontend tests, ESLint, `tsc`, production build
+- ✅ 611 backend tests, ruff, ruff format, mypy --strict; 47 frontend tests, ESLint, `tsc`, production build
 - ✅ Docker stack: `docker compose up --wait` healthy, smoke test passes (an invoice without its order on file is held for review with `INV_MISSING_PO`), the synthetic dataset processes through the stack with every planted discrepancy in the review queue under its rule; built with the sandbox-only base-image shim (`deb.debian.org` blocked)
 - ✅ CI: the quick evaluation includes both new suites; gitleaks clean on history; `actionlint` clean
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)

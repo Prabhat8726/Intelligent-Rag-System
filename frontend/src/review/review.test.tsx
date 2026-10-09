@@ -18,7 +18,7 @@ import type {
   VersionInfo,
 } from "../lib/types";
 import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
-import { reviewTasksUrl } from "./format";
+import { itemValue, reviewTasksUrl } from "./format";
 
 const DOC_ID = "5b0d8a3e-6b43-4c86-9f73-0b5b0f1f0a11";
 const PO_ID = "7d1e9b4f-0000-4c86-9f73-0b5b0f1f0a22";
@@ -234,6 +234,13 @@ describe("review queue", () => {
 });
 
 describe("comparison view", () => {
+  it("formats rates and terms", () => {
+    expect(itemValue("tax_rate", "0.0825")).toBe("8.25%");
+    expect(itemValue("payment_terms", "45")).toBe("45 days");
+    expect(itemValue("unit_price", "9.41")).toBe("9.41");
+    expect(itemValue("unit_price", null)).toBe("—");
+  });
+
   const comparison: Comparison = {
     id: COMPARISON_ID,
     comparison_type: "INVOICE_PO",
