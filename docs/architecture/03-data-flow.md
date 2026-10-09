@@ -35,35 +35,43 @@ display metadata.
 
 ## Flow B — Processing pipeline (worker)
 
+Stages 0–8 are implemented (Phases 2–4); 9–11 are planned (Phases 5–6). Stage names in
+brackets are the names recorded in `processing_jobs.stage_timings`.
+
 ```mermaid
 flowchart TD
   Q[processing_jobs QUEUED] -->|claim: FOR UPDATE SKIP LOCKED + lease| P[doc → PROCESSING]
-  P --> I[1 Inspect<br/>per-page: has text layer? rotation? DPI]
-  I --> T{native text<br/>sufficient?}
-  T -- yes --> N[2a pdfplumber words + bboxes]
-  T -- no --> O[2b render page pypdfium2 → preprocess → Tesseract OCR<br/>words + bboxes + confidence]
-  N & O --> L[3 Layout: lines→blocks, headings, KV candidates,<br/>tables pdfplumber / vision fallback, multi-page table stitching]
-  L --> C[4 Classify: local calibrated model → LLM fallback if low]
-  C --> SG{sensitivity gate:<br/>external AI allowed?}
-  SG -- yes --> X[5 Extract: schema per type, LLM structured output<br/>page-tagged text (+ page images when needed)]
-  SG -- no --> XL[5' local extractor / manual review task]
-  X & XL --> V[6 Validate: Pydantic schema; one repair attempt with validation errors]
-  V --> E[7 Evidence: locate source_text in page words → page, bbox, match score]
-  E --> NM[8 Normalize: dates, currency, amounts, vendor canonicalization]
-  NM --> CF[9 Confidence per field + document from measured signals]
-  CF --> D[10 Duplicate detection: hash · invoice#+vendor · fuzzy amount/date · embedding similarity]
-  D --> CH[11 Chunk + embed for semantic search]
-  CH --> WF[12 Auto-workflow hook: e.g. invoice → find PO → comparison + rules]
+  P --> G[0 Integrity: re-verify SHA-256 of the stored file  ·integrity·]
+  G --> I[1 Inspect per page: text layer? images? rotation?  ·inspect·]
+  I --> T{usable text<br/>layer?}
+  T -- yes --> N[2a pypdfium2 words + boxes]
+  T -- no --> O[2b render · upscale · deskew → Tesseract OCR<br/>words + boxes + confidence]
+  N & O --> L[3 Layout: lines, column segments, blocks, label/value grids;<br/>geometry tables stitched across pages  ·extract· + ·previews·]
+  L --> C[4 Classify: local calibrated model → LLM fallback if uncertain  ·classify·]
+  C --> LX[5 Layout extractor: labels, letterhead, table columns  ·fields·]
+  LX --> M{confident?<br/>EXTRACTION_LLM_MODE}
+  M -- auto: no / always --> SG{sensitivity gate:<br/>external AI allowed<br/>or local model?}
+  SG -- yes --> X[5' LLM: schema-constrained output,<br/>page-tagged text + low-confidence page images,<br/>one repair round-trip, cached by input hash]
+  SG -- no --> MG
+  M -- yes / never --> MG
+  X --> MG[6 Merge field by field; evidence: quote located on the page → page, box, status]
+  MG --> NM[7 Normalize: amounts, currency, dates, terms; vendor master match]
+  NM --> CF[8 Consistency checks → confidence per field + document → review level]
+  CF --> D[9 Duplicate detection: invoice#+vendor · fuzzy amount/date  — Phase 5]
+  D --> CH[10 Chunk + embed for semantic search  — Phase 6]
+  CH --> WF[11 Auto-workflow hook: invoice → PO → comparison + rules  — Phase 5]
   WF --> R{routing}
-  R -- high confidence, no blocking rule --> DONE[doc COMPLETED]
-  R -- medium/low or rule failure --> REV[doc REVIEW_REQUIRED + review_task]
+  R -- AUTO, no open reason --> DONE[doc COMPLETED]
+  R -- review level or other reason --> REV[doc REVIEW_REQUIRED + reasons]
   P -. unrecoverable error / attempts exhausted .-> F[doc FAILED, job FAILED, error recorded]
 ```
 
-* Every stage is **idempotent** and keyed by `(document_version_id, stage)`; a
-  retried job skips completed stages.
-* Stage timings go to `processing_jobs.stage_timings` → dashboard "average
-  processing time" and Prometheus histograms.
+* Every stage is **idempotent**: its results are replaced per document version, so a
+  retried or re-requested job simply runs again. Human input survives: a human
+  classification is never overridden, and human field corrections are re-applied to a new
+  extraction of the same version and schema (ADR-032).
+* Stage timings go to `processing_jobs.stage_timings` (shown on the document page) →
+  dashboard "average processing time" and Prometheus histograms (Phases 9 and 11).
 * Transient errors (HTTP 429/5xx, timeouts) → retry with exponential backoff and
   jitter, `run_after` pushed forward; permanent errors (validation, corrupt file)
   → fail fast.

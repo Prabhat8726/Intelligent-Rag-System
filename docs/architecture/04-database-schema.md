@@ -48,6 +48,7 @@ erDiagram
   users ||--o{ agent_runs : "requests"
   agent_runs ||--o{ agent_tool_calls : "calls"
   agent_runs ||--o{ llm_calls : "uses"
+  documents ||--o{ llm_calls : "accounted for"
 
   workflows ||--o{ workflow_tasks : "steps"
   workflows ||--o{ workflow_actions : "proposes"
@@ -112,7 +113,8 @@ erDiagram
     jsonb bbox
     numeric confidence
     jsonb confidence_signals
-    text evidence_status "VERIFIED,FUZZY,NOT_FOUND"
+    text evidence_status "VERIFIED,FUZZY,UNSUPPORTED,NOT_FOUND,HUMAN"
+    text corrected_value
   }
   knowledge_chunks {
     uuid id PK
@@ -175,7 +177,7 @@ Implemented by migration `0002_documents_and_jobs` (✅ Phase 2).
 
 | Table | Purpose / notable columns |
 |---|---|
-| `documents` | Logical document. `status` CHECK (`PENDING, PROCESSING, COMPLETED, FAILED, REVIEW_REQUIRED`), `sensitivity` CHECK (`PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED`), `source` CHECK (`UPLOAD, API, SYNTHETIC`), `document_type` CHECK (nullable until classification in Phase 3), `type_confidence` CHECK 0–1, `owner_id`, `department_id`, `current_version_id`, `duplicate_of_id` + `duplicate_reason`, `processing_error`, `last_processed_at`, `deleted_at` + `deleted_by_id` (soft delete). Indexes: partial `(department_id, status, created_at DESC) WHERE deleted_at IS NULL`, `(owner_id)`, `(document_type)`, `(duplicate_of_id)`. `vendor_id` arrives with the `vendors` table (Phase 4). |
+| `documents` | Logical document. `status` CHECK (`PENDING, PROCESSING, COMPLETED, FAILED, REVIEW_REQUIRED`), `sensitivity` CHECK (`PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED`), `source` CHECK (`UPLOAD, API, SYNTHETIC`), `document_type` CHECK (nullable until classification in Phase 3), `type_confidence` CHECK 0–1, `owner_id`, `department_id`, `current_version_id`, `duplicate_of_id` + `duplicate_reason`, `processing_error`, `last_processed_at`, `deleted_at` + `deleted_by_id` (soft delete). Indexes: partial `(department_id, status, created_at DESC) WHERE deleted_at IS NULL`, `(owner_id)`, `(document_type)`, `(duplicate_of_id)`. `vendor_id` was added with the `vendors` table (Phase 4). |
 | `document_versions` | Immutable file version: `version_number` (unique per document), `storage_backend` CHECK (`local, s3`), `storage_key` (unique), `original_filename`, `file_kind`, `mime_type`, `size_bytes` (> 0), `sha256` (CHECK lower-case hex), `page_count` (≥ 1), `inspection jsonb` (per-page native-text/OCR decision written by the worker), `uploaded_by_id`. Index on `sha256` for exact-duplicate detection. |
 | `processing_jobs` | Queue: `job_type` CHECK, `status` CHECK (`QUEUED, PROCESSING, COMPLETED, FAILED, CANCELLED`), `document_id`, `document_version_id`, `requested_by_id`, `payload jsonb`, `priority`, `attempts`, `max_attempts`, `run_after`, `locked_by`, `locked_at`, `lease_expires_at`, `last_error`, `stage`, `stage_timings jsonb`, `started_at`, `finished_at`. Partial index `(priority DESC, run_after) WHERE status = 'QUEUED'` (claim path); partial index `(lease_expires_at) WHERE status = 'PROCESSING'` (expired-lease recovery); unique partial index `(job_type, document_version_id) WHERE status IN ('QUEUED','PROCESSING')` so a version can never be queued twice. `created_at` and `run_after` default to `clock_timestamp()` (not `now()`, which is fixed per transaction) so FIFO order holds for jobs created in one transaction. |
 
@@ -197,12 +199,18 @@ type minimum and detected sensitivity, input to the external-AI gate).
 
 ### Phase 4 — extraction
 
+Implemented by migration `0004_structured_extraction` (✅ Phase 4), which also enables the
+`pg_trgm` extension. An extraction belongs to a document **version**; exactly one extraction
+per document is current (partial unique index `uq_document_extractions_current WHERE
+is_current`); older ones are kept as history.
+
 | Table | Purpose / notable columns |
 |---|---|
-| `document_extractions` | One extraction attempt: `schema_name`, `schema_version`, `provider`, `model`, `prompt_version`, `status` CHECK (`SUCCEEDED, PARTIAL, FAILED`), `output jsonb` (validated), `normalized_output jsonb`, `validation_errors jsonb`, `overall_confidence`, `is_current`. |
-| `extracted_fields` | Field-level provenance + correction: `field_path`, `original_value`, `normalized_value jsonb`, `value_type`, `page_number`, `source_text`, `bbox`, `confidence`, `confidence_signals jsonb`, `evidence_status`, `corrected_value`, `corrected_by`, `corrected_at`. |
-| `vendors` | Vendor master data for normalization: `canonical_name` UNIQUE, `aliases text[]`, `tax_id`, `default_currency`, `payment_terms_days`. GIN trigram index on `canonical_name` (pg_trgm). |
-| `llm_calls` | AI observability (no prompt content): `provider`, `model`, `purpose`, `document_id`, `agent_run_id`, `input_tokens`, `output_tokens`, `thinking_tokens`, `latency_ms`, `status`, `error_code`, `estimated_cost_usd`, `prompt_version`. |
+| `vendors` | Vendor master data: `canonical_name` UNIQUE, `name_key` (organization key: casefolded, legal suffixes removed; GIN trigram index), `aliases text[]` + `alias_keys text[]` (GIN), `tax_id` + `tax_id_key` (index), `default_currency` CHECK ISO 4217 pattern, `payment_terms_days` CHECK ≥ 0, `is_active`, `created_by_id` FK `RESTRICT`, timestamps. |
+| `documents.vendor_id` | FK → `vendors` `ON DELETE SET NULL` (index): the vendor the current extraction matched. |
+| `document_extractions` | One extraction run: `document_id` / `document_version_id` FK `CASCADE`, `schema_name`, `schema_version` CHECK ≥ 1, `status` CHECK (`SUCCEEDED, PARTIAL, FAILED`), `method` CHECK (`LOCAL, LLM, COMBINED`), `provider`, `model`, `prompt_version`, `input_hash` (partial index where `llm_output IS NOT NULL`: the LLM cache), `llm_output jsonb` (validated model output), `output jsonb` / `normalized_output jsonb` (merged result), `checks jsonb` (consistency checks), `validation_errors jsonb`, `signals jsonb` (LLM use, gate decision, normalization context), `overall_confidence` CHECK 0–1, `review_level` CHECK (`AUTO, ANALYST_REVIEW, MANDATORY_REVIEW`), `is_current`, `created_at`. Indexes `(document_id, created_at)`, `(document_version_id)`. |
+| `extracted_fields` | Field-level provenance + correction, one row per scalar, table cell and list item: `extraction_id` FK `CASCADE`, `position`, `field_path` (UNIQUE per extraction, e.g. `line_items[2].quantity`), `field_name`, `group_name`, `row_index`, `value_type` CHECK (14 types), `is_required`, `original_value` (as printed), `normalized_value jsonb`, `page_number` CHECK ≥ 1, `source_text`, `bbox jsonb`, `evidence_status` CHECK (`VERIFIED, FUZZY, UNSUPPORTED, NOT_FOUND, HUMAN`), `origin` CHECK (`LOCAL, LLM, BOTH, DERIVED, HUMAN`), `method`, `confidence` CHECK 0–1, `confidence_signals jsonb`, `alternatives jsonb` (the competing reading), `corrected_value`, `corrected_normalized jsonb`, `correction_note`, `corrected_by_id` FK `RESTRICT`, `corrected_at`. |
+| `llm_calls` | AI usage accounting, no prompt or output content: `created_at`, `provider`, `model`, `purpose`, `document_id` FK `SET NULL`, `prompt_version`, `status` CHECK (`SUCCEEDED, FAILED`), `error_code`, `input_tokens`, `output_tokens`, `thinking_tokens`, `latency_ms`, `estimated_cost_usd` CHECK ≥ 0 (NULL when no price is configured). Indexes `(provider, created_at)` (daily budget) and `(document_id)`. `agent_run_id` arrives with the agent tables (Phase 7). |
 
 ### Phase 5 — comparison, rules, review
 
@@ -256,3 +264,4 @@ are enabled for filtered queries so access/metadata filters don't under-fill top
 * Soft-deleted documents (`deleted_at` set) are excluded by the access-policy query helper, so every read path—including RAG and agent tools—ignores them.
 * `workflow_action_transitions` rows are written by the same service method that changes `workflow_actions.status`, inside the same transaction; invalid transitions are rejected before the write.
 * Vector columns store L2-normalized vectors; cosine distance (`<=>`) is used consistently.
+* Extraction history: a new extraction clears `is_current` on the previous one in the same transaction; the partial unique index makes two current extractions impossible. Human corrections are copied forward onto a re-extraction of the same version and schema (ADR-032).

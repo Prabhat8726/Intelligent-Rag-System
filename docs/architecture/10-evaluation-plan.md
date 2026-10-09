@@ -54,6 +54,10 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 | OCR (CER, WER, word F1 per degradation + preprocessing ablation) | Phase 3 | [`evaluation/reports/ocr.md`](../../evaluation/reports/ocr.md) | `synthetic-noisy`: first page of every native synthetic-core document (seed 7) under six degradations |
 | Classification (accuracy, macro-F1, per class, confusion, ECE, auto-accept error) | Phase 3 | [`evaluation/reports/classification.md`](../../evaluation/reports/classification.md) | held-out corpus text (seed 1001), corpus rendered to PDF and scanned (seed 2002), synthetic-core (seed 42) |
 | Line-item tables (found, row P/R, cell accuracy per column) | Phase 3 | [`evaluation/reports/tables.md`](../../evaluation/reports/tables.md) | synthetic-core (seed 11), native, re-rendered as scans and the dataset's own scans |
+| Structured extraction, layout extractor (field exact / normalized match, P/R/F1 per field, line-item row P/R and cell accuracy, vendor and date normalization of printed variants, consistency checks, auto-accept share and **error inside the auto bucket**) | Phase 4 | [`evaluation/reports/extraction.md`](../../evaluation/reports/extraction.md) | synthetic-core POs, invoices and delivery notes (seed 31), native, re-rendered as scans and the dataset's own scans; document type from ground truth |
 
-Everything else (extraction, provenance, comparison, RAG, agent, system latency): **Not yet
-measured.** All current datasets are synthetic; reports say so next to the numbers.
+Not yet measured: the **LLM extraction path** (no API key or local model in the build
+environment; its merge, evidence and gating logic is covered by tests), provenance metrics
+(page accuracy, bbox IoU), contracts, receipts, resumes, bank statements and policies
+(no generator ground truth yet), comparison, RAG, agent and system latency. All current
+datasets are synthetic; reports say so next to the numbers.

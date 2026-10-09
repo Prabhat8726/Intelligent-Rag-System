@@ -1,8 +1,8 @@
 {
   "suite": "ocr",
   "title": "OCR evaluation (synthetic-noisy)",
-  "created_at": "2026-10-08T13:25:57+00:00",
-  "git_revision": "f85f34217fc7",
+  "created_at": "2026-10-09T01:30:25+00:00",
+  "git_revision": "8ceaf1a0a0ac",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",
@@ -65,7 +65,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 94.79,
-        "seconds_per_page": 1.795,
+        "seconds_per_page": 1.449,
         "orientation_corrected_share": 0.0
       }
     },
@@ -94,7 +94,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.89,
-        "seconds_per_page": 2.335,
+        "seconds_per_page": 1.996,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -121,7 +121,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 92.33,
-        "seconds_per_page": 1.298,
+        "seconds_per_page": 1.118,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -148,7 +148,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 94.01,
-        "seconds_per_page": 2.136,
+        "seconds_per_page": 1.78,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -175,7 +175,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.43,
-        "seconds_per_page": 3.494,
+        "seconds_per_page": 2.617,
         "orientation_corrected_share": 0.0
       }
     },
@@ -204,7 +204,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 89.25,
-        "seconds_per_page": 2.548,
+        "seconds_per_page": 1.966,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -231,7 +231,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 88.32,
-        "seconds_per_page": 1.34,
+        "seconds_per_page": 1.014,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -258,7 +258,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 89.34,
-        "seconds_per_page": 2.11,
+        "seconds_per_page": 1.577,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -285,7 +285,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 87.83,
-        "seconds_per_page": 3.357,
+        "seconds_per_page": 2.535,
         "orientation_corrected_share": 0.0
       }
     },
@@ -314,7 +314,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.75,
-        "seconds_per_page": 1.267,
+        "seconds_per_page": 0.97,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -341,7 +341,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 78.94,
-        "seconds_per_page": 0.683,
+        "seconds_per_page": 0.504,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -368,7 +368,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.75,
-        "seconds_per_page": 1.187,
+        "seconds_per_page": 0.972,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -395,7 +395,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.34,
-        "seconds_per_page": 1.445,
+        "seconds_per_page": 1.197,
         "orientation_corrected_share": 0.0
       }
     },
@@ -424,7 +424,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.52,
-        "seconds_per_page": 2.489,
+        "seconds_per_page": 1.997,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -451,7 +451,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.44,
-        "seconds_per_page": 1.443,
+        "seconds_per_page": 1.197,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -478,7 +478,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 90.62,
-        "seconds_per_page": 1.9,
+        "seconds_per_page": 1.531,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -505,7 +505,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.52,
-        "seconds_per_page": 3.187,
+        "seconds_per_page": 2.562,
         "orientation_corrected_share": 0.0
       }
     },
@@ -534,7 +534,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.7,
-        "seconds_per_page": 6.134,
+        "seconds_per_page": 4.729,
         "orientation_corrected_share": 1.0
       }
     }

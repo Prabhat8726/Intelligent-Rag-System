@@ -42,7 +42,7 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 | Method | Path | Permission | Status |
 |---|---|---|---|
 | POST | `/api/v1/documents` (multipart: `file`, `sensitivity`, `department_id` admins only) → 201 | `documents:upload` | ✅ 2 |
-| GET | `/api/v1/documents` (filters: `status`, `document_type`, `mine`, `q` filename, `created_from`/`created_to`) | `documents:read` + scope | ✅ 2 (vendor filter 🔜 4) |
+| GET | `/api/v1/documents` (filters: `status`, `document_type`, `vendor_id`, `mine`, `q` filename, `created_from`/`created_to`; items carry the matched `vendor`) | `documents:read` + scope | ✅ 2 (vendor ✅ 4) |
 | GET | `/api/v1/documents/{id}` (detail: inspection, latest job; from Phase 3 also pages, current classification + history, review reasons, sensitivity assessment) | `documents:read` + scope | ✅ 2/3 |
 | DELETE | `/api/v1/documents/{id}` (soft delete, cancels queued jobs) → 204 | `documents:delete` + scope | ✅ 2 |
 | GET | `/api/v1/documents/{id}/file` (attachment, `nosniff`, sandbox CSP) | `documents:read` + scope | ✅ 2 |
@@ -51,9 +51,9 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 | GET | `/api/v1/documents/{id}/pages/{n}/image` (PNG preview, `nosniff`, sandbox CSP, `private` cache) | `documents:read` + scope | ✅ 3 |
 | GET | `/api/v1/documents/{id}/tables` (stitched tables with rows) | `documents:read` + scope | ✅ 3 |
 | PATCH | `/api/v1/documents/{id}/classification` `{document_type, note?}` (human correction, audited) | `documents:review` + scope | ✅ 3 |
-| GET | `/api/v1/documents/{id}/extraction` | `documents:read` | 🔜 4 |
-| GET | `/api/v1/documents/{id}/evidence` | `documents:read` | 🔜 4 |
-| PATCH | `/api/v1/documents/{id}/fields/{field_id}` (correction) | `documents:review` | 🔜 4 |
+| GET | `/api/v1/documents/{id}/extraction` (current extraction: schema, method, provider/model, review level, overall confidence, consistency checks, signals, matched vendor, every field with original and normalized value, page, quote, box, evidence status, origin, confidence and its signals, competing reading, correction) → 404 if the type has no schema or nothing was extracted | `documents:read` + scope | ✅ 4 |
+| GET | `/api/v1/documents/{id}/evidence?field_path=` (where each value was read: page, quote, box, evidence status) | `documents:read` + scope | ✅ 4 |
+| PATCH | `/api/v1/documents/{id}/extraction/fields/{field_id}` `{value, note?}` (value as printed; empty = not on the document; normalized and re-scored; review reasons and status recomputed; audited without values) → 422 if the value does not fit the field type | `documents:review` + scope | ✅ 4 |
 | POST/GET | `/api/v1/documents/{id}/versions` · `/versions/compare?from=&to=` | `documents:upload` / `read` | 🔜 5 |
 | GET | `/api/v1/documents/{id}/duplicates` | `documents:read` | 🔜 5 |
 
@@ -72,6 +72,17 @@ The stored file, document, version, processing job and audit row are created
 in one transaction; if the transaction fails the stored file is deleted.
 Filenames are normalized (NFKC, path, control and bidi characters removed) and
 are display data only: storage keys are `documents/{id}/v{n}/original.{ext}`.
+
+### Vendors (Module 8 normalization target)
+| Method | Path | Permission | Status |
+|---|---|---|---|
+| GET | `/api/v1/vendors?q=&limit=&offset=` (`q`: fuzzy name or exact tax ID) | `documents:read` | ✅ 4 |
+| GET | `/api/v1/vendors/{id}` | `documents:read` | ✅ 4 |
+| POST | `/api/v1/vendors` `{canonical_name, aliases?, tax_id?, default_currency?, payment_terms_days?, is_active?}` → 201, 409 duplicate name (audited) | `vendors:manage` | ✅ 4 |
+| PATCH | `/api/v1/vendors/{id}` (partial update, e.g. add a confirmed alias; audited) | `vendors:manage` | ✅ 4 |
+
+Vendor master data is shared across departments: it holds supplier names and terms, not
+document content.
 
 ### Comparison, rules, review
 | Method | Path | Permission | Status |
@@ -123,6 +134,7 @@ Defined in code (`docintel/auth/permissions.py`), covered by tests.
 | `documents:process` | ✓ | ✓ | ✓ | | |
 | `documents:review` (corrections) | ✓ | ✓ | ✓ | ✓ | |
 | `documents:delete` | ✓ | ✓ | | | |
+| `vendors:manage` | ✓ | ✓ | | | |
 | `comparisons:create` | ✓ | ✓ | ✓ | ✓ | |
 | `rules:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `rules:manage` | ✓ | | | | |

@@ -12,7 +12,7 @@ architecture decisions are validated by running code immediately.
 | **0 — Architecture & Foundation** | Requirements, architecture, schema, API, agent, RAG, security, evaluation design; runnable foundation | `docs/`, backend skeleton (config, logging, errors, health, DB, migrations, auth+RBAC, audit, AI provider layer + Gemini), frontend shell, Docker, CI, Makefile | See §1 below |
 | **2 — Document ingestion** ✅ | Upload, validation, storage abstraction, versions, job queue, worker, synthetic generator v1 | `POST/GET/DELETE /documents`, `LocalStorage` + S3-compatible storage, PG job queue + worker, `make generate-documents` | Valid files stored + job queued atomically; invalid/oversized/spoofed rejected (security tests); worker processes jobs with retries/leases |
 | **3 — OCR & understanding** ✅ | Per-page inspection, native text, Tesseract OCR, layout blocks, tables, classification, sensitivity gate | `document_pages`, `document_tables`, classifier + LLM fallback, page preview images | Mixed PDFs handled per page; CER/WER measured on synthetic-noisy; classification metrics reported |
-| 4 — Structured extraction | Schemas, extraction, repair, evidence, normalization, confidence, LLM usage tracking, Ollama provider | `document_extractions`, `extracted_fields`, `llm_calls`, `/extraction`, `/evidence` | Field metrics measured; malformed JSON handled; every field has provenance or is flagged |
+| **4 — Structured extraction** ✅ | Schemas, extraction, repair, evidence, normalization, confidence, LLM usage tracking, Ollama provider | `document_extractions`, `extracted_fields`, `llm_calls`, `/extraction`, `/evidence` | Field metrics measured; malformed JSON handled; every field has provenance or is flagged |
 | 5 — Comparison & rules | Comparison engine, rule engine, duplicates, versions diff, review queue | `/comparisons`, `/rules`, `/review-tasks`, contract version diff | Discrepancy P/R/F1 on scenarios; rules configurable; CI regression suite |
 | 6 — Knowledge & RAG | KB ingestion, chunking, embeddings, hybrid retrieval, citations, semantic search, fastembed local provider | `/knowledge/*`, `/search` | Retrieval metrics measured with ablations; access filters proven by tests |
 | 7 — Agent | LangGraph graph, tool registry, planner, guardrails, MCP server, API tokens | `/analysis`, `mcp` entrypoint | Agent scenario success/tool-selection measured; injection tests pass |
@@ -128,5 +128,47 @@ Persistence, API, UI
 Delivery
 - ✅ Dockerfile installs Tesseract (eng, deu, osd); worker verifies OCR before claiming jobs
 - ⏳ The Dockerfile's `apt-get install` step itself was not run in the build environment (`deb.debian.org` blocked by its network policy); the stack was verified with the same Tesseract version supplied by a sandbox-only base-image shim. CI builds the real image
-- ✅ CI: Tesseract installed for tests, evaluation suites smoke run, dataset ingest with `--require-completed`; `actionlint` clean
+- ✅ CI: Tesseract installed for tests, evaluation suites smoke run, dataset ingest with `--require-completed` (dropped in Phase 4, where some synthetic documents are meant to need review); `actionlint` clean
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+
+## 4. Phase 4 acceptance criteria
+
+Status as of 2026-10-09, same legend as §1. Metrics live in `evaluation/reports/extraction.md`.
+
+Schemas and extraction
+- ✅ Eight versioned Pydantic schemas (invoice, purchase order, receipt, delivery note, contract, resume, bank statement, policy); every value cites page and quote; the model-facing JSON schema is self-contained (`unit/test_fields_scoring.py`)
+- ✅ Layout extractor without any model: labels on the same line, below, across a skewed line break, OCR-damaged labels, letterhead issuer, table columns by header and content, section lists, derived currency; junk and summary rows dropped (`unit/test_fields_layout.py`, 18 tests)
+- ✅ LLM extraction only when allowed and needed: `auto` skips the call when the layout result is confident; sensitive documents never reach an external model, a local model may see them; low-confidence OCR pages go as images; long documents are cut with a marker (`unit/test_fields_service.py`)
+- ✅ Malformed model output gets one repair round-trip, then the layout result stands; provider errors degrade to the layout result; identical input reuses the stored output (`unit/test_fields_service.py::test_malformed_output_gets_one_repair_round_trip`, `::test_provider_errors_degrade_to_the_layout_result`, `::test_identical_input_reuses_the_stored_model_output`)
+- ⏳ LLM extraction against the real Gemini API or a live Ollama server: needs the user's key / server (`make check-ai`); not measured
+
+Evidence, normalization, validation, confidence
+- ✅ Every value has provenance or is flagged: quotes located on the cited page (case/spacing-insensitive, word boundaries, fuzzy for OCR noise), wrong page citations recorded, hallucinated or unsupported values get confidence 0 (`unit/test_fields_layout.py`, `unit/test_fields_service.py::test_hallucinated_and_unsupported_values_get_no_confidence`)
+- ✅ Normalization of amounts (decimal comma, digit grouping), currencies, dates with explicit day/month rules (ambiguous → `UNCERTAIN` until the document decides), terms, percentages, identifiers (`unit/test_fields_normalize.py`); every printed vendor-name variant resolves to its vendor; tax IDs and aliases decide (`unit/test_vendor_matching.py`)
+- ✅ Consistency checks (line arithmetic, sums, tax, totals, due date, date order, balances); a printed arithmetic error is flagged, not hidden (`unit/test_fields_scoring.py`, `unit/test_fields_service.py::test_printed_arithmetic_error_is_flagged_not_hidden`)
+- ✅ Confidence from measured factors; documents route to AUTO / analyst / mandatory review; a missing line-item table, or a row without its quantity or amount, blocks auto-acceptance (`unit/test_fields_scoring.py`, `unit/test_fields_service.py::test_a_missing_line_item_table_blocks_auto_acceptance_until_confirmed`, `::test_a_line_item_missing_an_essential_cell_is_not_auto_accepted`)
+- ✅ Prompt injection: the document cannot close its data block; injected values never reach AUTO, whether they disagree with the layout reading or only the model reports them (`security/test_prompt_injection.py`)
+
+Persistence, API, UI
+- ✅ Migration 0004 round-trips and matches the models (`integration/test_database.py`)
+- ✅ `/extraction`, `/evidence`, field correction and vendor endpoints with scope and permission checks; a reviewer's correction re-scores the document, is audited without values and survives reprocessing; a type correction re-extracts with the new schema (`integration/test_extraction_api.py`, `integration/test_understanding.py::test_uncertain_document_is_corrected_and_correction_survives_reprocessing`)
+- ✅ LLM calls accounted in `llm_calls`; the daily budget holds across calls; cost only from configured prices (`unit/test_ai_providers_phase4.py`, `integration/test_extraction_api.py::test_llm_calls_are_accounted_and_the_daily_budget_holds`)
+- ✅ Ollama provider: chat API request shape, schema format, images only for vision models, error mapping, retries, model listing — against a mocked server (`unit/test_ai_providers_phase4.py`)
+- ✅ UI: extracted fields with evidence, confidence, ambiguity and competing reading; line items; consistency checks; "Show" outlines the source on the page preview; reviewer correction; vendor column (`frontend/src/documents/documents.test.tsx`); checked in headless Chromium against the Docker stack (inbox, a document with a wrong printed total, a scanned invoice, highlight, correction) with no console errors
+
+Evaluation (synthetic data only, layout extractor without LLM, commit `44c14e2`)
+- ✅ Field metrics measured: native PDFs 100% exact and normalized match (70 documents); re-rendered scans 95.9% exact, 99.3% normalized, F1 0.996; the dataset's own scans 100% normalized (4 documents)
+- ✅ Line items: native rows and cells 100%; re-rendered scans row recall 0.738, cell accuracy 78.1%
+- ✅ Routing: 97.1% of native documents auto-accepted with 0.0% error inside the auto bucket; no scanned document is auto-accepted (the first full run auto-accepted one scanned delivery note with a garbled table — fixed by ADR-033's essential cells)
+- ✅ Consistency checks flag 4 of 4 printed arithmetic errors; 1.4% of correctly printed documents are flagged because a value was misread
+- ✅ Printed vendor-name and date-format variants normalized correctly (8 of 8 documents)
+- ⏳ LLM extraction quality, provenance page accuracy and bbox IoU: Not yet measured
+
+Delivery
+- ✅ 546 backend tests, ruff, ruff format, mypy --strict; 31 frontend tests, ESLint, `tsc`, production build; the full backend suite also passes in a fresh checkout (this caught the storage package that an unanchored `.gitignore` rule had kept out of git — and out of ruff, which skips ignored files — since Phase 2)
+- ✅ Docker stack: `docker compose up --wait` healthy, smoke test passes, the synthetic dataset processes through the stack: 34 `COMPLETED`, 3 `REVIEW_REQUIRED` — the invoice with a wrong printed total (`EXTRACTION_INCONSISTENT`) and the two scanned documents of bundle B0012 (`EXTRACTION_UNCERTAIN`); built with the same sandbox-only base-image shim as Phase 3 (`deb.debian.org` blocked)
+- ✅ CI: dataset ingest accepts `REVIEW_REQUIRED`; the quick evaluation includes extraction; gitleaks clean on history
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+- ⏳ Cost per document: no prices are shipped (`LLM_PRICING`), and the Gemini pricing page was not reachable from the build environment
+
+Not in Phase 4 (by design): comparison of documents against each other, near-duplicate detection, review tasks (Phase 5); calibration of the confidence factors on held-out data (Phase 10).

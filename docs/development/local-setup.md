@@ -15,12 +15,22 @@
 
 ```bash
 make env          # creates .env with a random JWT secret (never overwrites an existing .env)
-# edit .env: set SEED_USER_PASSWORD (min 12 chars) and GEMINI_API_KEY
+# edit .env: set SEED_USER_PASSWORD (min 12 chars) and, optionally, GEMINI_API_KEY
+#   (safe placeholder: GEMINI_API_KEY=replace_with_real_key; put the real key only in .env)
 #   values containing spaces must be quoted: SEED_USER_PASSWORD="correct horse battery staple"
 make setup        # uv sync + npm ci
-make seed         # starts Postgres in Docker, applies migrations, creates demo users
-make check-ai     # optional: verifies your Gemini key with real API calls
+make seed         # starts Postgres in Docker, applies migrations, creates demo users and vendors
+make check-ai     # optional: verifies your Gemini key (or Ollama model) with real calls
 ```
+
+Without a key everything except the AI fallbacks works: classification uses the local model
+and field extraction uses the layout rules; uncertain documents go to review. With
+`LLM_PROVIDER=ollama` a self-hosted model takes the LLM role instead of Gemini (see
+[configuration](configuration.md#local-model-ollama)).
+
+`make seed` also creates the demo **vendor master** (the five synthetic vendors with tax IDs,
+currency and payment terms). Extracted vendor names are resolved against it; managers and
+admins can add vendors or aliases through `/api/v1/vendors`.
 
 Demo users (password = `SEED_USER_PASSWORD`):
 
@@ -67,8 +77,9 @@ Each bundle has a purchase order, delivery note and invoice plus a `.json` groun
 listing the intended discrepancies; `manifest.json` describes the dataset. `make process` logs
 in as `analyst@docintel.local` with `SEED_USER_PASSWORD`, writes `ingest-report.json` next to
 the dataset and exits non-zero when a document fails, is rejected or does not finish
-(`REVIEW_REQUIRED` counts as processed; add `INGEST_FLAGS=--require-completed` to fail on it,
-as CI does). Uploading the same
+(`REVIEW_REQUIRED` counts as processed; add `INGEST_FLAGS=--require-completed` to fail on it).
+Some synthetic documents are meant to need review: the dataset contains invoices whose printed
+total is wrong, and scanned copies whose fields OCR misreads. Uploading the same
 dataset again is allowed: the copies are flagged as exact duplicates.
 
 ## Everyday commands
@@ -81,7 +92,8 @@ dataset again is allowed: the copies are flagged as exact duplicates.
 | `make migrate` | Apply migrations to the local database |
 | `make worker` | Process queued jobs on the host until the queue is empty |
 | `make check-ocr` | Verify Tesseract, the configured languages and TSV output |
-| `make evaluate` | Run the OCR, classification and table evaluations (~10 min) → `evaluation/reports/` |
+| `make evaluate` | Run the OCR, classification, table and extraction evaluations (~25 min) → `evaluation/reports/` |
+| `make llm-usage` | LLM calls, tokens and estimated cost per day for the last 7 days (from `llm_calls`) |
 | `cd backend && uv run --env-file ../.env alembic revision -m "..."` | New migration (write it by hand, then `alembic check`) |
 
 ## Troubleshooting
@@ -92,7 +104,9 @@ dataset again is allowed: the copies are flagged as exact duplicates.
 | `warning: Failed to parse environment file` from uv | A value in `.env` contains spaces without quotes: wrap it in double quotes |
 | Documents stay `Queued` | No worker is running: `make dev` starts one, or run `make worker`; in Docker check `docker compose ps worker` |
 | Worker exits with `OCR engine not found` or `language data missing` | Install Tesseract and the languages in `OCR_LANGUAGES` (see prerequisites); `make check-ocr` |
-| Many documents end in `Needs review` | Open one: the banner names the reason. `Document type is uncertain` → correct it (reviewer role), or configure `GEMINI_API_KEY` for the LLM fallback; low OCR confidence → check the scan quality |
+| Many documents end in `Needs review` | Open one: the banner names the reason. `Document type is uncertain` → correct it (reviewer role), or configure `GEMINI_API_KEY` for the LLM fallback; low OCR confidence → check the scan quality; `Required fields are missing` / `Some extracted values are uncertain` → check or correct the values under *Extracted data*; `Extracted amounts or dates do not add up` → the document (or a misread value) is inconsistent |
+| Vendor column stays empty | The printed vendor name did not match the vendor master: run `make seed` (creates the demo vendors), or add the vendor / alias via `/api/v1/vendors` |
+| `ProviderBudgetExceededError` in an extraction's signals | `LLM_DAILY_REQUEST_BUDGET` is used up for today (resets 00:00 UTC); `make llm-usage` shows the count |
 | Port 5432 already in use | Another Postgres is running. Set `POSTGRES_PORT=5433` and update `DATABASE_URL`/`TEST_DATABASE_URL` in `.env` |
 | `/health/ready` returns 503 with `schema is not at migration head` | Run `make migrate` (or `make up`, which runs the migrate service) |
 | `JWT_SECRET_KEY looks like a placeholder` | You are in `staging`/`production` with the example secret: generate a real one |

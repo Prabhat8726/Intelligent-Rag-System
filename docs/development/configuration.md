@@ -22,7 +22,7 @@ Create your `.env` with `make env` — it copies `.env.example` and generates a 
 responses to improve its products and human reviewers may read them; the terms say not to
 submit sensitive, confidential or personal information. Use **synthetic documents only** on
 the free tier (see [C1](../architecture/01-requirements.md)). Real business documents need a
-paid tier or a local model (Phase 4).
+paid tier or a local model (`LLM_PROVIDER=ollama`, below).
 
 Free-tier quotas vary per model and change over time; check **AI Studio → Usage/Rate limits**
 for your project and set `LLM_REQUESTS_PER_MINUTE` / `EMBEDDING_REQUESTS_PER_MINUTE` at or
@@ -118,7 +118,7 @@ never part of a key (ADR-014).
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `gemini` | LLM implementation (local providers arrive in Phase 4) |
+| `LLM_PROVIDER` | `gemini` | `gemini` or `ollama` (a self-hosted model server; see *Local model* below) |
 | `EMBEDDING_PROVIDER` | `gemini` | Embedding implementation (local fastembed in Phase 6) |
 | `GEMINI_API_KEY` | unset | See above. Blank = not configured |
 | `GEMINI_MODEL` | `gemini-3.5-flash` | Default tier: extraction, analysis, RAG answers |
@@ -131,9 +131,46 @@ never part of a key (ADR-014).
 | `LLM_REQUESTS_PER_MINUTE` | `10` | Client-side token bucket for generation calls |
 | `EMBEDDING_REQUESTS_PER_MINUTE` | `60` | Client-side token bucket for embedding calls |
 | `EMBEDDING_BATCH_SIZE` | `100` | Texts per embedding request (max 100) |
+| `LLM_DAILY_REQUEST_BUDGET` | `0` | Maximum LLM requests per provider per UTC day across all workers (counted in `llm_calls`); `0` = unlimited. When used up, calls fail fast and documents keep the layout result (ADR-031) |
+| `LLM_PRICING` | `{}` | JSON map of model ID → USD per million tokens, e.g. `{"gemini-3.5-flash": {"input_per_mtok": 0.5, "output_per_mtok": 3.0}}` (illustrative numbers — take current prices from the provider's pricing page). Used only for the estimated cost in `llm_calls` and `docintel llm-usage`; models without a price show no cost. No prices are shipped |
 
 Model IDs are pinned versions on purpose (reproducible evaluations, ADR-008). If Google
 retires a default, `make check-ai` reports it as unavailable — change the variable.
+
+`make llm-usage` (`docintel llm-usage --days N`) prints calls, failures, tokens and estimated
+cost per day, provider, model and purpose from `llm_calls`, and the configured daily budget.
+
+### Local model (Ollama)
+
+With `LLM_PROVIDER=ollama`, classification fallback and field extraction use a model served by
+[Ollama](https://ollama.com) inside your deployment. Content does not leave it, so the
+external-AI gate does not block confidential documents (ADR-029) — keep `OLLAMA_BASE_URL` on a
+host you control. Embeddings still use `EMBEDDING_PROVIDER`. The provider is covered by tests
+against a mocked Ollama API; it has not been run against a live Ollama server in the build
+environment. `make check-ai` verifies your setup (lists models, one structured call per tier).
+
+| Variable | Default | Description |
+|---|---|---|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server. From the compose containers use the host's address (e.g. `http://host.docker.internal:11434` where available) |
+| `OLLAMA_MODEL` | unset | Model for extraction (required with `LLM_PROVIDER=ollama`), e.g. one you pulled with `ollama pull`. It must support structured output (`format` with a JSON schema) |
+| `OLLAMA_FAST_MODEL` | `OLLAMA_MODEL` | Model for classification fallback |
+| `OLLAMA_VISION` | `false` | `true` if the model accepts images; then low-confidence OCR pages are attached to extraction requests |
+| `OLLAMA_KEEP_ALIVE` | unset | How long Ollama keeps the model loaded (Ollama duration, e.g. `10m`); unset = server default |
+
+### Structured extraction
+
+| Variable | Default | Description |
+|---|---|---|
+| `EXTRACTION_LLM_MODE` | `auto` | `auto`: call the LLM only when the layout extractor's result would not be auto-accepted; `always`; `never` (layout rules only, no AI calls). The sensitivity gate applies in every mode |
+| `EXTRACTION_CONFIDENCE_HIGH` | `0.85` | Document confidence at or above this with no failed consistency check → auto-accepted |
+| `EXTRACTION_CONFIDENCE_MEDIUM` | `0.6` | At or above → analyst review; below → mandatory review. Must not exceed `HIGH` |
+| `EXTRACTION_ARITHMETIC_TOLERANCE` | `0.01` | Allowed difference in amount checks (qty × price, sums, tax, totals) |
+| `EXTRACTION_MAX_PROMPT_CHARS` | `60000` | Page text sent to the LLM is cut at this length (a marker says so) |
+| `EXTRACTION_MAX_OUTPUT_TOKENS` | `8192` | Output limit for the extraction call |
+| `EXTRACTION_VISION_BELOW_OCR_CONFIDENCE` | `70` | OCR pages below this mean confidence are attached as images when the model accepts images |
+| `EXTRACTION_MAX_IMAGES` | `2` | Maximum page images per extraction request |
+| `EVIDENCE_FUZZY_THRESHOLD` | `85` | RapidFuzz alignment score (0–100) at which a quote counts as a close match (`FUZZY`) |
+| `VENDOR_MATCH_MIN_SCORE` | `85` | Name similarity (0–100) needed to link a printed vendor name to the vendor master (tax IDs and aliases match exactly) |
 
 ### Containers
 

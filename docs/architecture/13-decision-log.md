@@ -135,3 +135,33 @@ Short ADRs: context → decision → consequences. New decisions are appended.
 * **Context**: README numbers must trace to a recorded run; the plan suggested timestamped files.
 * **Decision**: `docintel evaluate` writes `evaluation/reports/<suite>.json|.md` with commit (marked `+dirty` for uncommitted trees), versions, seeds and configuration; git history keeps older runs. CI runs the suites with small datasets as a smoke test.
 * **Consequences**: + one place to look, diffs show metric changes in review. − full runs take ~10 minutes and are run by a developer, not by CI.
+
+### ADR-028 — Layout rules extract first; the LLM is a second, checked reader
+* **Context**: the free tier limits requests, some documents may not leave the deployment, and a model can be talked into values by the document's own text.
+* **Decision**: a deterministic layout extractor (labels, letterhead, table headers, section lists) runs on every document. The LLM runs only when allowed by the sensitivity gate and, in the default `EXTRACTION_LLM_MODE=auto`, only when the layout result would not be auto-accepted. Both outputs are merged field by field: agreement raises confidence; on disagreement the value the vendor master recognizes, else the better-evidenced value, else a strong layout rule wins, and the other value is kept for the reviewer. No value is accepted without being found on the page.
+* **Consequences**: + extraction works with no key and no network, most clean documents cost zero calls, and with the default thresholds a value the model alone reports (the target of an injected instruction) is never auto-accepted: disagreement scores 0.6 and a model-only value 0.8. − the layout rules know the label vocabulary of the synthetic templates and common business wording; unfamiliar layouts depend on the LLM or a reviewer. The LLM path is not yet measured (no key in the build environment).
+
+### ADR-029 — A self-hosted model provider is not "external AI"
+* **Context**: the sensitivity gate (ADR-026) blocks content above `AI_EXTERNAL_MAX_SENSITIVITY` from leaving the deployment; Phase 4 adds Ollama as a local `LLMProvider`.
+* **Decision**: providers declare `local`; the gate allows a local provider for any sensitivity and records the reason ("local model: content stays in the deployment"). Gemini is never local.
+* **Consequences**: + confidential and restricted documents can use model extraction on a self-hosted model. − "local" means the operator's Ollama endpoint; pointing `OLLAMA_BASE_URL` at a remote host moves content out, so the setting is documented as an operator responsibility.
+
+### ADR-030 — Field confidence is a product of measured factors; documents route on the weakest field
+* **Context**: Module 26 needs a confidence that drives routing; model self-reports are not evidence (ADR-005).
+* **Decision**: field confidence = product of factors for evidence, normalization, OCR quality, layout rule strength, conflicts, citation page, consistency checks and source agreement (`fields/confidence.py`); a value only the LLM read gets 0.8, below the AUTO threshold. Document confidence = minimum over required fields and line-item cells. AUTO needs ≥ 0.85 and no failed check; ≥ 0.6 is analyst review; below is mandatory review.
+* **Consequences**: + every number is explainable from stored signals and recomputed after a correction. − the factor values are design choices, not fitted; the evaluation reports the error rate inside the auto-accepted bucket, and Phase 10 calibrates on held-out data.
+
+### ADR-031 — Every LLM call is accounted; cost needs configured prices
+* **Context**: Module 43 requires usage and cost tracking; published prices change and the pricing page could not be fetched from the build environment.
+* **Decision**: a provider decorator records each call in `llm_calls` (provider, model, purpose, document, prompt version, tokens, latency, status; never prompts or outputs) and enforces `LLM_DAILY_REQUEST_BUDGET` before sending. Cost is computed only from `LLM_PRICING` (per-million-token prices the operator enters); none are shipped, and a local model costs 0.
+* **Consequences**: + no invented prices in reports; usage is visible via `docintel llm-usage`. − cost shows as unknown until prices are configured.
+
+### ADR-032 — Corrections are values as printed, re-scored, kept on reprocessing, audited without values
+* **Context**: reviewers fix extracted values; reprocessing must not silently drop their work; audit logs must not copy document content.
+* **Decision**: a correction is the text as printed (empty = not on the document); it is normalized with the document's context, scored as human evidence, and the document's review reasons are recomputed. Reprocessing the same version with the same schema re-applies corrections. A type correction that changes the schema re-extracts with the new schema and retires the old extraction. Audit events record field, document and actor, not values.
+* **Consequences**: + corrections survive reprocessing and feed routing immediately. − corrections do not yet train the layout rules (Phase 10 uses them as labelled data).
+
+### ADR-033 — Line-item documents require table rows, and rows require their essential cells
+* **Context**: the first full extraction evaluation auto-accepted scanned delivery notes whose header fields were right but whose table was not found; a later run auto-accepted one whose OCR had garbled the table into a single row without quantity, because routing only weighed cells that existed.
+* **Decision**: invoices, purchase orders, delivery notes and bank statements have a required row-count field; no rows means a missing required field. A reviewer confirms a document without rows with an empty correction. Columns marked essential (quantity; amount for priced lines) get an explicit `NOT_FOUND` cell when a row lacks them, with confidence 0.
+* **Consequences**: + a missed table or a row without its quantity can no longer be auto-accepted, and the reviewer sees exactly which cell is missing. − documents that genuinely have no table, or service lines without a quantity, always need one review. A table read with too few rows but complete ones is not detected by this rule; the error rate inside the auto bucket is reported to watch for it.

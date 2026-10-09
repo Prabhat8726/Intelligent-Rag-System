@@ -39,9 +39,9 @@ classDiagram
 
 | Interface | Default (Phase) | Local alternative (Phase) |
 |---|---|---|
-| `LLMProvider` | Gemini via `google-genai` 2.x (**0**) | Ollama HTTP API (4) |
+| `LLMProvider` | Gemini via `google-genai` 2.x (**0**) | Ollama HTTP API (**4**) |
 | `EmbeddingProvider` | Gemini `gemini-embedding-001`, 768-d, L2-normalized (**0**) | `fastembed` `BAAI/bge-base-en-v1.5`, 768-d (6) |
-| `VisionProvider` | Gemini multimodal (4, with extraction — ADR-024) | Ollama vision model (4, optional) |
+| `VisionProvider` | Page images in the extraction request (`LLMRequest.images`; Gemini, **4** — ADR-024) | Ollama vision model (`OLLAMA_VISION=true`, **4**) |
 | `OCRProvider` | Tesseract 5 via subprocess (**3**) | — (already local) |
 
 Cross-cutting concerns implemented **once** in the provider layer:
@@ -56,8 +56,8 @@ Cross-cutting concerns implemented **once** in the provider layer:
 * **Client-side rate limiting**: async token bucket (`LLM_REQUESTS_PER_MINUTE`)
   so free-tier RPM limits are respected proactively instead of via 429 storms.
 * **Usage accounting**: every call returns `LLMUsage` (input/output/thinking
-  tokens, latency, model); Phase 4 persists it to `llm_calls` and Prometheus.
-  Prompts/completions are **not** stored.
+  tokens, latency, model); Phase 4 persists it to `llm_calls` (Prometheus metrics in
+  Phase 9). Prompts/completions are **not** stored.
 * **Error taxonomy**: `ProviderConfigurationError`, `ProviderRateLimitError`,
   `ProviderUnavailableError`, `ProviderResponseError`, `StructuredOutputError`
   — callers branch on type, not on SDK internals.
@@ -112,10 +112,10 @@ Per **page**, not per document (mixed PDFs are common). Code: `docintel/processi
    `document_pages` (words and layout as JSONB) and `document_tables`/`table_rows`; a PNG
    preview per page goes to document storage.
 
-**Vision fallback deferred to Phase 4.** The plan sent low-confidence OCR pages to a vision
-model here. In Phase 4 the extraction prompt attaches page images for low-confidence pages
-anyway, which covers the same need with one call instead of two (ADR-024). Phase 3 flags such
-pages (`LOW_OCR_CONFIDENCE` review reason).
+**Vision fallback in extraction.** The plan sent low-confidence OCR pages to a vision model
+here. Phase 4's extraction call attaches the images of low-confidence pages instead, which
+covers the same need with one call instead of two (ADR-024). Phase 3 flags such pages
+(`LOW_OCR_CONFIDENCE` review reason).
 
 Licences: pypdfium2 (Apache-2.0/BSD-3), Tesseract (Apache-2.0), scikit-learn (BSD-3),
 RapidFuzz (MIT). PyMuPDF rejected (AGPL-3.0).
@@ -149,57 +149,125 @@ Code: `docintel/classification/`.
   CONFIDENTIAL; IBANs and e-mail addresses are recorded without raising the level. Only counts
   and page numbers are stored. Above `AI_EXTERNAL_MAX_SENSITIVITY` nothing leaves the worker.
 
-## 5. Structured extraction (Modules 6–8, Phase 4)
+## 5. Structured extraction (Modules 6–8, Phase 4 — implemented)
 
-* **Schemas** (Pydantic, versioned): `InvoiceV1`, `PurchaseOrderV1`, `ReceiptV1`,
-  `DeliveryNoteV1`, `ContractV1`, `ResumeV1`, `BankStatementV1`, `PolicyV1`.
-  Each field is wrapped as `ExtractedValue{value, page, source_text}` so the
-  model must cite where it read the value.
-* **Prompt**: page-tagged text (`<page n="1">…</page>`) inside a clearly
-  delimited *untrusted data* block; tables passed as Markdown; images added only
-  for low-OCR-confidence pages.
-* **Validation**: Pydantic → one repair round-trip with the validation errors →
-  else `PARTIAL`/`FAILED` + review task.
-* **Evidence verification** (anti-hallucination): `source_text` must be found in
-  the cited page (exact → `VERIFIED`; `rapidfuzz` partial ratio ≥ threshold →
-  `FUZZY`; else `NOT_FOUND`), and the value must be derivable from the
-  source_text (e.g. normalized amount equals parsed number in the quote). Boxes
-  come from matching words.
-* **Normalization**: dates (explicit format detection; ambiguous `03/04/2026`
-  → `UNCERTAIN` unless vendor/locale hints resolve it), currency (ISO 4217 from
-  symbol/code/vendor default), amounts (`Decimal`, US/EU separators), vendor
-  names (casefold, strip legal suffixes, `rapidfuzz` match against `vendors`).
+Code: `docintel/fields/`. Pipeline stage `fields`, after classification, for the eight types
+that have a schema (`OTHER` has none).
+
+```mermaid
+flowchart LR
+  P[PageContent + stitched tables] --> L[Layout extractor<br/>always runs, no network]
+  L -->|EXTRACTION_LLM_MODE=auto and<br/>result not AUTO-level| G{Sensitivity gate}
+  G -->|allowed or local model| M[LLM extractor<br/>structured output + 1 repair]
+  G -->|blocked| X[layout result only]
+  L --> E[Evidence check per value]
+  M --> E
+  E --> N[Normalize] --> V[Vendor master] --> C[Consistency checks] --> S[Confidence + routing]
+```
+
+* **Schemas** (`schemas.py`, Pydantic, versioned): `InvoiceV1`, `PurchaseOrderV1`,
+  `ReceiptV1`, `DeliveryNoteV1`, `ContractV1`, `ResumeV1`, `BankStatementV1`, `PolicyV1`.
+  Every scalar is `ExtractedValue{value, page, source_text}` and every table row carries
+  `page` and `source_text`, so the model must cite where it read each value. Field metadata
+  (type, required, printed labels, letterhead position) drives both extractors; the schema
+  is the single source of truth.
+* **Layout extractor** (`local.py`, ADR-028): finds printed labels (same line, same column
+  segment, the line below, the neighbouring line on skewed scans, OCR-damaged labels with
+  RapidFuzz ≥ 90), the issuer name in the letterhead (largest text in the top 30% of page 1,
+  never another schema's label or a document title), table columns by header synonyms and
+  content, section lists for contracts, resumes and policies. Each candidate records how it was
+  found (`method`) and how strong that rule is (`anchor`, 0.6–1.0).
+* **LLM extractor** (`llm.py`): `EXTRACTION_LLM_MODE` = `auto` (call the model only when the
+  layout result would not be auto-accepted), `always` or `never`. One call per document
+  version with all fields; page-tagged text inside a delimited untrusted-data block
+  (`<document>…</document>`, tag look-alikes in the text are neutralized), tables in the page
+  text, and page images for pages whose OCR confidence is below
+  `EXTRACTION_VISION_BELOW_OCR_CONFIDENCE` (at most `EXTRACTION_MAX_IMAGES`, ADR-024).
+  Pydantic validates the output; one repair round-trip with the validation errors, else the
+  layout result stands. Outputs are cached by a hash of prompt version, system instruction,
+  schema, model, prompt text and images.
+* **Merge** (field by field): both sources agree → agreement signal. They disagree → the value
+  the vendor master recognizes (vendor name), else the one with better evidence, else the
+  layout value if its rule is strong (anchor ≥ 0.95), else the model's; the other value is
+  stored as an alternative and shown to the reviewer.
+* **Evidence** (`evidence.py`, anti-hallucination): the quote must be on the cited page (word
+  boundaries, whitespace-insensitive) → `VERIFIED`; RapidFuzz alignment ≥
+  `EVIDENCE_FUZZY_THRESHOLD` → `FUZZY`; on the page but the value is not in the quote →
+  `UNSUPPORTED`; else `NOT_FOUND`. A model value without a usable quote counts only if the
+  value itself (≥ 6 characters) is printed on the page. The bounding box comes from the matched
+  words.
+* **Normalization** (`normalize.py`): amounts as `Decimal` (decimal comma inferred per
+  document), ISO 4217 currency (explicit code > vendor default > the one currency printed on
+  the page > assumed from `$`), dates with explicit order rules (`03/04/2026` is decided by
+  unambiguous dates or the currency on the same document, dotted dates are day-first, else
+  `UNCERTAIN` with both readings), percentages as fractions, payment terms in days. The printed
   `original_value` is always kept.
-* **Arithmetic validation**: Σ line totals = subtotal; subtotal + tax = total;
-  qty × unit price = line total (tolerances configurable).
+* **Vendor master** (`vendors.py`, table `vendors`): tax ID > exact alias > name similarity ≥
+  `VENDOR_MATCH_MIN_SCORE` on organization keys (legal suffixes removed; PostgreSQL `pg_trgm`
+  pre-filter). A match links the document to the vendor and supplies the default currency.
+* **Consistency checks** (`validation.py`): qty × unit price = line amount; Σ lines = subtotal
+  (or total); subtotal + tax = total; subtotal × tax rate = tax; invoice date + payment terms =
+  due date (else due date not before invoice date); period/effective start not after end;
+  opening balance + credits − debits = closing balance. Tolerance
+  `EXTRACTION_ARITHMETIC_TOLERANCE`. A failed check never changes a value; it lowers the
+  confidence of the fields involved and forces review.
+* **Line items are required** for invoices, purchase orders, delivery notes and bank
+  statements (ADR-033): a row-count pseudo-field is required, so a document whose table was
+  not found cannot be auto-accepted. A reviewer confirms "no rows" with an empty correction.
+  Within a row, columns a line item cannot do without (quantity; amount for priced lines) are
+  *essential*: a row missing one gets an explicit `NOT_FOUND` cell with confidence 0.
+* **Human corrections** (`PATCH /documents/{id}/extraction/fields/{field_id}`): the reviewer
+  types the value as printed; it is normalized and re-scored like any other value, kept on
+  reprocessing of the same version and schema, and audited without the value (ADR-032).
 
-## 6. Confidence model (Module 26)
+## 6. Confidence model (Module 26, implemented)
 
-Field confidence is a weighted combination of **measured** signals:
+A field's confidence is the **product** of factors from measured signals (`confidence.py`,
+ADR-030). The model's own certainty is not an input (ADR-005).
 
-| Signal | Source | Range |
-|---|---|---|
-| `ocr` | mean word confidence of the evidence span (1.0 for native text) | 0–1 |
-| `evidence` | VERIFIED 1.0 / FUZZY ratio / NOT_FOUND 0 | 0–1 |
-| `type_valid` | value parses as the declared type/format | 0/1 |
-| `consistency` | arithmetic / cross-field checks involving the field | 0/1/neutral |
-| `agreement` | agreement with an independent extractor (regex/heuristic) where one exists | 0/1/neutral |
+| Signal | Factor |
+|---|---|
+| evidence | VERIFIED 1.0 · FUZZY score/100 · UNSUPPORTED 0.1 · NOT_FOUND 0 |
+| normalization | OK 1.0 · UNCERTAIN 0.6 (e.g. ambiguous day/month) · INVALID 0 |
+| ocr | native text 1.0, else 0.5 + 0.5 × mean word confidence of the evidence |
+| anchor | strength of the layout rule (exact label 1.0 … weak letterhead guess 0.6) |
+| conflicts | 0.8 when the same rule found different values |
+| page | 0.95 when the model cited the wrong page |
+| consistency | 0.6 when every check involving the field failed |
+| agreement | two sources agree 1.0 · single source 0.9 · only the LLM read it 0.8 · disagree 0.6 |
 
-* Document confidence = minimum over **required** fields (weakest link) —
-  conservative by design.
-* LLM self-reported confidence is **not** an input.
-* Routing: `≥ CONFIDENCE_HIGH` and no blocking rule → auto; `≥ CONFIDENCE_MEDIUM`
-  → analyst review; below → mandatory review. Any `CRITICAL` rule failure forces review.
-* Phase 10 calibrates weights/thresholds on held-out labelled data and reports
-  reliability (ECE) and the error rate inside the auto-processed bucket.
+* A value only the model found is printed on the page, but nothing shows it is the right
+  field (text on the page can talk a model into quoting it), so with the default thresholds it
+  is never auto-accepted on its own (`tests/security/test_prompt_injection.py`).
+* Document confidence = the weakest of the **required** scalar fields (missing = 0) and the
+  line-item cells (row numbers and units excluded).
+* Routing: ≥ `EXTRACTION_CONFIDENCE_HIGH` (0.85) and no failed check → `AUTO`; ≥
+  `EXTRACTION_CONFIDENCE_MEDIUM` (0.6) → `ANALYST_REVIEW`; else `MANDATORY_REVIEW`. Anything
+  but `AUTO` adds a review reason (`MISSING_REQUIRED_FIELDS`, `EXTRACTION_UNCERTAIN`,
+  `EXTRACTION_INCONSISTENT`, `EXTRACTION_FAILED`) and the document becomes `REVIEW_REQUIRED`.
+* The factor values are design choices. Whether they are good is measured, not assumed: the
+  extraction evaluation reports the error rate inside the auto-accepted bucket
+  (`evaluation/reports/extraction.md`). Calibration on held-out labelled data (ECE) is
+  Phase 10.
 
-## 7. Cost & quota control (free-tier strategy)
+## 7. Cost & quota control (free-tier strategy, implemented in Phase 4)
 
-1. Deterministic stages first (native text, rules, comparison, normalization) — zero LLM calls.
+1. Deterministic stages first (native text, layout rules, normalization, checks) — zero LLM
+   calls. In `auto` mode the extraction LLM is called only when the layout result would not be
+   auto-accepted.
 2. Local classifier handles confident cases; LLM only for the uncertain tail.
-3. One extraction call per document version (all fields at once), cached by
-   `(sha256, schema_version, prompt_version, model)`.
-4. Embeddings batched; re-embedding only when content hash or model changes.
-5. Client-side token bucket + SDK retries; daily budget guard (`LLM_DAILY_REQUEST_BUDGET`, Phase 4).
-6. Every call accounted (`llm_calls`) → dashboard shows calls, tokens, estimated cost
-   (labelled "estimated at paid-tier list price" when on the free tier).
+3. One extraction call per document version (all fields at once), cached by input hash
+   (identical input → stored output, no call).
+4. Embeddings batched; re-embedding only when content hash or model changes (Phase 6).
+5. Client-side token bucket + SDK retries; `LLM_DAILY_REQUEST_BUDGET` (0 = unlimited) is
+   checked before every call; when it is used up the call fails with
+   `ProviderBudgetExceededError`, the error is recorded in the extraction's signals, and the
+   layout result is kept and routed by its own confidence (in `auto` mode that means review).
+6. Every call is recorded in `llm_calls` (provider, model, purpose, document, prompt version,
+   tokens, latency, status, estimated cost) — never prompts or completions. `docintel
+   llm-usage` reports per day. Cost is estimated only from prices you configure in
+   `LLM_PRICING` (none are shipped: published prices change and could not be verified,
+   ADR-031); a local model costs 0.
+7. **Local provider** (`LLM_PROVIDER=ollama`): extraction and classification can run on a
+   self-hosted model. Content stays in the deployment, so the external-AI sensitivity gate
+   does not block it (ADR-029); `make check-ai` verifies it.

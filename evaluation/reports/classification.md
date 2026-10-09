@@ -1,6 +1,6 @@
 # Document classification
 
-Generated 2026-10-08T13:26:41+00:00 from commit `f85f34217fc7` by `docintel evaluate --suite classification`. Do not edit by hand.
+Generated 2026-10-09T01:30:59+00:00 from commit `8ceaf1a0a0ac` by `docintel evaluate --suite classification`. Do not edit by hand.
 
 ## Summary
 

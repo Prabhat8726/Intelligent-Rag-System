@@ -20,12 +20,15 @@ Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 | Logging | **structlog** (JSON in prod) | Structured, contextvars for request ids, redaction processor | std logging only |
 | Metrics | prometheus-client (Phase 11) | De-facto standard, free | OpenTelemetry metrics (can be added) |
 | LLM SDK | **google-genai 2.x** | Google's current unified SDK; `google-generativeai` is legacy | REST by hand |
+| Local LLM | **Ollama** HTTP API via httpx (`/api/chat` with a JSON-schema `format`, Phase 4) | Self-hosted models keep confidential documents in the deployment (ADR-029); no extra SDK — one small client with the same retries, errors and accounting as Gemini | `ollama` Python package (thin wrapper), vLLM / llama.cpp server (OpenAI-compatible; possible later) |
 | Agent framework | **LangGraph 1.x** (Phase 7) | Explicit state graphs, conditional edges, mature | Custom state machine, CrewAI |
 | MCP | official `mcp` Python SDK (Phase 7) | Reference implementation | — |
 | PDF | **pypdfium2** 5.x (validation, rendering, text layer with character boxes) | Permissive licence, one parser for every PDF task, C speed | PyMuPDF (AGPL), pdfplumber (second parser of untrusted input; dropped in Phase 3, ADR-021), Docling (heavy torch deps; optional future upgrade) |
 | OCR | **Tesseract 5** called as a subprocess (TSV output) | Free, local, word boxes + confidences; subprocess gives real timeouts | pytesseract (thin wrapper, adds nothing), PaddleOCR / docTR / EasyOCR (torch-heavy) |
 | Image maths | NumPy 2 + SciPy (deskew, line detection) | Vectorized, already required by scikit-learn | OpenCV (large binary for two operations) |
-| Fuzzy matching | RapidFuzz 3 | Fast, MIT; CER/WER and evidence matching | thefuzz, python-Levenshtein |
+| Fuzzy matching | RapidFuzz 3 | Fast, MIT; CER/WER, evidence quotes, OCR-damaged labels, vendor names | thefuzz, python-Levenshtein |
+| Vendor name search | PostgreSQL **pg_trgm** (GIN trigram index, `similarity()`) as a pre-filter, RapidFuzz for the final score (Phase 4) | Scales the vendor master without loading it into memory; extension ships with PostgreSQL | Full-text search (poor on short names), loading all vendors per document |
+| Structured extraction | Own layout extractor (labels, letterhead, table headers) + Pydantic schemas for the LLM (Phase 4, ADR-028) | Works without a key or network; every value carries page, quote and box | LLM-only extraction (cost, injection exposure), Docling / LayoutLM (torch, training data) |
 | Classifier | scikit-learn 1.9 (TF-IDF + calibrated LR) | Calibrated probabilities, tiny, private, trains in seconds | Fine-tuned transformer (cost, data needs) |
 | Local embeddings | fastembed (ONNX) `bge-base-en-v1.5` | No torch, 768-d to match Gemini | sentence-transformers (torch) |
 | Synthetic docs | reportlab + Pillow + Faker | Deterministic PDF generation with ground truth | — |
@@ -59,7 +62,7 @@ Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 
 | Cost driver | Strategy |
 |---|---|
-| LLM | Gemini free tier for development **with synthetic data only** (free-tier terms forbid sensitive data — C1); deterministic-first pipeline; local classifier; one extraction call per document version; caching; client-side rate limiting; daily budget guard |
+| LLM | Gemini free tier for development **with synthetic data only** (free-tier terms forbid sensitive data — C1) or a local Ollama model ($0, private); deterministic-first pipeline; local classifier; layout extraction first and the LLM only when it is not confident (`EXTRACTION_LLM_MODE=auto`); one extraction call per document version, cached by input hash; client-side rate limiting; daily request budget (`LLM_DAILY_REQUEST_BUDGET`); every call accounted in `llm_calls` |
 | Embeddings | Batched, cached by content hash; local fastembed option = $0 |
 | OCR | Tesseract locally = $0 |
 | Vector DB / queue / search | All inside PostgreSQL = no extra services |

@@ -1,0 +1,1566 @@
+{
+  "suite": "extraction",
+  "title": "Structured extraction (layout extractor, no LLM)",
+  "created_at": "2026-10-09T01:38:42+00:00",
+  "git_revision": "44c14e2ea276",
+  "environment": {
+    "python": "3.13.16",
+    "pypdfium2": "5.14.0",
+    "pillow": "12.3.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "rapidfuzz": "3.14.6",
+    "reportlab": "5.0.1",
+    "tesseract": "tesseract 5.3.4"
+  },
+  "dataset": {
+    "name": "synthetic-core",
+    "seed": 31,
+    "documents": 74,
+    "bundles_per_scenario": 2,
+    "scanned_rerender": "light scan profile at 150 DPI",
+    "vendor_master": "demo vendors: canonical names and tax IDs, no name variants"
+  },
+  "config": {
+    "engine": "tesseract 5.3.4",
+    "languages": "eng",
+    "quick": false,
+    "llm": "not used (EXTRACTION_LLM_MODE=never)",
+    "thresholds": {
+      "high": 0.85,
+      "medium": 0.6
+    }
+  },
+  "metrics": {
+    "by_method": {
+      "native": {
+        "documents": 70,
+        "fields": {
+          "buyer_name": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "due_date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 46,
+            "with_value": 44,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "subtotal": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_rate": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "total": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_tax_id": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 686,
+          "with_value": 684,
+          "exact_match": 1.0,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 1.0,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 1.0,
+          "cell_accuracy_by_column": {
+            "line_number": 1.0,
+            "sku": 1.0,
+            "description": 1.0,
+            "quantity": 1.0,
+            "unit": 1.0,
+            "unit_price": 1.0,
+            "amount": 1.0
+          }
+        },
+        "routing": {
+          "auto_share": 0.9714,
+          "error_rate_in_auto": 0.0,
+          "levels": {
+            "AUTO": 68,
+            "ANALYST_REVIEW": 0,
+            "MANDATORY_REVIEW": 2
+          },
+          "high_confidence_fields": 682,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "scanned (dataset)": {
+        "documents": 4,
+        "fields": {
+          "buyer_name": {
+            "n": 4,
+            "with_value": 4,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 4,
+            "with_value": 4,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 4,
+            "with_value": 4,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "due_date": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 4,
+            "with_value": 4,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "subtotal": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 0.5,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_rate": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "total": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 0.5,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 4,
+            "with_value": 4,
+            "exact_match": 0.75,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_tax_id": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 36,
+          "with_value": 36,
+          "exact_match": 0.9167,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 0.25,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 0.8646,
+          "cell_accuracy_by_column": {
+            "line_number": 0.75,
+            "sku": 0.625,
+            "description": 0.9375,
+            "quantity": 1.0,
+            "unit": 0.875,
+            "unit_price": 1.0,
+            "amount": 1.0
+          }
+        },
+        "routing": {
+          "auto_share": 0.0,
+          "error_rate_in_auto": null,
+          "levels": {
+            "AUTO": 0,
+            "ANALYST_REVIEW": 1,
+            "MANDATORY_REVIEW": 3
+          },
+          "high_confidence_fields": 30,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "scanned (re-rendered)": {
+        "documents": 70,
+        "fields": {
+          "buyer_name": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 0.9792,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 0.9857,
+            "normalized_match": 0.9857,
+            "precision": 1.0,
+            "recall": 0.9857,
+            "f1": 0.9928
+          },
+          "document number": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 0.9857,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "due_date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 0.9792,
+            "normalized_match": 0.9792,
+            "precision": 1.0,
+            "recall": 0.9792,
+            "f1": 0.9895
+          },
+          "purchase_order_number": {
+            "n": 46,
+            "with_value": 44,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "subtotal": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 0.8958,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 0.8125,
+            "normalized_match": 0.9792,
+            "precision": 1.0,
+            "recall": 0.9792,
+            "f1": 0.9895
+          },
+          "tax_rate": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 0.9792,
+            "normalized_match": 0.9792,
+            "precision": 1.0,
+            "recall": 0.9792,
+            "f1": 0.9895
+          },
+          "total": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 0.9167,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 70,
+            "with_value": 70,
+            "exact_match": 0.9286,
+            "normalized_match": 0.9857,
+            "precision": 0.9857,
+            "recall": 0.9857,
+            "f1": 0.9857
+          },
+          "vendor_tax_id": {
+            "n": 48,
+            "with_value": 48,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 686,
+          "with_value": 684,
+          "exact_match": 0.9591,
+          "normalized_match": 0.9927,
+          "precision": 0.9985,
+          "recall": 0.9927,
+          "f1": 0.9956
+        },
+        "required_fields_correct_rate": 0.9714,
+        "documents_fully_correct_rate": 0.2286,
+        "line_items": {
+          "row_precision": 0.9404,
+          "row_recall": 0.7383,
+          "row_f1": 0.8272,
+          "cell_accuracy": 0.7814,
+          "cell_accuracy_by_column": {
+            "line_number": 0.4524,
+            "sku": 0.7608,
+            "description": 0.8847,
+            "quantity": 0.8184,
+            "unit": 0.8213,
+            "unit_price": 0.8606,
+            "amount": 0.9363
+          }
+        },
+        "routing": {
+          "auto_share": 0.0,
+          "error_rate_in_auto": null,
+          "levels": {
+            "AUTO": 0,
+            "ANALYST_REVIEW": 47,
+            "MANDATORY_REVIEW": 23
+          },
+          "high_confidence_fields": 592,
+          "high_confidence_field_error_rate": 0.0
+        }
+      }
+    },
+    "by_method_and_type": {
+      "native / DELIVERY_NOTE": {
+        "documents": 22,
+        "fields": {
+          "buyer_name": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 110,
+          "with_value": 110,
+          "exact_match": 1.0,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 1.0,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 1.0,
+          "cell_accuracy_by_column": {
+            "line_number": 1.0,
+            "sku": 1.0,
+            "description": 1.0,
+            "quantity": 1.0,
+            "unit": 1.0
+          }
+        },
+        "routing": {
+          "auto_share": 1.0,
+          "error_rate_in_auto": 0.0,
+          "levels": {
+            "AUTO": 22,
+            "ANALYST_REVIEW": 0,
+            "MANDATORY_REVIEW": 0
+          },
+          "high_confidence_fields": 110,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "native / INVOICE": {
+        "documents": 24,
+        "fields": {
+          "buyer_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "due_date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 24,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "subtotal": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_rate": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "total": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_tax_id": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 312,
+          "with_value": 310,
+          "exact_match": 1.0,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 1.0,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 1.0,
+          "cell_accuracy_by_column": {
+            "line_number": 1.0,
+            "sku": 1.0,
+            "description": 1.0,
+            "quantity": 1.0,
+            "unit": 1.0,
+            "unit_price": 1.0,
+            "amount": 1.0
+          }
+        },
+        "routing": {
+          "auto_share": 0.9167,
+          "error_rate_in_auto": 0.0,
+          "levels": {
+            "AUTO": 22,
+            "ANALYST_REVIEW": 0,
+            "MANDATORY_REVIEW": 2
+          },
+          "high_confidence_fields": 308,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "native / PURCHASE_ORDER": {
+        "documents": 24,
+        "fields": {
+          "buyer_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "subtotal": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_rate": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "total": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_tax_id": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 264,
+          "with_value": 264,
+          "exact_match": 1.0,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 1.0,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 1.0,
+          "cell_accuracy_by_column": {
+            "line_number": 1.0,
+            "sku": 1.0,
+            "description": 1.0,
+            "quantity": 1.0,
+            "unit": 1.0,
+            "unit_price": 1.0,
+            "amount": 1.0
+          }
+        },
+        "routing": {
+          "auto_share": 1.0,
+          "error_rate_in_auto": 0.0,
+          "levels": {
+            "AUTO": 24,
+            "ANALYST_REVIEW": 0,
+            "MANDATORY_REVIEW": 0
+          },
+          "high_confidence_fields": 264,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "scanned (dataset) / DELIVERY_NOTE": {
+        "documents": 2,
+        "fields": {
+          "buyer_name": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 10,
+          "with_value": 10,
+          "exact_match": 1.0,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 0.5,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 0.9,
+          "cell_accuracy_by_column": {
+            "line_number": 1.0,
+            "sku": 0.75,
+            "description": 1.0,
+            "quantity": 1.0,
+            "unit": 0.75
+          }
+        },
+        "routing": {
+          "auto_share": 0.0,
+          "error_rate_in_auto": null,
+          "levels": {
+            "AUTO": 0,
+            "ANALYST_REVIEW": 0,
+            "MANDATORY_REVIEW": 2
+          },
+          "high_confidence_fields": 7,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "scanned (dataset) / INVOICE": {
+        "documents": 2,
+        "fields": {
+          "buyer_name": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "due_date": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "subtotal": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 0.5,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_rate": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "total": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 0.5,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 0.5,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_tax_id": {
+            "n": 2,
+            "with_value": 2,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 26,
+          "with_value": 26,
+          "exact_match": 0.8846,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 0.0,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 0.8393,
+          "cell_accuracy_by_column": {
+            "line_number": 0.5,
+            "sku": 0.5,
+            "description": 0.875,
+            "quantity": 1.0,
+            "unit": 1.0,
+            "unit_price": 1.0,
+            "amount": 1.0
+          }
+        },
+        "routing": {
+          "auto_share": 0.0,
+          "error_rate_in_auto": null,
+          "levels": {
+            "AUTO": 0,
+            "ANALYST_REVIEW": 1,
+            "MANDATORY_REVIEW": 1
+          },
+          "high_confidence_fields": 23,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "scanned (re-rendered) / DELIVERY_NOTE": {
+        "documents": 22,
+        "fields": {
+          "buyer_name": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 22,
+            "with_value": 22,
+            "exact_match": 0.9545,
+            "normalized_match": 0.9545,
+            "precision": 0.9545,
+            "recall": 0.9545,
+            "f1": 0.9545
+          }
+        },
+        "all_fields": {
+          "n": 110,
+          "with_value": 110,
+          "exact_match": 0.9909,
+          "normalized_match": 0.9909,
+          "precision": 0.9909,
+          "recall": 0.9909,
+          "f1": 0.9909
+        },
+        "required_fields_correct_rate": 0.9545,
+        "documents_fully_correct_rate": 0.1818,
+        "line_items": {
+          "row_precision": 0.9796,
+          "row_recall": 0.6316,
+          "row_f1": 0.768,
+          "cell_accuracy": 0.6792,
+          "cell_accuracy_by_column": {
+            "line_number": 0.3646,
+            "sku": 0.6562,
+            "description": 0.8125,
+            "quantity": 0.8333,
+            "unit": 0.7292
+          }
+        },
+        "routing": {
+          "auto_share": 0.0,
+          "error_rate_in_auto": null,
+          "levels": {
+            "AUTO": 0,
+            "ANALYST_REVIEW": 12,
+            "MANDATORY_REVIEW": 10
+          },
+          "high_confidence_fields": 87,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "scanned (re-rendered) / INVOICE": {
+        "documents": 24,
+        "fields": {
+          "buyer_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document number": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "due_date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "purchase_order_number": {
+            "n": 24,
+            "with_value": 22,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "subtotal": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.875,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.8333,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_rate": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "total": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.875,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.8333,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_tax_id": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 312,
+          "with_value": 310,
+          "exact_match": 0.9548,
+          "normalized_match": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "required_fields_correct_rate": 1.0,
+        "documents_fully_correct_rate": 0.2917,
+        "line_items": {
+          "row_precision": 0.8198,
+          "row_recall": 0.5759,
+          "row_f1": 0.6766,
+          "cell_accuracy": 0.7582,
+          "cell_accuracy_by_column": {
+            "line_number": 0.4505,
+            "sku": 0.8022,
+            "description": 0.9341,
+            "quantity": 0.7363,
+            "unit": 0.7033,
+            "unit_price": 0.7363,
+            "amount": 0.9451
+          }
+        },
+        "routing": {
+          "auto_share": 0.0,
+          "error_rate_in_auto": null,
+          "levels": {
+            "AUTO": 0,
+            "ANALYST_REVIEW": 19,
+            "MANDATORY_REVIEW": 5
+          },
+          "high_confidence_fields": 276,
+          "high_confidence_field_error_rate": 0.0
+        }
+      },
+      "scanned (re-rendered) / PURCHASE_ORDER": {
+        "documents": 24,
+        "fields": {
+          "buyer_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "currency": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.9583,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "document date": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.9583,
+            "normalized_match": 0.9583,
+            "precision": 1.0,
+            "recall": 0.9583,
+            "f1": 0.9787
+          },
+          "document number": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.9583,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "payment_terms_days": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.9583,
+            "normalized_match": 0.9583,
+            "precision": 1.0,
+            "recall": 0.9583,
+            "f1": 0.9787
+          },
+          "subtotal": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.9167,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "tax_amount": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.7917,
+            "normalized_match": 0.9583,
+            "precision": 1.0,
+            "recall": 0.9583,
+            "f1": 0.9787
+          },
+          "tax_rate": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.9583,
+            "normalized_match": 0.9583,
+            "precision": 1.0,
+            "recall": 0.9583,
+            "f1": 0.9787
+          },
+          "total": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 0.9583,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_name": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "vendor_tax_id": {
+            "n": 24,
+            "with_value": 24,
+            "exact_match": 1.0,
+            "normalized_match": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          }
+        },
+        "all_fields": {
+          "n": 264,
+          "with_value": 264,
+          "exact_match": 0.9508,
+          "normalized_match": 0.9848,
+          "precision": 1.0,
+          "recall": 0.9848,
+          "f1": 0.9924
+        },
+        "required_fields_correct_rate": 0.9583,
+        "documents_fully_correct_rate": 0.2083,
+        "line_items": {
+          "row_precision": 1.0,
+          "row_recall": 1.0,
+          "row_f1": 1.0,
+          "cell_accuracy": 0.8384,
+          "cell_accuracy_by_column": {
+            "line_number": 0.5062,
+            "sku": 0.8,
+            "description": 0.9,
+            "quantity": 0.8562,
+            "unit": 0.9437,
+            "unit_price": 0.9313,
+            "amount": 0.9313
+          }
+        },
+        "routing": {
+          "auto_share": 0.0,
+          "error_rate_in_auto": null,
+          "levels": {
+            "AUTO": 0,
+            "ANALYST_REVIEW": 16,
+            "MANDATORY_REVIEW": 8
+          },
+          "high_confidence_fields": 229,
+          "high_confidence_field_error_rate": 0.0
+        }
+      }
+    },
+    "consistency_checks": {
+      "printed document consistent (flag = misread)": {
+        "documents": 140,
+        "rate": 0.0143
+      },
+      "printed total wrong": {
+        "documents": 4,
+        "rate": 1.0
+      }
+    },
+    "normalization_variants": {
+      "native / DATE_FORMAT_VARIANT": {
+        "documents": 2,
+        "correct": 1.0
+      },
+      "native / VENDOR_NAME_VARIANT": {
+        "documents": 2,
+        "correct": 1.0
+      },
+      "scanned (re-rendered) / DATE_FORMAT_VARIANT": {
+        "documents": 2,
+        "correct": 1.0
+      },
+      "scanned (re-rendered) / VENDOR_NAME_VARIANT": {
+        "documents": 2,
+        "correct": 1.0
+      }
+    }
+  },
+  "notes": [
+    "Synthetic documents from one generator with three templates. The layout extractor's label vocabulary was written with these templates visible, so these numbers measure the pipeline, not generalization to unseen layouts.",
+    "Exact = the extracted text equals the printed text (whitespace collapsed); normalized = the typed value equals the truth (Decimal amounts, ISO dates, vendor resolved to the canonical vendor). Precision/recall count a wrong value as both a false positive and a false negative; nulls are explicit.",
+    "Fully correct = every header field and every line-item cell right. 'Error in auto bucket' is the share of auto-accepted documents with at least one error: the number that matters operationally.",
+    "LLM extraction: Not yet measured (no GEMINI_API_KEY or local model in the build environment). Its merge, verification and gating logic is covered by tests.",
+    "Document type taken from ground truth (classification is measured separately)."
+  ]
+}
