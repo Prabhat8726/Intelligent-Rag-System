@@ -1,6 +1,6 @@
 # Agent investigation evaluation
 
-Generated 2026-10-09T18:18:03+00:00 from commit `1e72c5073e24+dirty` by `docintel evaluate --suite agent`. Do not edit by hand.
+Generated 2026-10-10T01:21:22+00:00 from commit `b5d2ab7ce285` by `docintel evaluate --suite agent`. Do not edit by hand.
 
 ## Overall (development dataset)
 
@@ -21,7 +21,7 @@ Generated 2026-10-09T18:18:03+00:00 from commit `1e72c5073e24+dirty` by `docinte
 | Governing policy among the sources (defective invoices) | 85.7% |
 | Policy questions: expected section among the sources | 100.0% |
 | Tool calls per document run | 8.14 |
-| Latency per run p50 / p95 (ms, includes the job queue) | 331.8 / 411.3 |
+| Latency per run p50 / p95 (ms, includes the job queue) | 295.4 / 419.7 |
 | LLM calls in deterministic runs | 0 |
 
 ## Overall (held-out dataset, generator seed 11, never used while developing)
@@ -41,7 +41,7 @@ Generated 2026-10-09T18:18:03+00:00 from commit `1e72c5073e24+dirty` by `docinte
 | Findings citing nothing (by category) | 0 |
 | Governing policy among the sources (defective invoices) | 85.7% |
 | Tool calls per document run | 8.14 |
-| Latency per run p50 / p95 (ms, includes the job queue) | 343.2 / 499.2 |
+| Latency per run p50 / p95 (ms, includes the job queue) | 321.3 / 425.3 |
 | LLM calls in deterministic runs | 0 |
 
 ## Guardrails against a scripted adversarial model (development)
@@ -109,7 +109,7 @@ Generated 2026-10-09T18:18:03+00:00 from commit `1e72c5073e24+dirty` by `docinte
 * Policy retrieval for vendor mismatches misses the vendor section with the offline lexical (hashing) embeddings: the rule name shares most words with purchase-order sections. A semantic embedding model is expected to help; not yet measured.
 * Model-assisted planning and analysis (Gemini or a local model): Not yet measured - no model was available in the build environment.
 * Guardrail figures use a scripted adversary, so they measure the validators and guardrails, not an LLM's behaviour.
-* Run time: 94.7 s.
+* Run time: 86.2 s.
 
 ## Provenance
 

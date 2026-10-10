@@ -72,7 +72,7 @@ interface; sensitive documents are never sent to free-tier external AI.
 | Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, type/status filters, vendor column and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; review queue (filters, claim, priority, due dates), each document's checks, comparisons, duplicates and review decision, comparison view whose evidence links open the source field on its page, business rules (read-only, or editable with validation for administrators), versions with upload and clause comparison; knowledge page (ask with cited answers, library, upload, document passages, archive); document search with the query's interpretation; AI analysis (start an investigation or Investigate from a document; findings with evidence, policy sources, confidence factors, recommendation and the action taken or proposed, steps and tool calls); API tokens; system status page |
 | Delivery | Non-root multi-stage images, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, quick evaluation incl. retrieval, dependency audits, secret scan, container smoke test, synthetic dataset and knowledge base loaded through the stack) |
 
-Test suites: 777 backend tests (unit, integration against real PostgreSQL, security) and 62
+Test suites: 778 backend tests (unit, integration against real PostgreSQL, security) and 62
 frontend tests.
 
 ## Quick start
@@ -106,7 +106,7 @@ Details: [local setup](docs/development/local-setup.md) · [configuration](docs/
 All numbers below come from `make evaluate`, run on a clean checkout: OCR, classification,
 tables and extraction at commit `a22f1b8`, discrepancies and versions at `fa1fcce` (re-run
 after two matching fixes the other suites do not use), retrieval and search at `42fedf9`,
-the agent at `AGENT_COMMIT` (deterministic mode; development and held-out datasets).
+the agent at `b5d2ab7` (deterministic mode; development and held-out datasets).
 Retrieval was measured with the offline **lexical** hashing embeddings, and its gate thresholds
 and full-text order were chosen on `kb-queries`; the holdout set is small (14 questions). They are measured on **synthetic data only**. Synthetic layouts are regular and the classifier's training and
 test generators are related, so these numbers overstate real-world accuracy. Each report
@@ -147,7 +147,7 @@ lists its datasets, seeds, engine versions and caveats.
 | Agent task success: invoice named / found from the question / policy question | 100% / 100% / 100% (development, 70 runs) · 100% / 100% held-out (seed 11, 60 runs, run only after development) — deterministic mode | [agent](evaluation/reports/agent.md) |
 | Agent: unsafe recommendations (payment of a defective invoice) / planted defect reported / false failures on clean invoices | 0 / 100% / 0 on both datasets | [agent](evaluation/reports/agent.md) |
 | Agent tool selection precision / recall; findings whose evidence exists | 99.3% / 100% (held-out 99.2% / 100%); 236 of 236 (206 of 206) | [agent](evaluation/reports/agent.md) |
-| Agent: governing policy among the sources (defective invoices) | 85.7% — vendor mismatches miss the vendor section with the lexical embeddings | [agent](evaluation/reports/agent.md) |
+| Agent: governing policy among the sources (defective invoices) | 85.7% — on both datasets the vendor-mismatch invoices miss the vendor section with the lexical embeddings | [agent](evaluation/reports/agent.md) |
 | Agent guardrails vs a scripted adversarial model (16 defective invoices per dataset) | 0 payment recommendations accepted, 0 adversarial statements or summaries kept | [agent](evaluation/reports/agent.md) |
 | Agent with an LLM (Gemini or Ollama planning and analysis) | Not yet measured (no key or local model in the build environment) | |
 | Latency / throughput / cost per document | Not yet measured | |

@@ -250,7 +250,8 @@ Not in Phase 6 (by design): agent use of retrieval and policy explanations of ru
 
 ## 7. Phase 7 acceptance criteria
 
-Status as of 2026-10-10, same legend as §1. Metrics live in `evaluation/reports/agent.md`.
+Status as of 2026-10-10, same legend as §1. Metrics live in `evaluation/reports/agent.md`
+(commit `b5d2ab7`).
 
 Agent workflow (Module 14)
 - ✅ LangGraph `StateGraph` with explicit, JSON-compatible state: understand request → identify documents → inspect extraction → run rules → (compare documents) → retrieve knowledge → analyse (one bounded follow-up round) → determine confidence → recommend → approval gate → request a review / propose for approval → finish (`agent/graph.py`, `integration/test_agent_analysis.py`)
@@ -276,5 +277,12 @@ Evaluation (deterministic mode, synthetic data)
 
 Frontend
 - ✅ AI analysis pages (start, follow, findings with evidence, sources, confidence, recommendation, action, steps and tool calls), Investigate from a document, API tokens page (`analysis/analysis.test.tsx`)
+
+Delivery
+- ✅ 778 backend tests, ruff, ruff format, mypy --strict; 62 frontend tests, ESLint, `tsc`, production build
+- ✅ Docker stack rebuilt (sandbox-only base-image shim), migration 0007 applied by the migrate service, smoke test passes on a fresh stack; browser check on the stack with the synthetic dataset and knowledge base: an invoice investigated from its document page (vendor mismatch held for review, review requested, policy sources shown), a policy question answered from the knowledge base, the investigations list, a token created, shown once and revoked, no start form for a viewer, no console errors
+- ✅ MCP against the stack's database with a personal token (documents and knowledge scopes), over stdio and streamable HTTP: only the six tools the scopes allow are listed; search, fields, rules and knowledge calls succeed; `create_review_task` denied, an invalid id refused; anonymous and forged tokens 401, a foreign Host header 421; the token revoked afterwards
+- ✅ gitleaks clean on history; `actionlint` clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 7 (by design): approving and executing proposed actions (HITL state machine, workflow actions — Phase 8), reports, contract ↔ policy and resume ↔ job comparisons as agent tools (need extraction ground truth for those types).
