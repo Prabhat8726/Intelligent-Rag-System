@@ -1,8 +1,9 @@
 {
   "suite": "ocr",
   "title": "OCR evaluation (synthetic-noisy)",
-  "created_at": "2026-10-09T07:27:13+00:00",
-  "git_revision": "a22f1b8afcf8",
+  "quick": false,
+  "created_at": "2026-10-10T14:10:10+00:00",
+  "git_revision": "2a74f53db57f",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",
@@ -65,7 +66,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 94.79,
-        "seconds_per_page": 1.769,
+        "seconds_per_page": 1.374,
         "orientation_corrected_share": 0.0
       }
     },
@@ -94,7 +95,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.89,
-        "seconds_per_page": 2.362,
+        "seconds_per_page": 1.879,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -121,7 +122,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 92.33,
-        "seconds_per_page": 1.298,
+        "seconds_per_page": 1.048,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -148,7 +149,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 94.01,
-        "seconds_per_page": 2.102,
+        "seconds_per_page": 1.673,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -175,7 +176,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.43,
-        "seconds_per_page": 3.191,
+        "seconds_per_page": 2.371,
         "orientation_corrected_share": 0.0
       }
     },
@@ -204,7 +205,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 89.25,
-        "seconds_per_page": 2.283,
+        "seconds_per_page": 1.794,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -231,7 +232,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 88.32,
-        "seconds_per_page": 1.214,
+        "seconds_per_page": 0.919,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -258,7 +259,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 89.34,
-        "seconds_per_page": 1.977,
+        "seconds_per_page": 1.498,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -285,7 +286,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 87.83,
-        "seconds_per_page": 3.189,
+        "seconds_per_page": 2.39,
         "orientation_corrected_share": 0.0
       }
     },
@@ -314,7 +315,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.75,
-        "seconds_per_page": 1.224,
+        "seconds_per_page": 0.889,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -341,7 +342,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 78.94,
-        "seconds_per_page": 0.672,
+        "seconds_per_page": 0.473,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -368,7 +369,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.75,
-        "seconds_per_page": 1.219,
+        "seconds_per_page": 0.879,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -395,7 +396,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.34,
-        "seconds_per_page": 1.478,
+        "seconds_per_page": 1.104,
         "orientation_corrected_share": 0.0
       }
     },
@@ -424,7 +425,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.52,
-        "seconds_per_page": 2.466,
+        "seconds_per_page": 1.858,
         "orientation_corrected_share": 0.0
       },
       "no_upscale": {
@@ -451,7 +452,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.44,
-        "seconds_per_page": 1.426,
+        "seconds_per_page": 1.082,
         "orientation_corrected_share": 0.0
       },
       "no_deskew": {
@@ -478,7 +479,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 90.62,
-        "seconds_per_page": 1.875,
+        "seconds_per_page": 1.469,
         "orientation_corrected_share": 0.0
       },
       "remove_ruling_lines": {
@@ -505,7 +506,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.52,
-        "seconds_per_page": 3.311,
+        "seconds_per_page": 2.408,
         "orientation_corrected_share": 0.0
       }
     },
@@ -534,7 +535,7 @@
           "n": 35
         },
         "mean_ocr_confidence": 93.7,
-        "seconds_per_page": 6.052,
+        "seconds_per_page": 4.566,
         "orientation_corrected_share": 1.0
       }
     }
@@ -543,5 +544,257 @@
     "Reference text is the PDF text layer of the same page; reference and OCR output are serialized by the same line builder (top-to-bottom, left-to-right).",
     "CER/WER are edit distances divided by reference length; word F1 is order-insensitive.",
     "Synthetic pages are cleaner than real scans (fonts, layout, no handwriting, no stamps): these numbers overstate real-world accuracy."
+  ],
+  "tables": [
+    {
+      "heading": "Default pipeline",
+      "header": [
+        "Degradation",
+        "Variant",
+        "Pages",
+        "CER",
+        "WER",
+        "Word F1",
+        "OCR conf",
+        "s/page"
+      ],
+      "rows": [
+        [
+          "clean_300dpi",
+          "default",
+          "35",
+          "1.2%",
+          "1.5%",
+          "0.989",
+          "94.8",
+          "1.37"
+        ],
+        [
+          "light_scan_150dpi",
+          "default",
+          "35",
+          "2.3%",
+          "3.2%",
+          "0.980",
+          "93.9",
+          "1.88"
+        ],
+        [
+          "heavy_scan_150dpi",
+          "default",
+          "35",
+          "10.4%",
+          "14.9%",
+          "0.891",
+          "89.2",
+          "1.79"
+        ],
+        [
+          "low_res_100dpi",
+          "default",
+          "35",
+          "1.8%",
+          "3.5%",
+          "0.972",
+          "93.8",
+          "0.89"
+        ],
+        [
+          "skew_3deg",
+          "default",
+          "35",
+          "2.0%",
+          "3.2%",
+          "0.977",
+          "93.5",
+          "1.86"
+        ],
+        [
+          "sideways_90deg",
+          "default",
+          "35",
+          "2.7%",
+          "3.5%",
+          "0.980",
+          "93.7",
+          "4.57"
+        ]
+      ]
+    },
+    {
+      "heading": "Preprocessing ablation",
+      "header": [
+        "Degradation",
+        "Variant",
+        "Pages",
+        "CER",
+        "WER",
+        "Word F1",
+        "OCR conf",
+        "s/page"
+      ],
+      "rows": [
+        [
+          "light_scan_150dpi",
+          "default",
+          "35",
+          "2.3%",
+          "3.2%",
+          "0.980",
+          "93.9",
+          "1.88"
+        ],
+        [
+          "light_scan_150dpi",
+          "no_upscale",
+          "35",
+          "3.1%",
+          "5.3%",
+          "0.965",
+          "92.3",
+          "1.05"
+        ],
+        [
+          "light_scan_150dpi",
+          "no_deskew",
+          "35",
+          "2.2%",
+          "3.4%",
+          "0.979",
+          "94.0",
+          "1.67"
+        ],
+        [
+          "light_scan_150dpi",
+          "remove_ruling_lines",
+          "35",
+          "2.4%",
+          "3.5%",
+          "0.976",
+          "93.4",
+          "2.37"
+        ],
+        [
+          "heavy_scan_150dpi",
+          "default",
+          "35",
+          "10.4%",
+          "14.9%",
+          "0.891",
+          "89.2",
+          "1.79"
+        ],
+        [
+          "heavy_scan_150dpi",
+          "no_upscale",
+          "35",
+          "8.7%",
+          "15.4%",
+          "0.882",
+          "88.3",
+          "0.92"
+        ],
+        [
+          "heavy_scan_150dpi",
+          "no_deskew",
+          "35",
+          "11.3%",
+          "16.0%",
+          "0.884",
+          "89.3",
+          "1.50"
+        ],
+        [
+          "heavy_scan_150dpi",
+          "remove_ruling_lines",
+          "35",
+          "14.9%",
+          "20.2%",
+          "0.853",
+          "87.8",
+          "2.39"
+        ],
+        [
+          "low_res_100dpi",
+          "default",
+          "35",
+          "1.8%",
+          "3.5%",
+          "0.972",
+          "93.8",
+          "0.89"
+        ],
+        [
+          "low_res_100dpi",
+          "no_upscale",
+          "35",
+          "7.1%",
+          "18.7%",
+          "0.843",
+          "78.9",
+          "0.47"
+        ],
+        [
+          "low_res_100dpi",
+          "no_deskew",
+          "35",
+          "1.8%",
+          "3.5%",
+          "0.972",
+          "93.8",
+          "0.88"
+        ],
+        [
+          "low_res_100dpi",
+          "remove_ruling_lines",
+          "35",
+          "2.1%",
+          "3.9%",
+          "0.970",
+          "93.3",
+          "1.10"
+        ],
+        [
+          "skew_3deg",
+          "default",
+          "35",
+          "2.0%",
+          "3.2%",
+          "0.977",
+          "93.5",
+          "1.86"
+        ],
+        [
+          "skew_3deg",
+          "no_upscale",
+          "35",
+          "1.9%",
+          "3.0%",
+          "0.977",
+          "93.4",
+          "1.08"
+        ],
+        [
+          "skew_3deg",
+          "no_deskew",
+          "35",
+          "3.7%",
+          "9.8%",
+          "0.926",
+          "90.6",
+          "1.47"
+        ],
+        [
+          "skew_3deg",
+          "remove_ruling_lines",
+          "35",
+          "2.0%",
+          "3.2%",
+          "0.977",
+          "93.5",
+          "2.41"
+        ]
+      ]
+    }
   ]
 }

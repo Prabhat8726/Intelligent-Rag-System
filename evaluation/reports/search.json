@@ -1,8 +1,9 @@
 {
   "suite": "search",
   "title": "Business document search evaluation",
-  "created_at": "2026-10-09T14:56:48+00:00",
-  "git_revision": "42fedf983ee5",
+  "quick": false,
+  "created_at": "2026-10-10T14:15:51+00:00",
+  "git_revision": "2a74f53db57f",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",
@@ -30,7 +31,7 @@
     "embedding_model": "hashing-ngram-v1",
     "text_depth": 10,
     "quick": false,
-    "seconds": 16.3
+    "seconds": 7.6
   },
   "metrics": {
     "families": {
@@ -723,5 +724,85 @@
     "Text questions return a ranked list (first 10); documents that list the item are relevant. Other documents sharing words with the item are returned too, so text precision is low by design.",
     "The first run of this suite found vendor names containing 'and' cut short ('Harbor and Pine Packaging Ltd' read as 'Harbor'); the parser was fixed and the suite re-run. Questions come from the ground truth of clean native PDFs, so these structured-search scores are an upper bound: scanned documents are not included.",
     "Embeddings: lexical hashing model; semantic models not measured."
+  ],
+  "tables": [
+    {
+      "heading": "Results per question family",
+      "header": [
+        "family",
+        "questions",
+        "precision",
+        "recall",
+        "F1",
+        "exact (text: all found)"
+      ],
+      "rows": [
+        [
+          "vendor",
+          "15",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "payment terms",
+          "3",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "totals",
+          "2",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "dates",
+          "4",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "types",
+          "2",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "text",
+          "6",
+          "52.5%",
+          "100.0%",
+          "68.8%",
+          "100.0%"
+        ]
+      ]
+    },
+    {
+      "heading": "Questions with a different result set",
+      "header": [
+        "family",
+        "question",
+        "missing",
+        "unexpected"
+      ],
+      "rows": [
+        [
+          "-",
+          "none",
+          "-",
+          "-"
+        ]
+      ]
+    }
   ]
 }

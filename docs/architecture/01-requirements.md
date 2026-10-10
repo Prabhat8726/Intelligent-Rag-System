@@ -89,7 +89,7 @@ Persona ≠ role: personas differ by **department** (data scope), roles differ b
 | NFR-06 Cost | Runs on free tiers; LLM calls minimized, rate-limited, cached, budgeted | usage table + limiter (Phase 0/4) |
 | NFR-07 Operability | Health/readiness probes, structured JSON logs, Prometheus metrics | Phase 0 (health/logs), Phase 11 (metrics) |
 | NFR-08 Reliability | Idempotent processing stages; retries with backoff; job leases | Phase 2 |
-| NFR-09 Performance | Not yet measured. Targets are set after the first baseline in Phase 10 | Phase 10 |
+| NFR-09 Performance | Baseline measured in Phase 10 on the 4-CPU build machine, one worker process, deterministic mode ([system report](../../evaluation/reports/system.md), ADR-071): see the README's evaluation table for the current numbers (throughput with 1 and 4 claim loops, processing p50/p95 per native and scanned document, in-process API latency). Targets for a deployment, to be verified by the Phase 11 load tests (not yet measured): processing p95 ≤ 1 s per native document and ≤ 5 s per scanned page; read API p95 ≤ 300 ms at the expected concurrency, which needs more than one API process (one process queues 8 concurrent inbox requests); no failed job on valid input | Phase 10 (baseline), 11 (targets) |
 | NFR-10 Maintainability | Typed Python (mypy strict on new code), ruff, tests in CI, migrations only | CI (Phase 0) |
 
 ## 5. Contradictions, gaps and weak choices — and resolutions

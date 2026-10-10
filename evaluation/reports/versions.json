@@ -1,8 +1,9 @@
 {
   "suite": "versions",
   "title": "Contract version comparison (clause changes)",
-  "created_at": "2026-10-10T08:14:02+00:00",
-  "git_revision": "5bf285550b3e",
+  "quick": false,
+  "created_at": "2026-10-10T14:15:29+00:00",
+  "git_revision": "2a74f53db57f",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",
@@ -127,5 +128,42 @@
     "A step is exactly right when its added, removed and modified clauses are all found and nothing else is reported (renumbering alone is not a change).",
     "Titles are compared case-insensitively with a similarity of at least 90 (an OCR slip in a heading does not hide a correctly detected change).",
     "Synthetic contracts use one heading style ('N. Title'); other styles (Clause N, Article N, nested N.N) are covered by unit tests, not measured here."
+  ],
+  "tables": [
+    {
+      "heading": "Summary",
+      "header": [
+        "Input",
+        "Steps",
+        "Steps exactly right",
+        "Change P / R",
+        "Added P / R",
+        "Removed P / R",
+        "Modified P / R",
+        "Segmentation (titles)"
+      ],
+      "rows": [
+        [
+          "native",
+          "40",
+          "100.0%",
+          "100.0% / 100.0%",
+          "100.0% / 100.0%",
+          "100.0% / 100.0%",
+          "100.0% / 100.0%",
+          "100.0%"
+        ],
+        [
+          "scanned (re-rendered)",
+          "40",
+          "100.0%",
+          "100.0% / 100.0%",
+          "100.0% / 100.0%",
+          "100.0% / 100.0%",
+          "100.0% / 100.0%",
+          "100.0%"
+        ]
+      ]
+    }
   ]
 }

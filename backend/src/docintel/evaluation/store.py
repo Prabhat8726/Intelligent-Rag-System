@@ -129,22 +129,43 @@ def read_report_directory(directory: Path) -> list[ReportFile]:
     return _pair(files)
 
 
-def read_report_tar(stream: IO[bytes]) -> list[ReportFile]:
-    """Reports from a tar stream (`tar -cf - -C evaluation/reports .`): regular files only,
-    by base name, nothing written to disk."""
+GATES_FILE = "gates.toml"
+
+
+@dataclass(frozen=True, slots=True)
+class TarImport:
+    reports: list[ReportFile]
+    gates: bytes | None  # the regression gates sent along (`gates.toml`), if any
+
+
+def read_import_tar(stream: IO[bytes]) -> TarImport:
+    """Reports, and optionally the regression gates, from a tar stream
+    (`tar -C evaluation -cf - reports gates.toml`): regular files only, by base name, nothing
+    written to disk."""
     files: dict[str, bytes] = {}
+    gates: bytes | None = None
     with tarfile.open(fileobj=stream, mode="r|*") as archive:
         for member in archive:
             name = PurePosixPath(member.name).name
-            if not member.isfile() or not name.endswith((".json", ".md")):
+            wanted = name.endswith((".json", ".md")) or name == GATES_FILE
+            if not member.isfile() or not wanted:
                 continue
             if member.size > MAX_REPORT_BYTES:
                 msg = f"{name}: larger than {MAX_REPORT_BYTES} bytes"
                 raise InvalidReportError(msg)
             extracted = archive.extractfile(member)
-            if extracted is not None:
+            if extracted is None:
+                continue
+            if name == GATES_FILE:
+                gates = extracted.read()
+            else:
                 files[name] = extracted.read()
-    return _pair(files)
+    return TarImport(_pair(files), gates)
+
+
+def read_report_tar(stream: IO[bytes]) -> list[ReportFile]:
+    """Only the reports of a tar stream (see `read_import_tar`)."""
+    return read_import_tar(stream).reports
 
 
 async def record_report(

@@ -1,6 +1,6 @@
 # Knowledge retrieval evaluation (RAG)
 
-Generated 2026-10-09T14:56:28+00:00 from commit `42fedf983ee5` by `docintel evaluate --suite retrieval`. Do not edit by hand.
+Generated 2026-10-10T14:15:43+00:00 from commit `2a74f53db57f` by `docintel evaluate --suite retrieval`. Do not edit by hand.
 
 ## Ranking (answerable questions; first 10 passages)
 
@@ -49,7 +49,7 @@ Generated 2026-10-09T14:56:28+00:00 from commit `42fedf983ee5` by `docintel eval
 
 | p50 ms | p95 ms | max ms | questions |
 |---|---|---|---|
-| 18.1 | 25.35 | 27.67 | 68 |
+| 18.55 | 30.61 | 33.02 | 68 |
 
 ## Answerable questions with no relevant passage in the first 5 (production)
 
@@ -125,7 +125,7 @@ Generated 2026-10-09T14:56:28+00:00 from commit `42fedf983ee5` by `docintel eval
       "fixed_size_overlap_chars": 300
     },
     "quick": false,
-    "seconds": 23.0
+    "seconds": 13.6
   },
   "environment": {
     "python": "3.13.16",

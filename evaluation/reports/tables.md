@@ -1,6 +1,6 @@
 # Line-item table extraction
 
-Generated 2026-10-09T07:31:19+00:00 from commit `a22f1b8afcf8` by `docintel evaluate --suite tables`. Do not edit by hand.
+Generated 2026-10-10T14:11:34+00:00 from commit `2a74f53db57f` by `docintel evaluate --suite tables`. Do not edit by hand.
 
 ## By input
 

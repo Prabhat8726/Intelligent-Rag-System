@@ -58,14 +58,13 @@ from docintel.db.models import (
     User,
 )
 from docintel.db.session import create_engine, create_sessionmaker
-from docintel.evaluation.gates import check_report, load_gates
+from docintel.evaluation.gates import Gate, check_report, load_gates, parse_gates
 from docintel.evaluation.gates import failures as gate_failures
 from docintel.evaluation.readme import render_block, update_readme
 from docintel.evaluation.store import (
-    InvalidReportError,
     ReportFile,
+    read_import_tar,
     read_report_directory,
-    read_report_tar,
     record_reports,
     report_file_from,
 )
@@ -877,26 +876,47 @@ class _Recorder:
         await self._engine.dispose()
 
 
+def _read_import(path: str, gates_file: str | None) -> tuple[list[ReportFile], list[Gate] | None]:
+    """Reports from a directory or a tar stream on stdin ("-"), and the gates to check."""
+    gates_text = Path(gates_file).read_bytes() if gates_file else None
+    if path == "-":
+        received = read_import_tar(sys.stdin.buffer)
+        reports, gates_text = received.reports, gates_text or received.gates
+    else:
+        reports = read_report_directory(Path(path))
+    return reports, parse_gates(gates_text) if gates_text is not None else None
+
+
 async def _evaluation_import(settings: Settings, args: argparse.Namespace) -> int:
+    """Record report files; each is checked against the regression gates when they are given
+    (`--gates FILE`, or a gates.toml inside the tar stream)."""
     try:
-        reports = (
-            read_report_tar(sys.stdin.buffer)
-            if args.path == "-"
-            else read_report_directory(Path(args.path))
-        )
-    except (OSError, tarfile.TarError, InvalidReportError) as exc:
+        reports, gates = _read_import(args.path, args.gates)
+    except (OSError, tarfile.TarError, ValueError) as exc:  # InvalidReportError is a ValueError
         _fail(str(exc))
         return EXIT_FAILURE
     if not reports:
         _fail(f"no evaluation reports in {args.path}")
         return EXIT_FAILURE
+    results = {
+        report.payload.suite: check_report(
+            gates,
+            suite=report.payload.suite,
+            quick=report.payload.quick,
+            metrics=report.payload.metrics,
+        )
+        for report in reports
+        if gates is not None
+    }
     recorder = await _Recorder.open(settings, args.recorded_by)
     if recorder is None:
         return EXIT_USAGE
     try:
-        await recorder.record(reports, EvaluationSource.IMPORT)
+        await recorder.record(reports, EvaluationSource.IMPORT, gates=results)
     finally:
         await recorder.close()
+    for line in gate_failures(results):
+        print(f"[WARN] recorded with a broken gate: {line}")
     return EXIT_OK
 
 
@@ -1002,6 +1022,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "path", help="directory with <suite>.json and .md files, or - for a tar stream on stdin"
     )
     importer.add_argument("--recorded-by", metavar="EMAIL", help="the user importing them")
+    importer.add_argument(
+        "--gates",
+        metavar="FILE",
+        help="regression gates to check each report against (a tar stream may carry gates.toml)",
+    )
     gates = evaluation_commands.add_parser("gates", help="check reports against regression gates")
     gates.add_argument("reports", nargs="?", default="../evaluation/reports")
     gates.add_argument("--gates", default="../evaluation/gates.toml")

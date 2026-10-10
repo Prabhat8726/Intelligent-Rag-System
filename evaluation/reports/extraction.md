@@ -1,6 +1,6 @@
 # Structured extraction (layout extractor, no LLM)
 
-Generated 2026-10-09T07:32:47+00:00 from commit `a22f1b8afcf8` by `docintel evaluate --suite extraction`. Do not edit by hand.
+Generated 2026-10-10T14:12:53+00:00 from commit `2a74f53db57f` by `docintel evaluate --suite extraction`. Do not edit by hand.
 
 ## Summary by input
 
@@ -9,6 +9,59 @@ Generated 2026-10-09T07:32:47+00:00 from commit `a22f1b8afcf8` by `docintel eval
 | native | 70 | 100.0% | 100.0% | 1.000 | 1.000 | 1.000 | 100.0% | 100.0% |
 | scanned (dataset) | 4 | 91.7% | 100.0% | 1.000 | 1.000 | 1.000 | 100.0% | 25.0% |
 | scanned (re-rendered) | 70 | 95.9% | 99.3% | 0.999 | 0.993 | 0.996 | 97.1% | 22.9% |
+
+## Calibration: confidence against accuracy
+
+| Dataset / input | Docs | Fields | Field ECE | Fields over-confident | Cells | Cell ECE | Cells over-confident |
+|---|---|---|---|---|---|---|---|
+| development / all | 144 | 1400 | 0.110 | 0.2% | 5059 | 0.075 | 1.4% |
+| development / native | 70 | 684 | 0.099 | 0.0% | 2986 | 0.103 | 0.0% |
+| development / scanned | 74 | 716 | 0.121 | 0.4% | 2073 | 0.035 | 3.6% |
+| held-out / all | 72 | 692 | 0.114 | 0.7% | 2651 | 0.082 | 2.8% |
+| held-out / native | 35 | 342 | 0.099 | 0.0% | 1448 | 0.103 | 0.0% |
+| held-out / scanned | 37 | 350 | 0.129 | 1.4% | 1203 | 0.056 | 6.1% |
+
+## Reliability (development, all inputs)
+
+| Confidence | Fields | Mean confidence | Accuracy | Cells | Mean confidence | Accuracy |
+|---|---|---|---|---|---|---|
+| 0.3-0.4 | 0 |  |  | 2 | 0.387 | 100.0% |
+| 0.4-0.5 | 0 |  |  | 4 | 0.466 | 75.0% |
+| 0.5-0.6 | 4 | 0.528 | 100.0% | 40 | 0.548 | 67.5% |
+| 0.6-0.7 | 0 |  |  | 73 | 0.661 | 64.4% |
+| 0.7-0.8 | 3 | 0.786 | 66.7% | 179 | 0.762 | 81.0% |
+| 0.8-0.9 | 731 | 0.872 | 100.0% | 2244 | 0.876 | 92.6% |
+| 0.9-1.0 | 662 | 0.912 | 100.0% | 2517 | 0.900 | 100.0% |
+
+## Auto-accept threshold: development (choice) and held-out, all inputs
+
+| Threshold | Development auto-accepted | Development errors (95% bound) | Held-out auto-accepted | Held-out errors (95% bound) |
+|---|---|---|---|---|
+| 0.50 | 123 of 144 (85.4%) | 38 (≤ 38.5%) | 60 of 72 (83.3%) | 17 (≤ 39.4%) |
+| 0.60 | 116 of 144 (80.6%) | 33 (≤ 36.1%) | 58 of 72 (80.6%) | 15 (≤ 37.0%) |
+| 0.70 | 108 of 144 (75.0%) | 25 (≤ 30.8%) | 54 of 72 (75.0%) | 12 (≤ 33.5%) |
+| 0.75 | 106 of 144 (73.6%) | 24 (≤ 30.3%) | 53 of 72 (73.6%) | 11 (≤ 32.0%) |
+| 0.80 | 92 of 144 (63.9%) | 16 (≤ 25.2%) | 47 of 72 (65.3%) | 7 (≤ 26.2%) |
+| 0.82 | 89 of 144 (61.8%) | 14 (≤ 23.5%) | 42 of 72 (58.3%) | 4 (≤ 20.5%) |
+| 0.85 (current, chosen) | 68 of 144 (47.2%) | 0 (≤ 4.3%) | 34 of 72 (47.2%) | 0 (≤ 8.4%) |
+| 0.88 | 68 of 144 (47.2%) | 0 (≤ 4.3%) | 34 of 72 (47.2%) | 0 (≤ 8.4%) |
+| 0.90 | 0 of 144 (0.0%) | none auto-accepted | 0 of 72 (0.0%) | none auto-accepted |
+| 0.95 | 0 of 144 (0.0%) | none auto-accepted | 0 of 72 (0.0%) | none auto-accepted |
+
+## Auto-accept threshold: scanned inputs only
+
+| Threshold | Development auto-accepted | Development errors (95% bound) | Held-out auto-accepted | Held-out errors (95% bound) |
+|---|---|---|---|---|
+| 0.50 | 55 of 74 (74.3%) | 38 (≤ 79.2%) | 26 of 37 (70.3%) | 17 (≤ 80.6%) |
+| 0.60 | 48 of 74 (64.9%) | 33 (≤ 79.7%) | 24 of 37 (64.9%) | 15 (≤ 78.8%) |
+| 0.70 | 40 of 74 (54.0%) | 25 (≤ 75.3%) | 20 of 37 (54.0%) | 12 (≤ 78.3%) |
+| 0.75 | 38 of 74 (51.3%) | 24 (≤ 76.2%) | 19 of 37 (51.3%) | 11 (≤ 77.0%) |
+| 0.80 | 24 of 74 (32.4%) | 16 (≤ 82.2%) | 13 of 37 (35.1%) | 7 (≤ 77.6%) |
+| 0.82 | 21 of 74 (28.4%) | 14 (≤ 83.2%) | 8 of 37 (21.6%) | 4 (≤ 80.7%) |
+| 0.85 (current, chosen) | 0 of 74 (0.0%) | none auto-accepted | 0 of 37 (0.0%) | none auto-accepted |
+| 0.88 | 0 of 74 (0.0%) | none auto-accepted | 0 of 37 (0.0%) | none auto-accepted |
+| 0.90 | 0 of 74 (0.0%) | none auto-accepted | 0 of 37 (0.0%) | none auto-accepted |
+| 0.95 | 0 of 74 (0.0%) | none auto-accepted | 0 of 37 (0.0%) | none auto-accepted |
 
 ## Fields: normalized match / F1
 
@@ -80,6 +133,8 @@ Generated 2026-10-09T07:32:47+00:00 from commit `a22f1b8afcf8` by `docintel eval
 * Fully correct = every header field and every line-item cell right. 'Error in auto bucket' is the share of auto-accepted documents with at least one error: the number that matters operationally.
 * LLM extraction: Not yet measured (no GEMINI_API_KEY or local model in the build environment). Its merge, verification and gating logic is covered by tests.
 * Document type taken from ground truth (classification is measured separately).
+* Calibration: every table except the calibration ones uses the development dataset (seed 31). The auto-accept threshold is chosen on it by a rule fixed in advance - the lowest threshold above the design floor (0.8: a value only a model read never auto-accepts) at which neither it nor any higher threshold auto-accepts a document with an error - and reported unchanged on the held-out dataset (seed 131). The bound is a one-sided 95% Clopper-Pearson upper bound on the error rate among auto-accepted documents.
+* ECE is the expected calibration error over ten equal-width bins; 'over-confident' counts the values in bins whose accuracy is below their mean confidence.
 
 ## Provenance
 
@@ -89,6 +144,8 @@ Generated 2026-10-09T07:32:47+00:00 from commit `a22f1b8afcf8` by `docintel eval
     "name": "synthetic-core",
     "seed": 31,
     "documents": 74,
+    "held_out_seed": 131,
+    "held_out_documents": 37,
     "bundles_per_scenario": 2,
     "scanned_rerender": "light scan profile at 150 DPI",
     "vendor_master": "demo vendors: canonical names and tax IDs, no name variants"

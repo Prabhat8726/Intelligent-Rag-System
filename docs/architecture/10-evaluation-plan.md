@@ -14,6 +14,8 @@ versions and git SHA.
 | `synthetic-scenarios` | PO/invoice/delivery/contract/policy *bundles* with controlled discrepancies (price, quantity, tax, vendor, missing PO, duplicate, expired contract, injection payloads) | Expected discrepancy codes, expected recommendation, expected tool set | 5/7 |
 | `synthetic-contracts` | Contract families of three versions with recorded edits (`docintel.synthetic.contracts`) | Clauses added / removed / modified per step; per version the required clauses left out, the termination notice period and the governing law (Phase 8) | 5/8 |
 | `kb-queries` | 54 hand-written questions over the seed knowledge base (`knowledge_base/`), 6 unanswerable; used to choose the evidence-gate thresholds and the full-text order (the `dev` split) | Relevant (document_key, section heading) pairs; empty = unanswerable | 6 |
+| `synthetic-core` held-out (extraction) | Same generator, seed 131, re-rendered as scans too; used only to report the auto-accept threshold chosen on seed 31 (ADR-068) | Same as `synthetic-core` | 10 |
+| `system` | synthetic-core (seed 23, two bundles per scenario) plus the first 20 native PDFs re-rendered as light scans | Processing must finish; timings come from the jobs | 10 |
 | `kb-queries-holdout` | 14 questions written after those choices, 4 unanswerable; never used for tuning (the `test` split) | Same | 6 |
 | Public (optional) | e.g. SROIE / CORD receipts, FUNSD forms | Dataset labels | 10, after licence review; reported separately |
 
@@ -40,11 +42,20 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 
 ## 3. Execution
 
-* `make evaluate` → `docintel evaluate --suite all` → writes
-  `evaluation/reports/<suite>.{json,md}` (stable names, git keeps history, ADR-027); the
-  `evaluations` table arrives in Phase 10.
-* CI runs the **deterministic** suites (normalization, comparison, rules,
-  retrieval with a local embedding model) as regression gates.
+* `make evaluate` → `docintel evaluate --suite all --gates ../evaluation/gates.toml` → writes
+  `evaluation/reports/<suite>.{json,md}` (stable names, git keeps history, ADR-027) and fails
+  when a report breaks a [regression gate](../../evaluation/gates.toml) (ADR-069).
+  `make evaluate-quick` runs every suite on small datasets in a few minutes.
+* The README's evaluation table is generated from the committed reports
+  (`docintel evaluation readme`, ADR-070); quick reports and reports from uncommitted code are
+  refused.
+* CI runs every suite on quick datasets and checks the gates for that mode, checks the
+  committed reports against the full-run gates and the README table against the reports, and
+  runs `make demo` and `make e2e` against the container stack.
+* Runs are recorded in the `evaluations` table with `docintel evaluate --record` (the run's own
+  database, gates included) or imported from report files (`docintel evaluation import`;
+  `make seed` and `make seed-docker` load the committed ones, ADR-067); the web app's
+  **Evaluation** page and `GET /api/v1/evaluations` show them.
 * LLM-dependent suites run manually or on a schedule (free-tier quotas), with a
   budget cap and caching so re-runs are cheap.
 * Threshold calibration (confidence weights, retrieval score threshold) is done on
@@ -63,6 +74,8 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 | Knowledge retrieval (hit@1/3/5, section recall@5, precision@5, MRR, nDCG@5; evidence-gate refusals and false refusals; access control; version filtering; latency; ablations dense / full text / hybrid, full-text order, contextual prefix off, fixed-size chunks) — the seed knowledge base ingested by the production upload service and worker in a scratch database, questions answered by `KnowledgeRetriever` | Phase 6 | [`evaluation/reports/retrieval.md`](../../evaluation/reports/retrieval.md) | `kb-queries` (tuning) and `kb-queries-holdout`; offline lexical hashing embeddings |
 | Business document search (precision / recall / exact result sets per question family: vendor, payment terms, totals, dates, types, free text) — synthetic documents processed by the worker, questions generated from ground truth, answered by `DocumentSearchService` | Phase 6 | [`evaluation/reports/search.md`](../../evaluation/reports/search.md) | synthetic-core, 6 scenarios × 2 bundles (seed 2), native PDFs |
 | Agent investigations (task success per way of asking, unsafe recommendations, planted defect reported, false failures on clean invoices, identification from the question, tool selection P/R, findings whose evidence exists, governing policy among the sources, policy-question sections, guardrails against a scripted adversarial model, tool calls and latency per run) — synthetic bundles and the seed knowledge base processed by the worker in a scratch database, every invoice investigated through the job queue named, found from the question and (if defective) with the adversary | Phase 7 | [`evaluation/reports/agent.md`](../../evaluation/reports/agent.md) | synthetic-scenarios, 10 invoice scenarios × 2 bundles: development (seed 7, used while building) and held-out (seed 11); 10 answerable `kb-queries-holdout` questions; deterministic mode |
+| System performance (documents and pages per minute with 1 and 4 claim loops, processing time per document and per stage p50/p95 for native and scanned documents, failure and retry rates, in-process API latency one request at a time and with 8 concurrent clients) — the dataset processed by the production worker in a scratch database (ADR-071) | Phase 10 | [`evaluation/reports/system.md`](../../evaluation/reports/system.md) | `system` (94 documents, 24 of them scanned) |
+| Extraction confidence calibration (reliability bins and ECE for fields and line-item cells, auto-accept threshold sweep with 95% bounds, threshold chosen on development and reported on held-out) | Phase 10 | [`evaluation/reports/extraction.md`](../../evaluation/reports/extraction.md) | `synthetic-core` seed 31 (development) and seed 131 (held-out) |
 | Workflow automation (proposal vs expected action, unsafe proposals, open-review holds, maker-checker probes through the service and the table, audited refusals and transitions, report re-render and regeneration, contract rule outcomes and version changes, latency) — every invoice and contract version processed by the worker in a scratch database, each workflow started by one manager and decided by another through the job queue and the service | Phase 8 | [`evaluation/reports/workflow.md`](../../evaluation/reports/workflow.md) | the agent suite's invoice datasets (seeds 7 and 11); `synthetic-contracts`, 12 families × 3 versions (seed 73); deterministic mode |
 
 Not yet measured: the **LLM extraction path** (no API key or local model in the build
@@ -73,8 +86,15 @@ and policies (no generator ground truth yet), contract/policy comparison, **sema
 with the lexical hashing model), **generated RAG answers** (citation precision/recall,
 unsupported-claim rate: need an LLM; the citation and grounding checks are covered by tests),
 **model-assisted agent runs and workflow proposals** (planning and analysis with Gemini or a
-local model: the validators and guardrails are measured against a scripted adversary instead)
-and system latency. The retrieval, search, agent and workflow suites need a PostgreSQL server
+local model: the validators and guardrails are measured against a scripted adversary instead),
+model latency and cost per document, and the latency and throughput of a deployment (network,
+nginx, several worker and API processes: Phase 11 load tests; the system suite measures one
+worker process and the API in process). Public datasets (SROIE, CORD, FUNSD) are not used:
+their licences have not been reviewed and the build environment does not download them.
+Reranking is not measured: no reranking model is available offline, and the hybrid retrieval's
+tuning-set MRR leaves little room to show a gain on this knowledge base. Human corrections are
+not yet turned into a labelled dataset: the synthetic setting has none worth evaluating on.
+The retrieval, search, agent, workflow and system suites need a PostgreSQL server
 (`TEST_DATABASE_URL`); they create and drop a scratch database. Comparison and rules are deterministic: besides the suite, every planted
 discrepancy on native documents is a unit test (`tests/unit/test_rules.py`), so CI catches a
 regression without running the evaluation. All current

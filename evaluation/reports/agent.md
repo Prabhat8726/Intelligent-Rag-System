@@ -1,6 +1,6 @@
 # Agent investigation evaluation
 
-Generated 2026-10-10T13:10:53+00:00 from commit `fa098dfb7c7c` by `docintel evaluate --suite agent`. Do not edit by hand.
+Generated 2026-10-10T14:17:26+00:00 from commit `2a74f53db57f` by `docintel evaluate --suite agent`. Do not edit by hand.
 
 ## Overall (development dataset)
 
@@ -21,7 +21,7 @@ Generated 2026-10-10T13:10:53+00:00 from commit `fa098dfb7c7c` by `docintel eval
 | Governing policy among the sources (defective invoices) | 85.7% |
 | Policy questions: expected section among the sources | 100.0% |
 | Tool calls per document run | 7.95 |
-| Latency per run p50 / p95 (ms, includes the job queue) | 347.9 / 509.0 |
+| Latency per run p50 / p95 (ms, includes the job queue) | 371.8 / 516.3 |
 | LLM calls in deterministic runs | 0 |
 
 ## Overall (held-out dataset, generator seed 11, never used while developing)
@@ -41,7 +41,7 @@ Generated 2026-10-10T13:10:53+00:00 from commit `fa098dfb7c7c` by `docintel eval
 | Findings citing nothing (by category) | 0 |
 | Governing policy among the sources (defective invoices) | 85.7% |
 | Tool calls per document run | 7.95 |
-| Latency per run p50 / p95 (ms, includes the job queue) | 430.0 / 590.0 |
+| Latency per run p50 / p95 (ms, includes the job queue) | 394.3 / 534.2 |
 | LLM calls in deterministic runs | 0 |
 
 ## Guardrails against a scripted adversarial model (development)
@@ -109,7 +109,7 @@ Generated 2026-10-10T13:10:53+00:00 from commit `fa098dfb7c7c` by `docintel eval
 * Policy retrieval for vendor mismatches misses the vendor section with the offline lexical (hashing) embeddings: the rule name shares most words with purchase-order sections. A semantic embedding model is expected to help; not yet measured.
 * Model-assisted planning and analysis (Gemini or a local model): Not yet measured - no model was available in the build environment.
 * Guardrail figures use a scripted adversary, so they measure the validators and guardrails, not an LLM's behaviour.
-* Run time: 105.0 s.
+* Run time: 95.1 s.
 
 ## Provenance
 

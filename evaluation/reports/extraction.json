@@ -1,8 +1,9 @@
 {
   "suite": "extraction",
   "title": "Structured extraction (layout extractor, no LLM)",
-  "created_at": "2026-10-09T07:32:47+00:00",
-  "git_revision": "a22f1b8afcf8",
+  "quick": false,
+  "created_at": "2026-10-10T14:12:53+00:00",
+  "git_revision": "2a74f53db57f",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",
@@ -17,6 +18,8 @@
     "name": "synthetic-core",
     "seed": 31,
     "documents": 74,
+    "held_out_seed": 131,
+    "held_out_documents": 37,
     "bundles_per_scenario": 2,
     "scanned_rerender": "light scan profile at 150 DPI",
     "vendor_master": "demo vendors: canonical names and tax IDs, no name variants"
@@ -32,6 +35,1026 @@
     }
   },
   "metrics": {
+    "calibration": {
+      "development": {
+        "all": {
+          "documents": 144,
+          "fields": {
+            "n": 1400,
+            "ece": 0.1099,
+            "overconfident_share": 0.0021,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 4,
+                "mean_confidence": 0.5279,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 3,
+                "mean_confidence": 0.7864,
+                "accuracy": 0.6667
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 731,
+                "mean_confidence": 0.8722,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 662,
+                "mean_confidence": 0.9121,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "cells": {
+            "n": 5059,
+            "ece": 0.0749,
+            "overconfident_share": 0.0144,
+            "bins": [
+              {
+                "low": 0.3,
+                "high": 0.4,
+                "n": 2,
+                "mean_confidence": 0.3868,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.4,
+                "high": 0.5,
+                "n": 4,
+                "mean_confidence": 0.4663,
+                "accuracy": 0.75
+              },
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 40,
+                "mean_confidence": 0.5477,
+                "accuracy": 0.675
+              },
+              {
+                "low": 0.6,
+                "high": 0.7,
+                "n": 73,
+                "mean_confidence": 0.661,
+                "accuracy": 0.6438
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 179,
+                "mean_confidence": 0.7616,
+                "accuracy": 0.8101
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 2244,
+                "mean_confidence": 0.8763,
+                "accuracy": 0.9256
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 2517,
+                "mean_confidence": 0.9,
+                "accuracy": 0.9996
+              }
+            ]
+          },
+          "sweep": [
+            {
+              "threshold": 0.5,
+              "documents": 144,
+              "auto": 123,
+              "auto_share": 0.8542,
+              "errors": 38,
+              "error_rate": 0.3089,
+              "error_upper_95": 0.3845
+            },
+            {
+              "threshold": 0.6,
+              "documents": 144,
+              "auto": 116,
+              "auto_share": 0.8056,
+              "errors": 33,
+              "error_rate": 0.2845,
+              "error_upper_95": 0.3614
+            },
+            {
+              "threshold": 0.7,
+              "documents": 144,
+              "auto": 108,
+              "auto_share": 0.75,
+              "errors": 25,
+              "error_rate": 0.2315,
+              "error_upper_95": 0.308
+            },
+            {
+              "threshold": 0.75,
+              "documents": 144,
+              "auto": 106,
+              "auto_share": 0.7361,
+              "errors": 24,
+              "error_rate": 0.2264,
+              "error_upper_95": 0.3034
+            },
+            {
+              "threshold": 0.8,
+              "documents": 144,
+              "auto": 92,
+              "auto_share": 0.6389,
+              "errors": 16,
+              "error_rate": 0.1739,
+              "error_upper_95": 0.2521
+            },
+            {
+              "threshold": 0.82,
+              "documents": 144,
+              "auto": 89,
+              "auto_share": 0.6181,
+              "errors": 14,
+              "error_rate": 0.1573,
+              "error_upper_95": 0.2349
+            },
+            {
+              "threshold": 0.85,
+              "documents": 144,
+              "auto": 68,
+              "auto_share": 0.4722,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.88,
+              "documents": 144,
+              "auto": 68,
+              "auto_share": 0.4722,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.9,
+              "documents": 144,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.95,
+              "documents": 144,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            }
+          ]
+        },
+        "native": {
+          "documents": 70,
+          "fields": {
+            "n": 684,
+            "ece": 0.0987,
+            "overconfident_share": 0.0,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 2,
+                "mean_confidence": 0.54,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 70,
+                "mean_confidence": 0.855,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 612,
+                "mean_confidence": 0.9078,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "cells": {
+            "n": 2986,
+            "ece": 0.1028,
+            "overconfident_share": 0.0,
+            "bins": [
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 470,
+                "mean_confidence": 0.882,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 2516,
+                "mean_confidence": 0.9,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "sweep": [
+            {
+              "threshold": 0.5,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.6,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.7,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.75,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.8,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.82,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.85,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.88,
+              "documents": 70,
+              "auto": 68,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0431
+            },
+            {
+              "threshold": 0.9,
+              "documents": 70,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.95,
+              "documents": 70,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            }
+          ]
+        },
+        "scanned": {
+          "documents": 74,
+          "fields": {
+            "n": 716,
+            "ece": 0.1207,
+            "overconfident_share": 0.0042,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 2,
+                "mean_confidence": 0.5157,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 3,
+                "mean_confidence": 0.7864,
+                "accuracy": 0.6667
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 661,
+                "mean_confidence": 0.874,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 50,
+                "mean_confidence": 0.9637,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "cells": {
+            "n": 2073,
+            "ece": 0.0354,
+            "overconfident_share": 0.0357,
+            "bins": [
+              {
+                "low": 0.3,
+                "high": 0.4,
+                "n": 2,
+                "mean_confidence": 0.3868,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.4,
+                "high": 0.5,
+                "n": 4,
+                "mean_confidence": 0.4663,
+                "accuracy": 0.75
+              },
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 40,
+                "mean_confidence": 0.5477,
+                "accuracy": 0.675
+              },
+              {
+                "low": 0.6,
+                "high": 0.7,
+                "n": 73,
+                "mean_confidence": 0.661,
+                "accuracy": 0.6438
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 179,
+                "mean_confidence": 0.7616,
+                "accuracy": 0.8101
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 1774,
+                "mean_confidence": 0.8748,
+                "accuracy": 0.9059
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 1,
+                "mean_confidence": 0.9,
+                "accuracy": 0.0
+              }
+            ]
+          },
+          "sweep": [
+            {
+              "threshold": 0.5,
+              "documents": 74,
+              "auto": 55,
+              "auto_share": 0.7432,
+              "errors": 38,
+              "error_rate": 0.6909,
+              "error_upper_95": 0.7925
+            },
+            {
+              "threshold": 0.6,
+              "documents": 74,
+              "auto": 48,
+              "auto_share": 0.6486,
+              "errors": 33,
+              "error_rate": 0.6875,
+              "error_upper_95": 0.7965
+            },
+            {
+              "threshold": 0.7,
+              "documents": 74,
+              "auto": 40,
+              "auto_share": 0.5405,
+              "errors": 25,
+              "error_rate": 0.625,
+              "error_upper_95": 0.7527
+            },
+            {
+              "threshold": 0.75,
+              "documents": 74,
+              "auto": 38,
+              "auto_share": 0.5135,
+              "errors": 24,
+              "error_rate": 0.6316,
+              "error_upper_95": 0.7617
+            },
+            {
+              "threshold": 0.8,
+              "documents": 74,
+              "auto": 24,
+              "auto_share": 0.3243,
+              "errors": 16,
+              "error_rate": 0.6667,
+              "error_upper_95": 0.822
+            },
+            {
+              "threshold": 0.82,
+              "documents": 74,
+              "auto": 21,
+              "auto_share": 0.2838,
+              "errors": 14,
+              "error_rate": 0.6667,
+              "error_upper_95": 0.8318
+            },
+            {
+              "threshold": 0.85,
+              "documents": 74,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.88,
+              "documents": 74,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.9,
+              "documents": 74,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.95,
+              "documents": 74,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            }
+          ]
+        }
+      },
+      "held_out": {
+        "all": {
+          "documents": 72,
+          "fields": {
+            "n": 692,
+            "ece": 0.1139,
+            "overconfident_share": 0.0072,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 2,
+                "mean_confidence": 0.5348,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.6,
+                "high": 0.7,
+                "n": 1,
+                "mean_confidence": 0.6741,
+                "accuracy": 0.0
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 4,
+                "mean_confidence": 0.7863,
+                "accuracy": 0.25
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 355,
+                "mean_confidence": 0.8707,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 330,
+                "mean_confidence": 0.9117,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "cells": {
+            "n": 2651,
+            "ece": 0.0817,
+            "overconfident_share": 0.0275,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 24,
+                "mean_confidence": 0.5472,
+                "accuracy": 0.4583
+              },
+              {
+                "low": 0.6,
+                "high": 0.7,
+                "n": 49,
+                "mean_confidence": 0.6441,
+                "accuracy": 0.5918
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 117,
+                "mean_confidence": 0.7655,
+                "accuracy": 0.8034
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 1241,
+                "mean_confidence": 0.8756,
+                "accuracy": 0.9444
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 1220,
+                "mean_confidence": 0.9,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "sweep": [
+            {
+              "threshold": 0.5,
+              "documents": 72,
+              "auto": 60,
+              "auto_share": 0.8333,
+              "errors": 17,
+              "error_rate": 0.2833,
+              "error_upper_95": 0.3942
+            },
+            {
+              "threshold": 0.6,
+              "documents": 72,
+              "auto": 58,
+              "auto_share": 0.8056,
+              "errors": 15,
+              "error_rate": 0.2586,
+              "error_upper_95": 0.3699
+            },
+            {
+              "threshold": 0.7,
+              "documents": 72,
+              "auto": 54,
+              "auto_share": 0.75,
+              "errors": 12,
+              "error_rate": 0.2222,
+              "error_upper_95": 0.335
+            },
+            {
+              "threshold": 0.75,
+              "documents": 72,
+              "auto": 53,
+              "auto_share": 0.7361,
+              "errors": 11,
+              "error_rate": 0.2075,
+              "error_upper_95": 0.3201
+            },
+            {
+              "threshold": 0.8,
+              "documents": 72,
+              "auto": 47,
+              "auto_share": 0.6528,
+              "errors": 7,
+              "error_rate": 0.1489,
+              "error_upper_95": 0.2616
+            },
+            {
+              "threshold": 0.82,
+              "documents": 72,
+              "auto": 42,
+              "auto_share": 0.5833,
+              "errors": 4,
+              "error_rate": 0.0952,
+              "error_upper_95": 0.2048
+            },
+            {
+              "threshold": 0.85,
+              "documents": 72,
+              "auto": 34,
+              "auto_share": 0.4722,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.88,
+              "documents": 72,
+              "auto": 34,
+              "auto_share": 0.4722,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.9,
+              "documents": 72,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.95,
+              "documents": 72,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            }
+          ]
+        },
+        "native": {
+          "documents": 35,
+          "fields": {
+            "n": 342,
+            "ece": 0.0987,
+            "overconfident_share": 0.0,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 1,
+                "mean_confidence": 0.54,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 35,
+                "mean_confidence": 0.855,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 306,
+                "mean_confidence": 0.9078,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "cells": {
+            "n": 1448,
+            "ece": 0.1028,
+            "overconfident_share": 0.0,
+            "bins": [
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 228,
+                "mean_confidence": 0.882,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 1220,
+                "mean_confidence": 0.9,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "sweep": [
+            {
+              "threshold": 0.5,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.6,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.7,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.75,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.8,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.82,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.85,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.88,
+              "documents": 35,
+              "auto": 34,
+              "auto_share": 0.9714,
+              "errors": 0,
+              "error_rate": 0.0,
+              "error_upper_95": 0.0843
+            },
+            {
+              "threshold": 0.9,
+              "documents": 35,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.95,
+              "documents": 35,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            }
+          ]
+        },
+        "scanned": {
+          "documents": 37,
+          "fields": {
+            "n": 350,
+            "ece": 0.1288,
+            "overconfident_share": 0.0143,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 1,
+                "mean_confidence": 0.5295,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.6,
+                "high": 0.7,
+                "n": 1,
+                "mean_confidence": 0.6741,
+                "accuracy": 0.0
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 4,
+                "mean_confidence": 0.7863,
+                "accuracy": 0.25
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 320,
+                "mean_confidence": 0.8724,
+                "accuracy": 1.0
+              },
+              {
+                "low": 0.9,
+                "high": 1.0,
+                "n": 24,
+                "mean_confidence": 0.9606,
+                "accuracy": 1.0
+              }
+            ]
+          },
+          "cells": {
+            "n": 1203,
+            "ece": 0.0562,
+            "overconfident_share": 0.0607,
+            "bins": [
+              {
+                "low": 0.5,
+                "high": 0.6,
+                "n": 24,
+                "mean_confidence": 0.5472,
+                "accuracy": 0.4583
+              },
+              {
+                "low": 0.6,
+                "high": 0.7,
+                "n": 49,
+                "mean_confidence": 0.6441,
+                "accuracy": 0.5918
+              },
+              {
+                "low": 0.7,
+                "high": 0.8,
+                "n": 117,
+                "mean_confidence": 0.7655,
+                "accuracy": 0.8034
+              },
+              {
+                "low": 0.8,
+                "high": 0.9,
+                "n": 1013,
+                "mean_confidence": 0.8742,
+                "accuracy": 0.9319
+              }
+            ]
+          },
+          "sweep": [
+            {
+              "threshold": 0.5,
+              "documents": 37,
+              "auto": 26,
+              "auto_share": 0.7027,
+              "errors": 17,
+              "error_rate": 0.6538,
+              "error_upper_95": 0.806
+            },
+            {
+              "threshold": 0.6,
+              "documents": 37,
+              "auto": 24,
+              "auto_share": 0.6486,
+              "errors": 15,
+              "error_rate": 0.625,
+              "error_upper_95": 0.7884
+            },
+            {
+              "threshold": 0.7,
+              "documents": 37,
+              "auto": 20,
+              "auto_share": 0.5405,
+              "errors": 12,
+              "error_rate": 0.6,
+              "error_upper_95": 0.7829
+            },
+            {
+              "threshold": 0.75,
+              "documents": 37,
+              "auto": 19,
+              "auto_share": 0.5135,
+              "errors": 11,
+              "error_rate": 0.5789,
+              "error_upper_95": 0.7703
+            },
+            {
+              "threshold": 0.8,
+              "documents": 37,
+              "auto": 13,
+              "auto_share": 0.3514,
+              "errors": 7,
+              "error_rate": 0.5385,
+              "error_upper_95": 0.776
+            },
+            {
+              "threshold": 0.82,
+              "documents": 37,
+              "auto": 8,
+              "auto_share": 0.2162,
+              "errors": 4,
+              "error_rate": 0.5,
+              "error_upper_95": 0.8071
+            },
+            {
+              "threshold": 0.85,
+              "documents": 37,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.88,
+              "documents": 37,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.9,
+              "documents": 37,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            },
+            {
+              "threshold": 0.95,
+              "documents": 37,
+              "auto": 0,
+              "auto_share": 0.0,
+              "errors": 0,
+              "error_rate": null,
+              "error_upper_95": null
+            }
+          ]
+        }
+      },
+      "design_floor": 0.8,
+      "current_threshold": 0.85,
+      "chosen_threshold": 0.85
+    },
     "by_method": {
       "native": {
         "documents": 70,
@@ -1561,6 +2584,711 @@
     "Exact = the extracted text equals the printed text (whitespace collapsed); normalized = the typed value equals the truth (Decimal amounts, ISO dates, vendor resolved to the canonical vendor). Precision/recall count a wrong value as both a false positive and a false negative; nulls are explicit.",
     "Fully correct = every header field and every line-item cell right. 'Error in auto bucket' is the share of auto-accepted documents with at least one error: the number that matters operationally.",
     "LLM extraction: Not yet measured (no GEMINI_API_KEY or local model in the build environment). Its merge, verification and gating logic is covered by tests.",
-    "Document type taken from ground truth (classification is measured separately)."
+    "Document type taken from ground truth (classification is measured separately).",
+    "Calibration: every table except the calibration ones uses the development dataset (seed 31). The auto-accept threshold is chosen on it by a rule fixed in advance - the lowest threshold above the design floor (0.8: a value only a model read never auto-accepts) at which neither it nor any higher threshold auto-accepts a document with an error - and reported unchanged on the held-out dataset (seed 131). The bound is a one-sided 95% Clopper-Pearson upper bound on the error rate among auto-accepted documents.",
+    "ECE is the expected calibration error over ten equal-width bins; 'over-confident' counts the values in bins whose accuracy is below their mean confidence."
+  ],
+  "tables": [
+    {
+      "heading": "Summary by input",
+      "header": [
+        "Input",
+        "Docs",
+        "Field exact",
+        "Field normalized",
+        "Field P",
+        "Field R",
+        "Field F1",
+        "Required all correct",
+        "Docs fully correct"
+      ],
+      "rows": [
+        [
+          "native",
+          "70",
+          "100.0%",
+          "100.0%",
+          "1.000",
+          "1.000",
+          "1.000",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "scanned (dataset)",
+          "4",
+          "91.7%",
+          "100.0%",
+          "1.000",
+          "1.000",
+          "1.000",
+          "100.0%",
+          "25.0%"
+        ],
+        [
+          "scanned (re-rendered)",
+          "70",
+          "95.9%",
+          "99.3%",
+          "0.999",
+          "0.993",
+          "0.996",
+          "97.1%",
+          "22.9%"
+        ]
+      ]
+    },
+    {
+      "heading": "Calibration: confidence against accuracy",
+      "header": [
+        "Dataset / input",
+        "Docs",
+        "Fields",
+        "Field ECE",
+        "Fields over-confident",
+        "Cells",
+        "Cell ECE",
+        "Cells over-confident"
+      ],
+      "rows": [
+        [
+          "development / all",
+          "144",
+          "1400",
+          "0.110",
+          "0.2%",
+          "5059",
+          "0.075",
+          "1.4%"
+        ],
+        [
+          "development / native",
+          "70",
+          "684",
+          "0.099",
+          "0.0%",
+          "2986",
+          "0.103",
+          "0.0%"
+        ],
+        [
+          "development / scanned",
+          "74",
+          "716",
+          "0.121",
+          "0.4%",
+          "2073",
+          "0.035",
+          "3.6%"
+        ],
+        [
+          "held-out / all",
+          "72",
+          "692",
+          "0.114",
+          "0.7%",
+          "2651",
+          "0.082",
+          "2.8%"
+        ],
+        [
+          "held-out / native",
+          "35",
+          "342",
+          "0.099",
+          "0.0%",
+          "1448",
+          "0.103",
+          "0.0%"
+        ],
+        [
+          "held-out / scanned",
+          "37",
+          "350",
+          "0.129",
+          "1.4%",
+          "1203",
+          "0.056",
+          "6.1%"
+        ]
+      ]
+    },
+    {
+      "heading": "Reliability (development, all inputs)",
+      "header": [
+        "Confidence",
+        "Fields",
+        "Mean confidence",
+        "Accuracy",
+        "Cells",
+        "Mean confidence",
+        "Accuracy"
+      ],
+      "rows": [
+        [
+          "0.3-0.4",
+          "0",
+          "",
+          "",
+          "2",
+          "0.387",
+          "100.0%"
+        ],
+        [
+          "0.4-0.5",
+          "0",
+          "",
+          "",
+          "4",
+          "0.466",
+          "75.0%"
+        ],
+        [
+          "0.5-0.6",
+          "4",
+          "0.528",
+          "100.0%",
+          "40",
+          "0.548",
+          "67.5%"
+        ],
+        [
+          "0.6-0.7",
+          "0",
+          "",
+          "",
+          "73",
+          "0.661",
+          "64.4%"
+        ],
+        [
+          "0.7-0.8",
+          "3",
+          "0.786",
+          "66.7%",
+          "179",
+          "0.762",
+          "81.0%"
+        ],
+        [
+          "0.8-0.9",
+          "731",
+          "0.872",
+          "100.0%",
+          "2244",
+          "0.876",
+          "92.6%"
+        ],
+        [
+          "0.9-1.0",
+          "662",
+          "0.912",
+          "100.0%",
+          "2517",
+          "0.900",
+          "100.0%"
+        ]
+      ]
+    },
+    {
+      "heading": "Auto-accept threshold: development (choice) and held-out, all inputs",
+      "header": [
+        "Threshold",
+        "Development auto-accepted",
+        "Development errors (95% bound)",
+        "Held-out auto-accepted",
+        "Held-out errors (95% bound)"
+      ],
+      "rows": [
+        [
+          "0.50",
+          "123 of 144 (85.4%)",
+          "38 (\u2264 38.5%)",
+          "60 of 72 (83.3%)",
+          "17 (\u2264 39.4%)"
+        ],
+        [
+          "0.60",
+          "116 of 144 (80.6%)",
+          "33 (\u2264 36.1%)",
+          "58 of 72 (80.6%)",
+          "15 (\u2264 37.0%)"
+        ],
+        [
+          "0.70",
+          "108 of 144 (75.0%)",
+          "25 (\u2264 30.8%)",
+          "54 of 72 (75.0%)",
+          "12 (\u2264 33.5%)"
+        ],
+        [
+          "0.75",
+          "106 of 144 (73.6%)",
+          "24 (\u2264 30.3%)",
+          "53 of 72 (73.6%)",
+          "11 (\u2264 32.0%)"
+        ],
+        [
+          "0.80",
+          "92 of 144 (63.9%)",
+          "16 (\u2264 25.2%)",
+          "47 of 72 (65.3%)",
+          "7 (\u2264 26.2%)"
+        ],
+        [
+          "0.82",
+          "89 of 144 (61.8%)",
+          "14 (\u2264 23.5%)",
+          "42 of 72 (58.3%)",
+          "4 (\u2264 20.5%)"
+        ],
+        [
+          "0.85 (current, chosen)",
+          "68 of 144 (47.2%)",
+          "0 (\u2264 4.3%)",
+          "34 of 72 (47.2%)",
+          "0 (\u2264 8.4%)"
+        ],
+        [
+          "0.88",
+          "68 of 144 (47.2%)",
+          "0 (\u2264 4.3%)",
+          "34 of 72 (47.2%)",
+          "0 (\u2264 8.4%)"
+        ],
+        [
+          "0.90",
+          "0 of 144 (0.0%)",
+          "none auto-accepted",
+          "0 of 72 (0.0%)",
+          "none auto-accepted"
+        ],
+        [
+          "0.95",
+          "0 of 144 (0.0%)",
+          "none auto-accepted",
+          "0 of 72 (0.0%)",
+          "none auto-accepted"
+        ]
+      ]
+    },
+    {
+      "heading": "Auto-accept threshold: scanned inputs only",
+      "header": [
+        "Threshold",
+        "Development auto-accepted",
+        "Development errors (95% bound)",
+        "Held-out auto-accepted",
+        "Held-out errors (95% bound)"
+      ],
+      "rows": [
+        [
+          "0.50",
+          "55 of 74 (74.3%)",
+          "38 (\u2264 79.2%)",
+          "26 of 37 (70.3%)",
+          "17 (\u2264 80.6%)"
+        ],
+        [
+          "0.60",
+          "48 of 74 (64.9%)",
+          "33 (\u2264 79.7%)",
+          "24 of 37 (64.9%)",
+          "15 (\u2264 78.8%)"
+        ],
+        [
+          "0.70",
+          "40 of 74 (54.0%)",
+          "25 (\u2264 75.3%)",
+          "20 of 37 (54.0%)",
+          "12 (\u2264 78.3%)"
+        ],
+        [
+          "0.75",
+          "38 of 74 (51.3%)",
+          "24 (\u2264 76.2%)",
+          "19 of 37 (51.3%)",
+          "11 (\u2264 77.0%)"
+        ],
+        [
+          "0.80",
+          "24 of 74 (32.4%)",
+          "16 (\u2264 82.2%)",
+          "13 of 37 (35.1%)",
+          "7 (\u2264 77.6%)"
+        ],
+        [
+          "0.82",
+          "21 of 74 (28.4%)",
+          "14 (\u2264 83.2%)",
+          "8 of 37 (21.6%)",
+          "4 (\u2264 80.7%)"
+        ],
+        [
+          "0.85 (current, chosen)",
+          "0 of 74 (0.0%)",
+          "none auto-accepted",
+          "0 of 37 (0.0%)",
+          "none auto-accepted"
+        ],
+        [
+          "0.88",
+          "0 of 74 (0.0%)",
+          "none auto-accepted",
+          "0 of 37 (0.0%)",
+          "none auto-accepted"
+        ],
+        [
+          "0.90",
+          "0 of 74 (0.0%)",
+          "none auto-accepted",
+          "0 of 37 (0.0%)",
+          "none auto-accepted"
+        ],
+        [
+          "0.95",
+          "0 of 74 (0.0%)",
+          "none auto-accepted",
+          "0 of 37 (0.0%)",
+          "none auto-accepted"
+        ]
+      ]
+    },
+    {
+      "heading": "Fields: normalized match / F1",
+      "header": [
+        "Field",
+        "native (norm. / F1)",
+        "scanned (dataset) (norm. / F1)",
+        "scanned (re-rendered) (norm. / F1)"
+      ],
+      "rows": [
+        [
+          "buyer_name",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ],
+        [
+          "currency",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ],
+        [
+          "document date",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "98.6% / 0.993"
+        ],
+        [
+          "document number",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ],
+        [
+          "due_date",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ],
+        [
+          "payment_terms_days",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "97.9% / 0.990"
+        ],
+        [
+          "purchase_order_number",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ],
+        [
+          "subtotal",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ],
+        [
+          "tax_amount",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "97.9% / 0.990"
+        ],
+        [
+          "tax_rate",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "97.9% / 0.990"
+        ],
+        [
+          "total",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ],
+        [
+          "vendor_name",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "98.6% / 0.986"
+        ],
+        [
+          "vendor_tax_id",
+          "100.0% / 1.000",
+          "100.0% / 1.000",
+          "100.0% / 1.000"
+        ]
+      ]
+    },
+    {
+      "heading": "Line items",
+      "header": [
+        "Input",
+        "Row P",
+        "Row R",
+        "Row F1",
+        "Cell accuracy",
+        "line_number",
+        "sku",
+        "description",
+        "quantity",
+        "unit",
+        "unit_price",
+        "amount"
+      ],
+      "rows": [
+        [
+          "native",
+          "1.000",
+          "1.000",
+          "1.000",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "scanned (dataset)",
+          "1.000",
+          "1.000",
+          "1.000",
+          "86.5%",
+          "75.0%",
+          "62.5%",
+          "93.8%",
+          "100.0%",
+          "87.5%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "scanned (re-rendered)",
+          "0.940",
+          "0.738",
+          "0.827",
+          "78.1%",
+          "45.2%",
+          "76.1%",
+          "88.5%",
+          "81.8%",
+          "82.1%",
+          "86.1%",
+          "93.6%"
+        ]
+      ]
+    },
+    {
+      "heading": "Confidence routing",
+      "header": [
+        "Input",
+        "Auto-accepted",
+        "Error in auto bucket",
+        "Analyst review",
+        "Mandatory review",
+        "High-confidence fields",
+        "Error in high-confidence fields"
+      ],
+      "rows": [
+        [
+          "native",
+          "97.1%",
+          "0.0%",
+          "0",
+          "2",
+          "682",
+          "0.0%"
+        ],
+        [
+          "scanned (dataset)",
+          "0.0%",
+          "n/a",
+          "1",
+          "3",
+          "30",
+          "0.0%"
+        ],
+        [
+          "scanned (re-rendered)",
+          "0.0%",
+          "n/a",
+          "47",
+          "23",
+          "592",
+          "0.0%"
+        ]
+      ]
+    },
+    {
+      "heading": "By input and document type",
+      "header": [
+        "Input / type",
+        "Docs",
+        "Field normalized",
+        "Field F1",
+        "Row F1",
+        "Cell accuracy",
+        "Auto-accepted",
+        "Error in auto"
+      ],
+      "rows": [
+        [
+          "native / DELIVERY_NOTE",
+          "22",
+          "100.0%",
+          "1.000",
+          "1.000",
+          "100.0%",
+          "100.0%",
+          "0.0%"
+        ],
+        [
+          "native / INVOICE",
+          "24",
+          "100.0%",
+          "1.000",
+          "1.000",
+          "100.0%",
+          "91.7%",
+          "0.0%"
+        ],
+        [
+          "native / PURCHASE_ORDER",
+          "24",
+          "100.0%",
+          "1.000",
+          "1.000",
+          "100.0%",
+          "100.0%",
+          "0.0%"
+        ],
+        [
+          "scanned (dataset) / DELIVERY_NOTE",
+          "2",
+          "100.0%",
+          "1.000",
+          "1.000",
+          "90.0%",
+          "0.0%",
+          "n/a"
+        ],
+        [
+          "scanned (dataset) / INVOICE",
+          "2",
+          "100.0%",
+          "1.000",
+          "1.000",
+          "83.9%",
+          "0.0%",
+          "n/a"
+        ],
+        [
+          "scanned (re-rendered) / DELIVERY_NOTE",
+          "22",
+          "99.1%",
+          "0.991",
+          "0.768",
+          "67.9%",
+          "0.0%",
+          "n/a"
+        ],
+        [
+          "scanned (re-rendered) / INVOICE",
+          "24",
+          "100.0%",
+          "1.000",
+          "0.677",
+          "75.8%",
+          "0.0%",
+          "n/a"
+        ],
+        [
+          "scanned (re-rendered) / PURCHASE_ORDER",
+          "24",
+          "98.5%",
+          "0.992",
+          "1.000",
+          "83.8%",
+          "0.0%",
+          "n/a"
+        ]
+      ]
+    },
+    {
+      "heading": "Consistency checks: documents flagged inconsistent",
+      "header": [
+        "Printed document",
+        "Docs",
+        "Flagged"
+      ],
+      "rows": [
+        [
+          "printed document consistent (flag = misread)",
+          "140",
+          "1.4%"
+        ],
+        [
+          "printed total wrong",
+          "4",
+          "100.0%"
+        ]
+      ]
+    },
+    {
+      "heading": "Normalization of printed variants",
+      "header": [
+        "Input / variation",
+        "Docs",
+        "Correct"
+      ],
+      "rows": [
+        [
+          "native / DATE_FORMAT_VARIANT",
+          "2",
+          "100.0%"
+        ],
+        [
+          "native / VENDOR_NAME_VARIANT",
+          "2",
+          "100.0%"
+        ],
+        [
+          "scanned (re-rendered) / DATE_FORMAT_VARIANT",
+          "2",
+          "100.0%"
+        ],
+        [
+          "scanned (re-rendered) / VENDOR_NAME_VARIANT",
+          "2",
+          "100.0%"
+        ]
+      ]
+    }
   ]
 }

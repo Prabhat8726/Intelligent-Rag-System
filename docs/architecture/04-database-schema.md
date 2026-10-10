@@ -283,7 +283,7 @@ are enabled for filtered queries so access/metadata filters don't under-fill top
 
 | Table | Purpose / notable columns |
 |---|---|
-| `evaluations` | `eval_type` (`CLASSIFICATION, EXTRACTION, OCR, RAG, AGENT, SYSTEM`), `dataset_name`, `dataset_version`, `config jsonb` (models, prompt versions, git SHA), `metrics jsonb`, `report_path`, `status`, timings, `triggered_by`. |
+| `evaluations` | One evaluation report per row, copied verbatim (ADR-067): `suite` (CHECK `^[a-z][a-z_]{0,39}$`: ocr, classification, tables, extraction, discrepancies, versions, retrieval, search, agent, workflow, system), `title`, `quick` (small smoke-test datasets), `git_revision`, `run_at` (when the suite produced it), `dataset` / `config` / `environment` / `metrics` / `notes` / `tables` (JSONB as written), `report_markdown`, `report_sha256` (SHA-256 of the canonical JSON; UNIQUE with `suite`, so a report is stored once), `gates` (regression gate results when it was recorded; NULL when none applied), `source` (`RUN` — `docintel evaluate --record`, `IMPORT` — `docintel evaluation import`), `recorded_by_id` FK `SET NULL`, `recorded_at`. Index on (`suite`, `run_at`). Migration 0010. Nothing is computed here: the reports in `evaluation/reports/` stay the record. |
 
 ## 3. Integrity rules worth calling out
 

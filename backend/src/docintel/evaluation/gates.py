@@ -51,8 +51,12 @@ class GateFile(BaseModel):
 
 
 def load_gates(path: Path) -> list[Gate]:
-    with path.open("rb") as handle:
-        return GateFile.model_validate(tomllib.load(handle)).gate
+    return parse_gates(path.read_bytes())
+
+
+def parse_gates(data: bytes) -> list[Gate]:
+    """Gates from the TOML text of a gates file (raises ValueError when invalid)."""
+    return GateFile.model_validate(tomllib.loads(data.decode("utf-8"))).gate
 
 
 def _resolve(metrics: Mapping[str, Any], keys: Iterable[str]) -> Any:

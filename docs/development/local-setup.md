@@ -149,6 +149,43 @@ cookie, so a reload or a new tab stays signed in (12 hours idle, 7 days at most)
 is renewed in the background; **Sign out** ends the session in every tab. API and MCP clients
 keep using bearer tokens and get no cookie.
 
+## The demonstration in one command
+
+```bash
+make up && make seed-docker   # the stack, demo users and the committed evaluation results
+make demo                     # 17 checked steps through the API (about a minute)
+```
+
+`make demo` loads the knowledge base (skipped when present), then walks the master prompt's
+demonstration as the analyst, the reviewer and the administrator: it generates a purchase order,
+delivery note and invoice with a planted price difference (a new random case each run),
+uploads them, waits for processing and prints the classification, the extracted and normalized
+fields (including the planted price), the comparison and the failing rule, starts invoice
+processing and prints the policy sections retrieved and the agent's recommendation, shows the
+analyst refused by maker-checker, approves as the reviewer, prints the drafted vendor message
+and verifies the report, lists the audit events and the dashboard figures, and ends with links
+into the web app. Any step that does not show what it should stops the demo with an error.
+`make demo DEMO_URL=http://localhost:8000` runs it against `make dev`; `--seed N` (via
+`cd backend && uv run --env-file ../.env docintel demo --seed N`) repeats a case.
+
+## Evaluation
+
+```bash
+make evaluate-quick    # every suite on small datasets, gates checked (a few minutes) -> evaluation/quick/
+make evaluate          # full datasets (about 20 minutes on 4 CPUs) -> evaluation/reports/, gates checked
+make evaluation-readme # regenerate the README's evaluation table from evaluation/reports/
+make evaluation-gates  # check the committed reports against evaluation/gates.toml
+```
+
+Each suite writes `<suite>.json` and `<suite>.md` with the commit, datasets, seeds and engine
+versions. Commit full reports only from a clean checkout: the README generator refuses quick
+runs and reports from uncommitted code. To keep a run in a deployment's database, add
+`--record` (and `--recorded-by EMAIL`): `cd backend && uv run --env-file ../.env docintel
+evaluate --suite system --record --gates ../evaluation/gates.toml`. The **Evaluation** page
+(administrators, managers, analysts) shows the latest full run of every suite with its gates,
+headline numbers, tables and history; `make seed` and `make seed-docker` load the committed
+reports into it.
+
 ## End-to-end test (browser)
 
 ```bash
@@ -191,8 +228,10 @@ every call is logged and audited, and revoking the token takes effect on the nex
 | `make match` | Re-run comparisons, rules and review tasks for every processed document (after upgrading to Phase 5, or after changing rules) |
 | `make worker` | Process queued jobs on the host until the queue is empty |
 | `make check-ocr` | Verify Tesseract, the configured languages and TSV output |
-| `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search, agent, workflow; ~45 min) → `evaluation/reports/`. Retrieval, search, agent and workflow create and drop a scratch database on the `TEST_DATABASE_URL` server |
+| `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search, agent, workflow, system; about 20 minutes on 4 CPUs) → `evaluation/reports/`, checked against the regression gates. Retrieval, search, agent, workflow and system create and drop a scratch database on the `TEST_DATABASE_URL` server; run the system suite on an otherwise idle machine |
 | `make e2e` | Browser test of the demo path against the running stack (see above) |
+| `make demo` | The 17-step demonstration through the API of the running stack, each step checked |
+| `make evaluate-quick` / `make evaluation-gates` / `make evaluation-readme` | Quick run of every suite with gates / check the committed reports / regenerate the README table |
 | `make mcp` / `make mcp-http` | MCP server over stdio (needs `MCP_API_TOKEN`) / streamable HTTP on port 8001 |
 | `make seed-knowledge` | Load `knowledge_base/` through the API |
 | `make reembed` | Add vectors of the configured embedding model to passages that have none (after switching `EMBEDDING_PROVIDER`, or after a provider outage) |
@@ -225,4 +264,9 @@ every call is logged and audited, and revoking the token takes effect on the nex
 | `Your session has ended` in every tab at once | Expected after signing out, a password reset or deactivation, after 12 idle hours or 7 days, or when a copy of the refresh cookie was used elsewhere (`auth.refresh_reused` in the audit log): sign in again |
 | `make e2e`: `Set SEED_USER_PASSWORD` or a login failure in global setup | `.env` has no `SEED_USER_PASSWORD`, or the demo users do not exist on the stack: `make seed-docker` |
 | `make e2e`: `Executable doesn't exist` | Chromium for Playwright is missing: `cd frontend && npx playwright install chromium` |
+| `make demo`: `step 10: no policy was retrieved` | The knowledge base is not loaded on that stack: `make seed-knowledge API_URL=http://localhost:8080` (make demo does it too, unless the upload failed) |
+| `make demo`: `login as ... failed` | The demo users do not exist on that stack, or `SEED_USER_PASSWORD` differs: `make seed-docker` |
+| `[FAIL] gate ...` after `make evaluate` | A report broke a regression gate (the line names the metric, its value and why the gate exists): find the regression; change `evaluation/gates.toml` only for a deliberate change, with its reason |
+| CI: `the evaluation table is out of date` | The reports changed without regenerating the README: `make evaluation-readme` and commit both |
+| The Evaluation page is empty | No results recorded in this database: `make seed` / `make seed-docker` import the committed reports |
 | Docker build fails with TLS errors behind a corporate proxy | Your proxy intercepts TLS; build on a network without interception or add your corporate CA to the base images |

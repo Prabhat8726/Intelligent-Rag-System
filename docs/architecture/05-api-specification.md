@@ -145,7 +145,7 @@ MCP clients with an API token (docs/architecture/08 §7).
 |---|---|---|---|
 | GET | `/api/v1/audit-logs` (filters `actor_id`, `action` exact or a prefix ending in `.`, `entity_type`, `entity_id`, `outcome`, `since`, `until`; newest first, keyset paging with `before_id`; IP and user agent for administrators only) | `audit:read` (ADMIN all; MANAGER events by people of their department or about its documents) | ✅ 8 |
 | GET | `/api/v1/dashboard/summary?days=1..90` → documents (total, by status and type, uploaded), processing (mean / p95 seconds, failures), review queue (open, overdue, by priority and type), standing rule failures (documents per rule), investigations (`scope` all or mine), workflows (awaiting approval, outcomes), a daily confidence series, recent activity (ADR-064) | `dashboard:read` + scope | ✅ 9 |
-| GET | `/api/v1/evaluations` · `/evaluations/{id}` | `evaluations:read` | 🔜 10 |
+| GET | `/api/v1/evaluations` (recorded runs newest first; `suite`, `include_quick`, `latest=true` for the newest full run of each suite in README order; each with gate summary and headline values) · `/evaluations/{id}` (tables, gate checks, notes, datasets, configuration, environment, metrics, Markdown) — ADR-067 | `evaluations:read` | ✅ 10 |
 
 ## 3. Role → permission matrix
 

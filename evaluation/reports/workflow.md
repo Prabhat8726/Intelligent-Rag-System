@@ -1,6 +1,6 @@
 # Workflow automation evaluation
 
-Generated 2026-10-10T13:09:03+00:00 from commit `fa098dfb7c7c` by `docintel evaluate --suite workflow`. Do not edit by hand.
+Generated 2026-10-10T14:19:23+00:00 from commit `2a74f53db57f` by `docintel evaluate --suite workflow`. Do not edit by hand.
 
 ## Invoice processing (development dataset)
 
@@ -19,8 +19,8 @@ Generated 2026-10-10T13:09:03+00:00 from commit `fa098dfb7c7c` by `docintel eval
 | Action state changes with an audit event | 78/78 (100.0% of workflows) |
 | Workflow report re-renders to its stored hash | 100.0% |
 | Report generated twice: identical SHA-256 | 100.0% |
-| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 449.8 / 548.4 |
-| Approval p50 / p95 (ms, decision, execution and report) | 155.2 / 182.1 |
+| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 477.1 / 631.4 |
+| Approval p50 / p95 (ms, decision, execution and report) | 158.2 / 183.3 |
 | Workflow errors | 0 |
 
 ## Invoice processing (held-out dataset)
@@ -40,8 +40,8 @@ Generated 2026-10-10T13:09:03+00:00 from commit `fa098dfb7c7c` by `docintel eval
 | Action state changes with an audit event | 78/78 (100.0% of workflows) |
 | Workflow report re-renders to its stored hash | 100.0% |
 | Report generated twice: identical SHA-256 | 100.0% |
-| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 443.6 / 598.0 |
-| Approval p50 / p95 (ms, decision, execution and report) | 156.3 / 167.2 |
+| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 451.4 / 565.2 |
+| Approval p50 / p95 (ms, decision, execution and report) | 159.6 / 172.5 |
 | Workflow errors | 0 |
 
 ## Contract review (generator seed 73, three versions per contract)
@@ -63,8 +63,8 @@ Generated 2026-10-10T13:09:03+00:00 from commit `fa098dfb7c7c` by `docintel eval
 | Action state changes with an audit event | 128/128 (100.0% of workflows) |
 | Workflow report re-renders to its stored hash | 100.0% |
 | Report generated twice: identical SHA-256 | 100.0% |
-| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 455.6 / 563.6 |
-| Approval p50 / p95 (ms, decision, execution and report) | 132.8 / 135.9 |
+| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 445.5 / 531.1 |
+| Approval p50 / p95 (ms, decision, execution and report) | 129.0 / 153.1 |
 | Workflow errors | 0 |
 
 ## Invoice processing per scenario (development)
@@ -130,7 +130,7 @@ Generated 2026-10-10T13:09:03+00:00 from commit `fa098dfb7c7c` by `docintel eval
 * The documents are synthetic and come from the templates the extractors and rules were developed on: these figures show that the workflows and their controls behave as designed end to end, not accuracy on real-world documents.
 * A confirmed price or tax-rate difference against the order is put to the vendor (REQUEST_VENDOR_CLARIFICATION, decided by a reviewer or above; invoice processing procedure 3.2, 3.3); other discrepancies are held for review. No contract in this dataset expires within 30 days of the reference date, so the expiry rule is only exercised as PASS here (its other outcomes are unit-tested).
 * Model-assisted proposals (Gemini or a local model): Not yet measured - no model was available in the build environment.
-* Run time: 129.3 s.
+* Run time: 117.3 s.
 
 ## Provenance
 

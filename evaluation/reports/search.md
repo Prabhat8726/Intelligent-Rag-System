@@ -1,6 +1,6 @@
 # Business document search evaluation
 
-Generated 2026-10-09T14:56:48+00:00 from commit `42fedf983ee5` by `docintel evaluate --suite search`. Do not edit by hand.
+Generated 2026-10-10T14:15:51+00:00 from commit `2a74f53db57f` by `docintel evaluate --suite search`. Do not edit by hand.
 
 ## Results per question family
 
@@ -48,7 +48,7 @@ Generated 2026-10-09T14:56:48+00:00 from commit `42fedf983ee5` by `docintel eval
     "embedding_model": "hashing-ngram-v1",
     "text_depth": 10,
     "quick": false,
-    "seconds": 16.3
+    "seconds": 7.6
   },
   "environment": {
     "python": "3.13.16",

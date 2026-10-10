@@ -18,7 +18,7 @@ architecture decisions are validated by running code immediately.
 | **7 — Agent** ✅ | LangGraph graph, tool registry, planner, guardrails, MCP server, API tokens | `/analysis`, `mcp` entrypoint | Agent scenario success/tool-selection measured; injection tests pass |
 | **8 — Workflow automation** ✅ | Workflows, HITL state machine, executors, reports, audit API, user management | `/workflows/*`, `/reports`, `/audit-logs`, `/users` | Maker-checker enforced; transitions audited; reports reproducible |
 | **9 — Frontend** ✅ | Dashboard, inbox, viewer with evidence highlights, comparison, AI analysis, approvals, audit, search; refresh tokens | Full SPA, `/dashboard/summary`, `/auth/refresh`, `/auth/logout`, `make e2e` | E2E (Playwright) for the demo path |
-| 10 — Evaluation | Datasets, all suites, reports, regression gates, demo script | `make evaluate`, `make demo` | README metrics generated from reports |
+| **10 — Evaluation** ✅ | Datasets, all suites, reports, regression gates, demo script | `make evaluate`, `make demo`, `evaluation/gates.toml`, `/evaluations` | README metrics generated from reports |
 | 11 — Productionization | Prometheus metrics, rate limiting, hardening, deployment configs (staging/prod), performance tests, runbooks, import-linter | `/metrics`, deploy docs | Deployment claimed only after it is actually performed |
 
 ## 1. Phase 0 acceptance criteria
@@ -359,3 +359,42 @@ Delivery
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 9 (by design): a dark theme (the app is light-only), editable dashboards or saved views, notifications, and browser tests beyond the demo path (component tests cover the screens).
+
+## 10. Phase 10 acceptance criteria
+
+Status as of 2026-10-10, same legend as §1. Reports in `evaluation/reports/`, all from commit `2a74f53`.
+
+Benchmark coverage (Module 25)
+- ✅ Clean invoices, incorrect totals, quantity and price mismatches, tax, vendor and missing-order defects, resent invoices (duplicates): discrepancies, agent and workflow suites; missing fields and date formats: extraction suite (required fields, printed date variants); scanned and low-quality images: OCR (six degradations), tables and extraction (re-rendered scans and the dataset's own); multi-page documents and complex tables: the `LONG_MULTIPAGE` scenario and multi-page stitched tables
+- ✅ Classification accuracy / precision / recall / F1, extraction field exact and normalized match and table accuracy, OCR CER/WER, retrieval Recall@K / Precision@K / MRR / nDCG and citation correctness of retrieved passages, agent task success / tool selection / evidence grounding / recommendation correctness, system latency / throughput / failure rate — each in its report, with datasets, seeds and engine versions
+- ⏳ Generated-answer citation metrics and model-assisted runs (no model in the build environment); public datasets (licence review and download not done)
+
+System performance (NFR-09, ADR-071)
+- ✅ `--suite system`: the dataset (94 documents, 24 scanned) processed by the production worker with 1 and 4 claim loops: throughput, processing p50/p95 per native and scanned document, per-stage timings, 0 failed and 0 retried jobs; in-process API latency of the inbox, a document, its extraction and findings, the review queue, the dashboard and search, one request at a time and with 8 concurrent clients (`unit/test_evaluation.py::test_system_summary_rates_come_from_the_wall_time`)
+- ✅ Baseline recorded in NFR-09 with targets for the Phase 11 load tests; the concurrency run shows one API process queues concurrent requests, an input for sizing API processes
+
+Calibration (ADR-068)
+- ✅ Field and line-item cell confidence against correctness (reliability, ECE) and a threshold sweep with Clopper-Pearson bounds; the fixed rule chooses 0.85 on development (seed 31), the configured value; held-out (seed 131): 34 of 72 auto-accepted, 0 errors; at 0.82, 14 development documents with errors would have been auto-accepted (`unit/test_evaluation.py::test_the_threshold_rule_stays_above_the_floor_and_below_every_error`, `::test_zero_errors_is_not_a_zero_error_rate`)
+
+Regression gates and the README (ADR-069, ADR-070)
+- ✅ `evaluation/gates.toml`: 56 gates over all eleven suites (safety invariants exact, deterministic results exact, accuracy floors), per run mode; `docintel evaluate --gates` fails on a broken gate; the full run passed all of them; a missing metric fails its gate (`unit/test_evaluation_gates.py`)
+- ✅ The README's evaluation table is generated from the reports and refuses quick or uncommitted reports; a unit test and a CI step fail when it differs (`::test_the_readme_table_is_generated_from_the_committed_reports`, `::test_the_committed_reports_pass_their_gates`)
+- ✅ CI runs every suite on quick datasets against the quick gates, checks the committed reports and the README, imports the reports into the stack, runs `make demo` and `make e2e`
+
+Recorded runs and the web app (ADR-067)
+- ✅ Migration 0010 `evaluations`; `docintel evaluate --record` and `docintel evaluation import` (directory or tar on stdin), idempotent by report SHA-256 (`integration/test_evaluations.py`); `make seed` / `make seed-docker` import the committed reports
+- ✅ `GET /evaluations` (latest full run per suite, history) and `/evaluations/{id}`, `evaluations:read` only (`integration/test_evaluations_api.py`); Evaluation page with gate badges, headline numbers, report tables, gate checks, provenance and history (`src/evaluation/evaluation.test.tsx`)
+
+Reproducible demo (ADR-072)
+- ✅ `make demo`: the 17 steps through the API with three users, each checked, non-zero exit on a deviation; run against the Docker stack with random seeds (`integration/test_demo.py`)
+
+Delivery
+- ✅ 872 backend tests, ruff, ruff format, mypy --strict (src and tests); 78 frontend tests, ESLint, `tsc`, production build
+- ✅ Full evaluation of all eleven suites from a clean checkout of `2a74f53` (about 17 minutes on 4 CPUs): every gate passed; every non-timing metric of the earlier reports reproduced exactly, the only additions being the calibration metrics; the README table regenerated from them
+- ✅ Docker images rebuilt (sandbox-only base-image shim); on a fresh stack migration 0010 applies, the smoke test passes, `make seed-docker` streams the reports and gates into the API container (11 runs recorded with their gates; a second import records nothing), `make demo` and `make e2e` pass; the long-lived stack upgraded and `make demo` passes there too
+- ✅ Verification found and fixed: imported reports were stored without gate results (the container never saw `gates.toml`), so the Evaluation page showed "No gates" — `docintel evaluation import` now checks the gates given with `--gates` or carried in the tar stream; the concurrency measurement showed one API process queues concurrent requests (recorded in NFR-09 for Phase 11)
+- ✅ Browser check on the stack at 1366 px and 390 px: the Evaluation overview (11 suites with gates and headline numbers) and a run page (gate checks, report tables, provenance); no horizontal page scroll, no console errors
+- ✅ gitleaks clean; `actionlint` clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+
+Not in Phase 10 (by design): public datasets (licence review), reranking (no reranker model offline), an evaluation dataset built from human corrections (none in the synthetic setting), LLM-judged answer quality (no model), load tests of a deployment (Phase 11).

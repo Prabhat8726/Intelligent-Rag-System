@@ -17,6 +17,7 @@ from docintel.db.models import Evaluation, EvaluationSource
 from docintel.evaluation.report import Report
 from docintel.evaluation.store import (
     InvalidReportError,
+    read_import_tar,
     read_report_directory,
     read_report_tar,
     record_report,
@@ -112,6 +113,10 @@ def test_reports_arrive_as_a_tar_stream_without_touching_the_disk(tmp_path: Path
     (parsed,) = read_report_tar(tar_of(files))
     assert parsed.payload.suite == "tables"
     assert parsed.sha256 == report_file_from(report).sha256
+    # The gates can travel in the same stream (make seed-docker).
+    received = read_import_tar(tar_of({**files, "gates.toml": GATES_TOML.encode()}))
+    assert received.gates == GATES_TOML.encode()
+    assert [r.payload.suite for r in received.reports] == ["tables"]
 
 
 @pytest.mark.parametrize(
@@ -130,6 +135,42 @@ def test_damaged_or_foreign_files_are_refused(files: dict[str, bytes], message: 
         read_report_tar(tar_of(files))
 
 
+GATES_TOML = """
+[[gate]]
+suite = "versions"
+metric = ["native", "steps_exact"]
+min = 1.0
+why = "Contract version changes are found exactly."
+"""
+
+
+async def test_an_import_checks_the_gates_it_is_given(
+    database_url: str, engine: AsyncEngine, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settings = make_settings(database_url=database_url)
+    report = sample_report(suite="versions", value=0.654321)  # has no native/steps_exact
+    report.write(tmp_path / "reports")
+    gates = tmp_path / "gates.toml"
+    gates.write_text(GATES_TOML, encoding="utf-8")
+    args = argparse.Namespace(path=str(tmp_path / "reports"), recorded_by=None, gates=str(gates))
+    sha = report_file_from(report).sha256
+    try:
+        assert await cli._evaluation_import(settings, args) == cli.EXIT_OK
+        assert "[WARN] recorded with a broken gate: versions: native / steps_exact" in (
+            capsys.readouterr().out
+        )
+        async with AsyncSession(engine) as session:
+            row = await session.scalar(select(Evaluation).where(Evaluation.report_sha256 == sha))
+        assert row is not None
+        assert row.gates is not None
+        assert row.gates["passed"] is False
+        assert row.gates["checks"][0]["problem"] == "missing"
+    finally:
+        async with AsyncSession(engine) as session:
+            await session.execute(delete(Evaluation).where(Evaluation.report_sha256 == sha))
+            await session.commit()
+
+
 def test_a_report_must_be_named_after_its_suite(tmp_path: Path) -> None:
     report = sample_report(suite="tables")
     report.write(tmp_path)
@@ -145,7 +186,7 @@ async def test_cli_import_is_idempotent(
     settings = make_settings(database_url=database_url)
     report = sample_report(suite="versions", value=0.123456)
     report.write(tmp_path)
-    args = argparse.Namespace(path=str(tmp_path), recorded_by=None)
+    args = argparse.Namespace(path=str(tmp_path), recorded_by=None, gates=None)
     try:
         assert await cli._evaluation_import(settings, args) == cli.EXIT_OK
         assert "[ OK ] recorded versions" in capsys.readouterr().out
@@ -159,10 +200,16 @@ async def test_cli_import_is_idempotent(
             )
         assert count == 1
 
-        unknown = argparse.Namespace(path=str(tmp_path), recorded_by="nobody@docintel.local")
+        unknown = argparse.Namespace(
+            path=str(tmp_path), recorded_by="nobody@docintel.local", gates=None
+        )
         assert await cli._evaluation_import(settings, unknown) == cli.EXIT_USAGE
-        empty = argparse.Namespace(path=str(tmp_path / "missing"), recorded_by=None)
+        empty = argparse.Namespace(path=str(tmp_path / "missing"), recorded_by=None, gates=None)
         assert await cli._evaluation_import(settings, empty) == cli.EXIT_FAILURE
+        broken_gates = tmp_path / "broken.toml"
+        broken_gates.write_text("[[gate]]\nsuite = 'versions'\n", encoding="utf-8")
+        invalid = argparse.Namespace(path=str(tmp_path), recorded_by=None, gates=str(broken_gates))
+        assert await cli._evaluation_import(settings, invalid) == cli.EXIT_FAILURE
     finally:
         async with AsyncSession(engine) as session:
             await session.execute(

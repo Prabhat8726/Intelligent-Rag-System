@@ -1,8 +1,9 @@
 {
   "suite": "agent",
   "title": "Agent investigation evaluation",
-  "created_at": "2026-10-10T13:10:53+00:00",
-  "git_revision": "fa098dfb7c7c",
+  "quick": false,
+  "created_at": "2026-10-10T14:17:26+00:00",
+  "git_revision": "2a74f53db57f",
   "environment": {
     "python": "3.13.16",
     "pypdfium2": "5.14.0",
@@ -82,8 +83,8 @@
         "adversarial_summaries_kept": 0
       },
       "latency_ms": {
-        "p50": 347.9,
-        "p95": 509.0
+        "p50": 371.8,
+        "p95": 516.3
       },
       "tool_calls_per_run": 7.95,
       "llm_calls_deterministic_runs": 0,
@@ -124,7 +125,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 347.9,
+          "latency_ms": 339.5,
           "tool_calls": 6
         },
         {
@@ -165,7 +166,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 397.3,
+          "latency_ms": 322.4,
           "tool_calls": 7
         },
         {
@@ -204,7 +205,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 319.4,
+          "latency_ms": 315.6,
           "tool_calls": 6
         },
         {
@@ -245,7 +246,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 327.0,
+          "latency_ms": 407.9,
           "tool_calls": 7
         },
         {
@@ -284,7 +285,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 347.2,
+          "latency_ms": 333.1,
           "tool_calls": 6
         },
         {
@@ -325,7 +326,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 370.8,
+          "latency_ms": 329.8,
           "tool_calls": 7
         },
         {
@@ -364,7 +365,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 306.2,
+          "latency_ms": 318.2,
           "tool_calls": 6
         },
         {
@@ -405,7 +406,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 327.0,
+          "latency_ms": 352.9,
           "tool_calls": 7
         },
         {
@@ -448,7 +449,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 320.6,
+          "latency_ms": 371.8,
           "tool_calls": 7
         },
         {
@@ -493,7 +494,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 325.3,
+          "latency_ms": 386.4,
           "tool_calls": 8
         },
         {
@@ -536,7 +537,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 334.8,
+          "latency_ms": 359.0,
           "tool_calls": 7
         },
         {
@@ -579,7 +580,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 378.8,
+          "latency_ms": 351.3,
           "tool_calls": 7
         },
         {
@@ -624,7 +625,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 403.1,
+          "latency_ms": 349.3,
           "tool_calls": 8
         },
         {
@@ -667,7 +668,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 380.0,
+          "latency_ms": 361.2,
           "tool_calls": 7
         },
         {
@@ -712,7 +713,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 427.0,
+          "latency_ms": 422.8,
           "tool_calls": 9
         },
         {
@@ -759,7 +760,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 443.2,
+          "latency_ms": 464.3,
           "tool_calls": 10
         },
         {
@@ -804,7 +805,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 375.4,
+          "latency_ms": 399.4,
           "tool_calls": 9
         },
         {
@@ -849,7 +850,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 448.6,
+          "latency_ms": 402.7,
           "tool_calls": 9
         },
         {
@@ -896,7 +897,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 509.0,
+          "latency_ms": 460.8,
           "tool_calls": 10
         },
         {
@@ -941,7 +942,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 419.1,
+          "latency_ms": 661.1,
           "tool_calls": 9
         },
         {
@@ -986,7 +987,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 423.4,
+          "latency_ms": 524.6,
           "tool_calls": 8
         },
         {
@@ -1033,7 +1034,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 414.3,
+          "latency_ms": 622.4,
           "tool_calls": 9
         },
         {
@@ -1078,7 +1079,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 358.6,
+          "latency_ms": 422.9,
           "tool_calls": 8
         },
         {
@@ -1123,7 +1124,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 381.9,
+          "latency_ms": 398.3,
           "tool_calls": 8
         },
         {
@@ -1170,7 +1171,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 394.7,
+          "latency_ms": 431.8,
           "tool_calls": 9
         },
         {
@@ -1215,7 +1216,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 400.2,
+          "latency_ms": 396.2,
           "tool_calls": 8
         },
         {
@@ -1260,7 +1261,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 285.1,
+          "latency_ms": 314.0,
           "tool_calls": 6
         },
         {
@@ -1307,7 +1308,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 322.4,
+          "latency_ms": 331.9,
           "tool_calls": 7
         },
         {
@@ -1352,7 +1353,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 294.1,
+          "latency_ms": 309.2,
           "tool_calls": 6
         },
         {
@@ -1397,7 +1398,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 271.7,
+          "latency_ms": 291.6,
           "tool_calls": 6
         },
         {
@@ -1444,7 +1445,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 379.0,
+          "latency_ms": 358.0,
           "tool_calls": 7
         },
         {
@@ -1489,7 +1490,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 281.3,
+          "latency_ms": 308.1,
           "tool_calls": 6
         },
         {
@@ -1534,7 +1535,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 410.4,
+          "latency_ms": 404.4,
           "tool_calls": 8
         },
         {
@@ -1581,7 +1582,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 437.3,
+          "latency_ms": 415.5,
           "tool_calls": 9
         },
         {
@@ -1626,7 +1627,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 390.6,
+          "latency_ms": 380.5,
           "tool_calls": 8
         },
         {
@@ -1671,7 +1672,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 333.7,
+          "latency_ms": 428.6,
           "tool_calls": 8
         },
         {
@@ -1718,7 +1719,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 375.2,
+          "latency_ms": 501.5,
           "tool_calls": 9
         },
         {
@@ -1763,7 +1764,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 340.5,
+          "latency_ms": 440.5,
           "tool_calls": 8
         },
         {
@@ -1806,7 +1807,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 323.7,
+          "latency_ms": 376.5,
           "tool_calls": 7
         },
         {
@@ -1851,7 +1852,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 335.0,
+          "latency_ms": 466.7,
           "tool_calls": 8
         },
         {
@@ -1894,7 +1895,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 257.1,
+          "latency_ms": 392.6,
           "tool_calls": 7
         },
         {
@@ -1937,7 +1938,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 402.0,
+          "latency_ms": 428.7,
           "tool_calls": 7
         },
         {
@@ -1982,7 +1983,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 475.0,
+          "latency_ms": 482.8,
           "tool_calls": 8
         },
         {
@@ -2025,7 +2026,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 330.2,
+          "latency_ms": 459.1,
           "tool_calls": 7
         },
         {
@@ -2070,7 +2071,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 344.2,
+          "latency_ms": 381.7,
           "tool_calls": 8
         },
         {
@@ -2117,7 +2118,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 419.7,
+          "latency_ms": 426.5,
           "tool_calls": 9
         },
         {
@@ -2162,7 +2163,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 434.0,
+          "latency_ms": 354.6,
           "tool_calls": 8
         },
         {
@@ -2207,7 +2208,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 412.7,
+          "latency_ms": 349.9,
           "tool_calls": 8
         },
         {
@@ -2254,7 +2255,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 433.1,
+          "latency_ms": 441.7,
           "tool_calls": 9
         },
         {
@@ -2299,7 +2300,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 406.2,
+          "latency_ms": 387.5,
           "tool_calls": 8
         },
         {
@@ -2338,7 +2339,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 333.3,
+          "latency_ms": 289.9,
           "tool_calls": 6
         },
         {
@@ -2380,7 +2381,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 588.9,
+          "latency_ms": 516.3,
           "tool_calls": 11
         },
         {
@@ -2423,7 +2424,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 442.8,
+          "latency_ms": 413.8,
           "tool_calls": 8
         },
         {
@@ -2468,7 +2469,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 532.2,
+          "latency_ms": 475.1,
           "tool_calls": 11
         },
         {
@@ -2511,7 +2512,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 376.7,
+          "latency_ms": 384.2,
           "tool_calls": 8
         },
         {
@@ -2550,7 +2551,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 311.6,
+          "latency_ms": 305.8,
           "tool_calls": 6
         },
         {
@@ -2592,7 +2593,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 509.8,
+          "latency_ms": 583.6,
           "tool_calls": 11
         },
         {
@@ -2635,7 +2636,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 387.6,
+          "latency_ms": 383.2,
           "tool_calls": 8
         },
         {
@@ -2680,7 +2681,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 508.9,
+          "latency_ms": 439.0,
           "tool_calls": 11
         },
         {
@@ -2723,7 +2724,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 446.8,
+          "latency_ms": 341.0,
           "tool_calls": 8
         },
         {
@@ -2756,7 +2757,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 127.7,
+          "latency_ms": 104.2,
           "tool_calls": 1
         },
         {
@@ -2789,7 +2790,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 150.4,
+          "latency_ms": 108.4,
           "tool_calls": 1
         },
         {
@@ -2822,7 +2823,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 127.6,
+          "latency_ms": 106.3,
           "tool_calls": 1
         },
         {
@@ -2855,7 +2856,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 111.8,
+          "latency_ms": 112.9,
           "tool_calls": 1
         },
         {
@@ -2888,7 +2889,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 126.2,
+          "latency_ms": 121.6,
           "tool_calls": 1
         },
         {
@@ -2921,7 +2922,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 117.7,
+          "latency_ms": 100.3,
           "tool_calls": 1
         },
         {
@@ -2954,7 +2955,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 129.3,
+          "latency_ms": 122.4,
           "tool_calls": 1
         },
         {
@@ -2987,7 +2988,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 140.3,
+          "latency_ms": 112.6,
           "tool_calls": 1
         },
         {
@@ -3053,7 +3054,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 116.8,
+          "latency_ms": 114.5,
           "tool_calls": 1
         }
       ]
@@ -3097,8 +3098,8 @@
         "adversarial_summaries_kept": 0
       },
       "latency_ms": {
-        "p50": 430.0,
-        "p95": 590.0
+        "p50": 394.3,
+        "p95": 534.2
       },
       "tool_calls_per_run": 7.95,
       "llm_calls_deterministic_runs": 0,
@@ -3139,7 +3140,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 608.5,
+          "latency_ms": 360.9,
           "tool_calls": 6
         },
         {
@@ -3180,7 +3181,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 445.0,
+          "latency_ms": 394.3,
           "tool_calls": 7
         },
         {
@@ -3219,7 +3220,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 333.2,
+          "latency_ms": 374.8,
           "tool_calls": 6
         },
         {
@@ -3260,7 +3261,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 372.9,
+          "latency_ms": 412.8,
           "tool_calls": 7
         },
         {
@@ -3299,7 +3300,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 331.7,
+          "latency_ms": 388.4,
           "tool_calls": 6
         },
         {
@@ -3340,7 +3341,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 447.6,
+          "latency_ms": 372.9,
           "tool_calls": 7
         },
         {
@@ -3379,7 +3380,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 375.4,
+          "latency_ms": 317.1,
           "tool_calls": 6
         },
         {
@@ -3420,7 +3421,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 760.8,
+          "latency_ms": 430.1,
           "tool_calls": 7
         },
         {
@@ -3463,7 +3464,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 576.7,
+          "latency_ms": 456.5,
           "tool_calls": 7
         },
         {
@@ -3508,7 +3509,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 434.4,
+          "latency_ms": 384.8,
           "tool_calls": 8
         },
         {
@@ -3551,7 +3552,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 434.2,
+          "latency_ms": 351.8,
           "tool_calls": 7
         },
         {
@@ -3594,7 +3595,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 329.4,
+          "latency_ms": 356.4,
           "tool_calls": 7
         },
         {
@@ -3639,7 +3640,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 377.7,
+          "latency_ms": 395.9,
           "tool_calls": 8
         },
         {
@@ -3682,7 +3683,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 353.1,
+          "latency_ms": 374.6,
           "tool_calls": 7
         },
         {
@@ -3727,7 +3728,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 462.8,
+          "latency_ms": 461.8,
           "tool_calls": 9
         },
         {
@@ -3774,7 +3775,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 471.5,
+          "latency_ms": 482.6,
           "tool_calls": 10
         },
         {
@@ -3819,7 +3820,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 491.8,
+          "latency_ms": 449.4,
           "tool_calls": 9
         },
         {
@@ -3864,7 +3865,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 439.5,
+          "latency_ms": 408.6,
           "tool_calls": 9
         },
         {
@@ -3911,7 +3912,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 590.0,
+          "latency_ms": 497.5,
           "tool_calls": 10
         },
         {
@@ -3956,7 +3957,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 582.6,
+          "latency_ms": 456.9,
           "tool_calls": 9
         },
         {
@@ -4001,7 +4002,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 494.4,
+          "latency_ms": 405.9,
           "tool_calls": 8
         },
         {
@@ -4048,7 +4049,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 459.0,
+          "latency_ms": 499.6,
           "tool_calls": 9
         },
         {
@@ -4093,7 +4094,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 420.7,
+          "latency_ms": 428.0,
           "tool_calls": 8
         },
         {
@@ -4138,7 +4139,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 555.6,
+          "latency_ms": 408.4,
           "tool_calls": 8
         },
         {
@@ -4185,7 +4186,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 430.0,
+          "latency_ms": 399.7,
           "tool_calls": 9
         },
         {
@@ -4230,7 +4231,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 407.4,
+          "latency_ms": 373.4,
           "tool_calls": 8
         },
         {
@@ -4275,7 +4276,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 299.3,
+          "latency_ms": 290.5,
           "tool_calls": 6
         },
         {
@@ -4322,7 +4323,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 342.7,
+          "latency_ms": 330.0,
           "tool_calls": 7
         },
         {
@@ -4367,7 +4368,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 276.6,
+          "latency_ms": 280.0,
           "tool_calls": 6
         },
         {
@@ -4412,7 +4413,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 275.7,
+          "latency_ms": 274.1,
           "tool_calls": 6
         },
         {
@@ -4459,7 +4460,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 312.7,
+          "latency_ms": 298.8,
           "tool_calls": 7
         },
         {
@@ -4504,7 +4505,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 288.5,
+          "latency_ms": 309.1,
           "tool_calls": 6
         },
         {
@@ -4549,7 +4550,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 372.0,
+          "latency_ms": 369.7,
           "tool_calls": 8
         },
         {
@@ -4596,7 +4597,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 425.2,
+          "latency_ms": 396.4,
           "tool_calls": 9
         },
         {
@@ -4641,7 +4642,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 399.2,
+          "latency_ms": 353.0,
           "tool_calls": 8
         },
         {
@@ -4686,7 +4687,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 465.2,
+          "latency_ms": 338.6,
           "tool_calls": 8
         },
         {
@@ -4733,7 +4734,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 443.4,
+          "latency_ms": 434.6,
           "tool_calls": 9
         },
         {
@@ -4778,7 +4779,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "MEDIUM",
-          "latency_ms": 427.2,
+          "latency_ms": 364.9,
           "tool_calls": 8
         },
         {
@@ -4821,7 +4822,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 366.9,
+          "latency_ms": 326.8,
           "tool_calls": 7
         },
         {
@@ -4866,7 +4867,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 403.5,
+          "latency_ms": 373.0,
           "tool_calls": 8
         },
         {
@@ -4909,7 +4910,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 355.2,
+          "latency_ms": 356.2,
           "tool_calls": 7
         },
         {
@@ -4952,7 +4953,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 321.4,
+          "latency_ms": 337.7,
           "tool_calls": 7
         },
         {
@@ -4997,7 +4998,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 352.9,
+          "latency_ms": 372.0,
           "tool_calls": 8
         },
         {
@@ -5040,7 +5041,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 342.0,
+          "latency_ms": 316.9,
           "tool_calls": 7
         },
         {
@@ -5085,7 +5086,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 433.7,
+          "latency_ms": 356.7,
           "tool_calls": 8
         },
         {
@@ -5132,7 +5133,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 443.9,
+          "latency_ms": 352.8,
           "tool_calls": 9
         },
         {
@@ -5177,7 +5178,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 383.6,
+          "latency_ms": 366.6,
           "tool_calls": 8
         },
         {
@@ -5222,7 +5223,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 416.0,
+          "latency_ms": 374.5,
           "tool_calls": 8
         },
         {
@@ -5269,7 +5270,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 400.2,
+          "latency_ms": 407.0,
           "tool_calls": 9
         },
         {
@@ -5314,7 +5315,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 377.9,
+          "latency_ms": 393.4,
           "tool_calls": 8
         },
         {
@@ -5353,7 +5354,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 366.4,
+          "latency_ms": 347.6,
           "tool_calls": 6
         },
         {
@@ -5395,7 +5396,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 536.3,
+          "latency_ms": 582.8,
           "tool_calls": 11
         },
         {
@@ -5438,7 +5439,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 384.9,
+          "latency_ms": 411.4,
           "tool_calls": 8
         },
         {
@@ -5483,7 +5484,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 524.3,
+          "latency_ms": 534.2,
           "tool_calls": 11
         },
         {
@@ -5526,7 +5527,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 388.2,
+          "latency_ms": 427.4,
           "tool_calls": 8
         },
         {
@@ -5565,7 +5566,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 307.2,
+          "latency_ms": 369.8,
           "tool_calls": 6
         },
         {
@@ -5607,7 +5608,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 548.2,
+          "latency_ms": 600.2,
           "tool_calls": 11
         },
         {
@@ -5650,7 +5651,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 400.7,
+          "latency_ms": 436.2,
           "tool_calls": 8
         },
         {
@@ -5695,7 +5696,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 460.7,
+          "latency_ms": 516.2,
           "tool_calls": 11
         },
         {
@@ -5738,7 +5739,7 @@
           "model_statements_kept": 0,
           "summary_source": "rules",
           "confidence": "HIGH",
-          "latency_ms": 398.2,
+          "latency_ms": 461.2,
           "tool_calls": 8
         }
       ]
@@ -5750,6 +5751,459 @@
     "Policy retrieval for vendor mismatches misses the vendor section with the offline lexical (hashing) embeddings: the rule name shares most words with purchase-order sections. A semantic embedding model is expected to help; not yet measured.",
     "Model-assisted planning and analysis (Gemini or a local model): Not yet measured - no model was available in the build environment.",
     "Guardrail figures use a scripted adversary, so they measure the validators and guardrails, not an LLM's behaviour.",
-    "Run time: 105.0 s."
+    "Run time: 95.1 s."
+  ],
+  "tables": [
+    {
+      "heading": "Overall (development dataset)",
+      "header": [
+        "Measure",
+        "Value"
+      ],
+      "rows": [
+        [
+          "Runs completed",
+          "70/70"
+        ],
+        [
+          "Task success, document named",
+          "100.0%"
+        ],
+        [
+          "Task success, document found from the question",
+          "100.0%"
+        ],
+        [
+          "Task success, policy questions",
+          "100.0%"
+        ],
+        [
+          "Unsafe recommendations (payment of a defective invoice)",
+          "0"
+        ],
+        [
+          "Planted defect reported as a rule finding",
+          "100.0%"
+        ],
+        [
+          "False rule failures on clean invoices",
+          "0"
+        ],
+        [
+          "Target invoice identified from the question",
+          "100.0%"
+        ],
+        [
+          "... and nothing else",
+          "100.0%"
+        ],
+        [
+          "Tool selection precision / recall",
+          "99.2% / 100.0%"
+        ],
+        [
+          "Findings whose evidence labels all exist",
+          "236/236 (100.0%)"
+        ],
+        [
+          "Findings citing nothing (by category)",
+          "0"
+        ],
+        [
+          "Governing policy among the sources (defective invoices)",
+          "85.7%"
+        ],
+        [
+          "Policy questions: expected section among the sources",
+          "100.0%"
+        ],
+        [
+          "Tool calls per document run",
+          "7.95"
+        ],
+        [
+          "Latency per run p50 / p95 (ms, includes the job queue)",
+          "371.8 / 516.3"
+        ],
+        [
+          "LLM calls in deterministic runs",
+          "0"
+        ]
+      ]
+    },
+    {
+      "heading": "Overall (held-out dataset, generator seed 11, never used while developing)",
+      "header": [
+        "Measure",
+        "Value"
+      ],
+      "rows": [
+        [
+          "Runs completed",
+          "60/60"
+        ],
+        [
+          "Task success, document named",
+          "100.0%"
+        ],
+        [
+          "Task success, document found from the question",
+          "100.0%"
+        ],
+        [
+          "Unsafe recommendations (payment of a defective invoice)",
+          "0"
+        ],
+        [
+          "Planted defect reported as a rule finding",
+          "100.0%"
+        ],
+        [
+          "False rule failures on clean invoices",
+          "0"
+        ],
+        [
+          "Target invoice identified from the question",
+          "100.0%"
+        ],
+        [
+          "... and nothing else",
+          "100.0%"
+        ],
+        [
+          "Tool selection precision / recall",
+          "99.2% / 100.0%"
+        ],
+        [
+          "Findings whose evidence labels all exist",
+          "206/206 (100.0%)"
+        ],
+        [
+          "Findings citing nothing (by category)",
+          "0"
+        ],
+        [
+          "Governing policy among the sources (defective invoices)",
+          "85.7%"
+        ],
+        [
+          "Tool calls per document run",
+          "7.95"
+        ],
+        [
+          "Latency per run p50 / p95 (ms, includes the job queue)",
+          "394.3 / 534.2"
+        ],
+        [
+          "LLM calls in deterministic runs",
+          "0"
+        ]
+      ]
+    },
+    {
+      "heading": "Guardrails against a scripted adversarial model (development)",
+      "header": [
+        "Measure",
+        "Value"
+      ],
+      "rows": [
+        [
+          "Runs (defective invoices)",
+          "16"
+        ],
+        [
+          "Payment recommendations accepted",
+          "0"
+        ],
+        [
+          "Recommendation still correct",
+          "100.0%"
+        ],
+        [
+          "Adversarial statements kept as findings",
+          "0"
+        ],
+        [
+          "Adversarial summaries kept",
+          "0"
+        ]
+      ]
+    },
+    {
+      "heading": "Guardrails against a scripted adversarial model (held-out)",
+      "header": [
+        "Measure",
+        "Value"
+      ],
+      "rows": [
+        [
+          "Runs (defective invoices)",
+          "16"
+        ],
+        [
+          "Payment recommendations accepted",
+          "0"
+        ],
+        [
+          "Recommendation still correct",
+          "100.0%"
+        ],
+        [
+          "Adversarial statements kept as findings",
+          "0"
+        ],
+        [
+          "Adversarial summaries kept",
+          "0"
+        ]
+      ]
+    },
+    {
+      "heading": "Per scenario, named and search runs (development)",
+      "header": [
+        "Scenario",
+        "Runs",
+        "Expected",
+        "Recommended",
+        "Correct",
+        "Defect found",
+        "Policy found"
+      ],
+      "rows": [
+        [
+          "CLEAN_MATCH (INV)",
+          "4",
+          "APPROVE_FOR_PAYMENT",
+          "APPROVE_FOR_PAYMENT x4",
+          "100.0%",
+          "n/a",
+          "n/a"
+        ],
+        [
+          "DUPLICATE_INVOICE (INV)",
+          "4",
+          "APPROVE_FOR_PAYMENT",
+          "APPROVE_FOR_PAYMENT x2, REJECT_DUPLICATE x2",
+          "100.0%",
+          "n/a",
+          "n/a"
+        ],
+        [
+          "DUPLICATE_INVOICE (INV2)",
+          "4",
+          "REJECT_DUPLICATE",
+          "REJECT_DUPLICATE x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "MISSING_PO_REFERENCE (INV)",
+          "4",
+          "HOLD_FOR_REVIEW",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "QUANTITY_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "SHORT_DELIVERY (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "TAX_RATE_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "REQUEST_VENDOR_CLARIFICATION x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "TOTAL_ARITHMETIC_ERROR (INV)",
+          "4",
+          "HOLD_FOR_REVIEW",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "n/a"
+        ],
+        [
+          "UNIT_PRICE_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "REQUEST_VENDOR_CLARIFICATION x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "VENDOR_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "0.0%"
+        ],
+        [
+          "VENDOR_NAME_VARIANT (INV)",
+          "4",
+          "APPROVE_FOR_PAYMENT",
+          "APPROVE_FOR_PAYMENT x4",
+          "100.0%",
+          "n/a",
+          "n/a"
+        ]
+      ]
+    },
+    {
+      "heading": "Per scenario, named and search runs (held-out)",
+      "header": [
+        "Scenario",
+        "Runs",
+        "Expected",
+        "Recommended",
+        "Correct",
+        "Defect found",
+        "Policy found"
+      ],
+      "rows": [
+        [
+          "CLEAN_MATCH (INV)",
+          "4",
+          "APPROVE_FOR_PAYMENT",
+          "APPROVE_FOR_PAYMENT x4",
+          "100.0%",
+          "n/a",
+          "n/a"
+        ],
+        [
+          "DUPLICATE_INVOICE (INV)",
+          "4",
+          "APPROVE_FOR_PAYMENT",
+          "APPROVE_FOR_PAYMENT x2, REJECT_DUPLICATE x2",
+          "100.0%",
+          "n/a",
+          "n/a"
+        ],
+        [
+          "DUPLICATE_INVOICE (INV2)",
+          "4",
+          "REJECT_DUPLICATE",
+          "REJECT_DUPLICATE x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "MISSING_PO_REFERENCE (INV)",
+          "4",
+          "HOLD_FOR_REVIEW",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "QUANTITY_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "SHORT_DELIVERY (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "TAX_RATE_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "REQUEST_VENDOR_CLARIFICATION x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "TOTAL_ARITHMETIC_ERROR (INV)",
+          "4",
+          "HOLD_FOR_REVIEW",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "n/a"
+        ],
+        [
+          "UNIT_PRICE_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "REQUEST_VENDOR_CLARIFICATION x4",
+          "100.0%",
+          "100.0%",
+          "100.0%"
+        ],
+        [
+          "VENDOR_MISMATCH (INV)",
+          "4",
+          "HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION",
+          "HOLD_FOR_REVIEW x4",
+          "100.0%",
+          "100.0%",
+          "0.0%"
+        ],
+        [
+          "VENDOR_NAME_VARIANT (INV)",
+          "4",
+          "APPROVE_FOR_PAYMENT",
+          "APPROVE_FOR_PAYMENT x4",
+          "100.0%",
+          "n/a",
+          "n/a"
+        ]
+      ]
+    },
+    {
+      "heading": "Runs with an unexpected recommendation",
+      "header": [
+        "Dataset",
+        "Case",
+        "Question",
+        "Expected",
+        "Recommended",
+        "Rule failures"
+      ],
+      "rows": [
+        [
+          "-",
+          "-",
+          "-",
+          "-",
+          "-",
+          "-"
+        ]
+      ]
+    }
   ]
 }

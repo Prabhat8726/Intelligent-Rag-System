@@ -1,0 +1,595 @@
+{
+  "suite": "system",
+  "title": "System performance (latency, throughput, failure rate)",
+  "quick": false,
+  "created_at": "2026-10-10T14:21:23+00:00",
+  "git_revision": "2a74f53db57f",
+  "environment": {
+    "python": "3.13.16",
+    "pypdfium2": "5.14.0",
+    "pillow": "12.3.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "rapidfuzz": "3.14.6",
+    "reportlab": "5.0.1",
+    "tesseract": "tesseract 5.3.4",
+    "postgresql": "17.11 (Debian 17.11-1.pgdg12+2)",
+    "cpus": "4",
+    "machine": "x86_64",
+    "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39"
+  },
+  "dataset": {
+    "name": "synthetic-core + light re-scans",
+    "seed": 23,
+    "bundles_per_scenario": 2,
+    "scenarios": "all",
+    "documents": 94,
+    "native": 70,
+    "scanned": 24
+  },
+  "config": {
+    "mode": "deterministic (no LLM)",
+    "worker": "one process, Worker.run with N claim loops (WORKER_CONCURRENCY)",
+    "claim_loops": [
+      1,
+      4
+    ],
+    "ocr_concurrency": 2,
+    "api": "in process: httpx ASGITransport, no network, nginx or TLS",
+    "api_repeats": 30,
+    "seconds": 119.7
+  },
+  "metrics": {
+    "pipeline": {
+      "1_claim_loops": {
+        "worker_claim_loops": 1,
+        "documents": 94,
+        "pages": 100,
+        "wall_seconds": 69.7,
+        "documents_per_minute": 80.9,
+        "pages_per_minute": 86.1,
+        "completed": 94,
+        "failed": 0,
+        "failure_rate": 0.0,
+        "retried": 0,
+        "review_required": 40,
+        "processing_seconds": {
+          "all": {
+            "n": 94,
+            "p50": 0.15,
+            "p95": 1.9
+          },
+          "native": {
+            "n": 70,
+            "p50": 0.14,
+            "p95": 0.25
+          },
+          "scanned": {
+            "n": 24,
+            "p50": 1.72,
+            "p95": 1.95
+          }
+        },
+        "stage_ms": {
+          "classify": {
+            "all": {
+              "n": 94,
+              "p50": 9.53,
+              "p95": 15.06
+            },
+            "native": {
+              "n": 70,
+              "p50": 9.42,
+              "p95": 16.02
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 9.71,
+              "p95": 12.93
+            }
+          },
+          "extract": {
+            "all": {
+              "n": 94,
+              "p50": 55.57,
+              "p95": 1806.68
+            },
+            "native": {
+              "n": 70,
+              "p50": 51.92,
+              "p95": 107.86
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 1626.46,
+              "p95": 1857.51
+            }
+          },
+          "fields": {
+            "all": {
+              "n": 94,
+              "p50": 13.74,
+              "p95": 31.01
+            },
+            "native": {
+              "n": 70,
+              "p50": 13.87,
+              "p95": 52.15
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 13.38,
+              "p95": 19.52
+            }
+          },
+          "index": {
+            "all": {
+              "n": 94,
+              "p50": 2.88,
+              "p95": 6.26
+            },
+            "native": {
+              "n": 70,
+              "p50": 2.77,
+              "p95": 7.29
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 3.17,
+              "p95": 3.85
+            }
+          },
+          "inspect": {
+            "all": {
+              "n": 94,
+              "p50": 2.89,
+              "p95": 6.73
+            },
+            "native": {
+              "n": 70,
+              "p50": 3.03,
+              "p95": 6.73
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 1.09,
+              "p95": 12.75
+            }
+          },
+          "integrity": {
+            "all": {
+              "n": 94,
+              "p50": 1.41,
+              "p95": 2.34
+            },
+            "native": {
+              "n": 70,
+              "p50": 1.34,
+              "p95": 1.78
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 1.82,
+              "p95": 3.08
+            }
+          },
+          "previews": {
+            "all": {
+              "n": 94,
+              "p50": 2.58,
+              "p95": 4.51
+            },
+            "native": {
+              "n": 70,
+              "p50": 2.38,
+              "p95": 4.56
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 3.39,
+              "p95": 4.16
+            }
+          }
+        },
+        "upload_ms": {
+          "n": 94,
+          "p50": 28.43,
+          "p95": 37.86
+        },
+        "llm_calls": 0
+      },
+      "4_claim_loops": {
+        "worker_claim_loops": 4,
+        "documents": 94,
+        "pages": 100,
+        "wall_seconds": 28.94,
+        "documents_per_minute": 194.9,
+        "pages_per_minute": 207.3,
+        "completed": 94,
+        "failed": 0,
+        "failure_rate": 0.0,
+        "retried": 0,
+        "review_required": 40,
+        "processing_seconds": {
+          "all": {
+            "n": 94,
+            "p50": 0.33,
+            "p95": 2.13
+          },
+          "native": {
+            "n": 70,
+            "p50": 0.3,
+            "p95": 1.13
+          },
+          "scanned": {
+            "n": 24,
+            "p50": 1.86,
+            "p95": 2.25
+          }
+        },
+        "stage_ms": {
+          "classify": {
+            "all": {
+              "n": 94,
+              "p50": 10.12,
+              "p95": 20.06
+            },
+            "native": {
+              "n": 70,
+              "p50": 10.51,
+              "p95": 20.76
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 8.95,
+              "p95": 12.55
+            }
+          },
+          "extract": {
+            "all": {
+              "n": 94,
+              "p50": 136.52,
+              "p95": 1967.37
+            },
+            "native": {
+              "n": 70,
+              "p50": 119.01,
+              "p95": 502.63
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 1740.35,
+              "p95": 2083.85
+            }
+          },
+          "fields": {
+            "all": {
+              "n": 94,
+              "p50": 19.14,
+              "p95": 37.56
+            },
+            "native": {
+              "n": 70,
+              "p50": 20.55,
+              "p95": 52.76
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 16.45,
+              "p95": 28.91
+            }
+          },
+          "index": {
+            "all": {
+              "n": 94,
+              "p50": 2.71,
+              "p95": 6.18
+            },
+            "native": {
+              "n": 70,
+              "p50": 2.68,
+              "p95": 6.87
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 2.76,
+              "p95": 4.82
+            }
+          },
+          "inspect": {
+            "all": {
+              "n": 94,
+              "p50": 7.81,
+              "p95": 41.27
+            },
+            "native": {
+              "n": 70,
+              "p50": 9.2,
+              "p95": 152.94
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 2.61,
+              "p95": 30.39
+            }
+          },
+          "integrity": {
+            "all": {
+              "n": 94,
+              "p50": 6.82,
+              "p95": 17.3
+            },
+            "native": {
+              "n": 70,
+              "p50": 7.24,
+              "p95": 17.73
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 6.33,
+              "p95": 13.67
+            }
+          },
+          "previews": {
+            "all": {
+              "n": 94,
+              "p50": 8.59,
+              "p95": 26.19
+            },
+            "native": {
+              "n": 70,
+              "p50": 10.38,
+              "p95": 30.6
+            },
+            "scanned": {
+              "n": 24,
+              "p50": 6.33,
+              "p95": 20.37
+            }
+          }
+        },
+        "upload_ms": {
+          "n": 94,
+          "p50": 25.51,
+          "p95": 33.75
+        },
+        "llm_calls": 0
+      }
+    },
+    "api_ms": {
+      "inbox": {
+        "n": 30,
+        "p50": 24.65,
+        "p95": 30.64
+      },
+      "document": {
+        "n": 30,
+        "p50": 19.42,
+        "p95": 22.6
+      },
+      "extraction": {
+        "n": 30,
+        "p50": 17.93,
+        "p95": 22.21
+      },
+      "findings": {
+        "n": 30,
+        "p50": 34.54,
+        "p95": 39.43
+      },
+      "review_queue": {
+        "n": 30,
+        "p50": 25.43,
+        "p95": 32.91
+      },
+      "dashboard": {
+        "n": 30,
+        "p50": 43.14,
+        "p95": 50.61
+      },
+      "search": {
+        "n": 30,
+        "p50": 27.51,
+        "p95": 33.78
+      },
+      "inbox_concurrent": {
+        "n": 80,
+        "p50": 121.28,
+        "p95": 693.39,
+        "clients": 8,
+        "requests_per_second": 44.7
+      }
+    }
+  },
+  "notes": [
+    "Throughput is measured with the whole dataset queued at once, from the first claim to the last finish: the worker is never idle. Processing time is claim to finish of each document's job and includes matching, rules and the review queue.",
+    "Scanned documents are OCR'd page by page with Tesseract; native PDFs use their text layer. More claim loops in one process overlap I/O and Tesseract subprocesses; PDF rendering is serialized per process, so CPU-bound work scales with more worker processes, which this suite does not run.",
+    "API numbers are in process (the application and its database queries); a deployment adds the network, nginx and TLS. Authentication is a bearer token; the dashboard and search read the processed dataset.",
+    "No LLM is configured: 0 model calls. Model latency and cost per document are not measured here.",
+    "These numbers describe this machine (see Provenance) and this dataset; they are a baseline for regressions, not a capacity promise."
+  ],
+  "tables": [
+    {
+      "heading": "Document pipeline",
+      "header": [
+        "Claim loops",
+        "Documents",
+        "Wall time",
+        "Documents / min",
+        "Pages / min",
+        "Native p50 / p95",
+        "Scanned p50 / p95",
+        "Failed",
+        "Retried"
+      ],
+      "rows": [
+        [
+          "1",
+          "94 (100 pages)",
+          "69.70 s",
+          "80.9",
+          "86.1",
+          "0.14 s / 0.25 s",
+          "1.72 s / 1.95 s",
+          "0 (0%)",
+          "0"
+        ],
+        [
+          "4",
+          "94 (100 pages)",
+          "28.94 s",
+          "194.9",
+          "207.3",
+          "0.30 s / 1.13 s",
+          "1.86 s / 2.25 s",
+          "0 (0%)",
+          "0"
+        ]
+      ]
+    },
+    {
+      "heading": "Pipeline stages (1 claim loop)",
+      "header": [
+        "Stage",
+        "Native p50",
+        "Native p95",
+        "Scanned p50",
+        "Scanned p95"
+      ],
+      "rows": [
+        [
+          "integrity",
+          "1.34 ms",
+          "1.78 ms",
+          "1.82 ms",
+          "3.08 ms"
+        ],
+        [
+          "inspect",
+          "3.03 ms",
+          "6.73 ms",
+          "1.09 ms",
+          "12.75 ms"
+        ],
+        [
+          "extract",
+          "51.92 ms",
+          "107.86 ms",
+          "1,626.46 ms",
+          "1,857.51 ms"
+        ],
+        [
+          "previews",
+          "2.38 ms",
+          "4.56 ms",
+          "3.39 ms",
+          "4.16 ms"
+        ],
+        [
+          "classify",
+          "9.42 ms",
+          "16.02 ms",
+          "9.71 ms",
+          "12.93 ms"
+        ],
+        [
+          "fields",
+          "13.87 ms",
+          "52.15 ms",
+          "13.38 ms",
+          "19.52 ms"
+        ],
+        [
+          "index",
+          "2.77 ms",
+          "7.29 ms",
+          "3.17 ms",
+          "3.85 ms"
+        ]
+      ]
+    },
+    {
+      "heading": "API latency (in process)",
+      "header": [
+        "Request",
+        "Samples",
+        "p50",
+        "p95",
+        "Throughput"
+      ],
+      "rows": [
+        [
+          "Inbox, 25 documents (GET /documents)",
+          "30",
+          "24.65 ms",
+          "30.64 ms",
+          ""
+        ],
+        [
+          "Document detail",
+          "30",
+          "19.42 ms",
+          "22.60 ms",
+          ""
+        ],
+        [
+          "Extracted fields with evidence",
+          "30",
+          "17.93 ms",
+          "22.21 ms",
+          ""
+        ],
+        [
+          "Checks (findings)",
+          "30",
+          "34.54 ms",
+          "39.43 ms",
+          ""
+        ],
+        [
+          "Review queue",
+          "30",
+          "25.43 ms",
+          "32.91 ms",
+          ""
+        ],
+        [
+          "Dashboard summary, 30 days",
+          "30",
+          "43.14 ms",
+          "50.61 ms",
+          ""
+        ],
+        [
+          "Document search (structured + text)",
+          "30",
+          "27.51 ms",
+          "33.78 ms",
+          ""
+        ],
+        [
+          "Inbox, 8 concurrent clients",
+          "80",
+          "121.28 ms",
+          "693.39 ms",
+          "44.7 req/s"
+        ]
+      ]
+    },
+    {
+      "heading": "Upload (validation, storage, database; in process)",
+      "header": [
+        "Samples",
+        "p50",
+        "p95"
+      ],
+      "rows": [
+        [
+          "94",
+          "28.43 ms",
+          "37.86 ms"
+        ]
+      ]
+    }
+  ]
+}

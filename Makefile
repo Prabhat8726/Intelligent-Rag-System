@@ -48,7 +48,7 @@ migrate: db-up ## Apply database migrations
 
 seed: migrate ## Create demo departments and one user per role (local/test only), load evaluation results
 	$(BACKEND) docintel seed
-	$(BACKEND) docintel evaluation import ../evaluation/reports
+	$(BACKEND) docintel evaluation import ../evaluation/reports --gates ../evaluation/gates.toml
 
 dev: migrate ## Run API (auto-reload), worker and Vite on the host -> http://localhost:5173
 	$(MAKE) -j3 dev-api dev-worker dev-web
@@ -70,7 +70,7 @@ up: require-env ## Build and start the full stack in Docker -> http://localhost:
 
 seed-docker: ## Seed demo users inside the running Docker stack and load the evaluation results
 	$(COMPOSE) exec api docintel seed
-	tar -C evaluation/reports -cf - . | $(COMPOSE) exec -T api docintel evaluation import -
+	tar -C evaluation -cf - reports gates.toml | $(COMPOSE) exec -T api docintel evaluation import -
 
 generate-documents: ## Generate synthetic POs, invoices and delivery notes with ground truth
 	cd backend && uv run docintel generate-documents --output $(DATASET)

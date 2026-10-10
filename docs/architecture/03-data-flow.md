@@ -189,6 +189,8 @@ a person decides.
 | 17 Dashboard displays it | — | SPA |
 
 Phase 9 runs this path in a browser on every CI run: `frontend/e2e/demo.spec.ts` (`make e2e`).
+Phase 10 runs it through the API as a narrated, checked command: `make demo`
+(`backend/src/docintel/tools/demo.py`, ADR-072), also on every CI run.
 
 ## Data classification along the flow
 
