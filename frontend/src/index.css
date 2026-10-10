@@ -3,3 +3,14 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
+
+/* Chart color roles (validated: scripts in the data-viz method, light surface #ffffff). The app
+   is light-only; a dark theme would add its own validated steps here. */
+.viz-root {
+  --viz-surface: #ffffff;
+  --viz-series-1: #2a78d6; /* categorical slot 1 / sequential blue */
+  --viz-series-2: #eb6834; /* categorical slot 2 */
+  --viz-grid: #e1e0d9;
+  --viz-baseline: #c3c2b7;
+  --viz-muted: #898781;
+}

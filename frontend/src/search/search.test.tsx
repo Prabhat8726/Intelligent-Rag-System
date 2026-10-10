@@ -2,14 +2,13 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { saveSession } from "../auth/session";
 import type { DocumentSearchResponse, DocumentSummary } from "../lib/types";
-import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
+import { browserHasSession, CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
 
 const DOC_ID = "5b0d8a3e-6b43-4c86-9f73-0b5b0f1f0a11";
 
 function me() {
-  saveSession({ token: "header.payload.signature", expiresAt: Date.now() + 60_000 });
+  browserHasSession();
   const user = { ...CURRENT_USER, permissions: ["documents:read", "knowledge:read"] };
   return () => jsonResponse(user);
 }

@@ -42,10 +42,12 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** HTTP statuses whose JSON body is a valid result rather than an error (e.g. 503 readiness). */
   acceptStatuses?: number[];
+  /** Extra request headers (e.g. the session header of the cookie-authenticated auth calls). */
+  headers?: Record<string, string>;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
   const isForm = options.body instanceof FormData;
   if (options.body !== undefined && !isForm) {
     headers["Content-Type"] = "application/json";

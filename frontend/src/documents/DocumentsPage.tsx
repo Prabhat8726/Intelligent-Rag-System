@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { useAuth } from "../auth/useAuth";
 import { apiRequest } from "../lib/api";
@@ -11,10 +11,11 @@ import {
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_TYPES,
   documentsUrl,
-  formatBytes,
   formatDateTime,
   formatPercent,
   PAGE_SIZE,
+  REVIEW_LEVEL_LABELS,
+  REVIEW_LEVEL_STYLES,
 } from "./format";
 import { DocumentStatusBadge } from "./StatusBadge";
 import { UploadForm } from "./UploadForm";
@@ -24,7 +25,12 @@ const STATUS_OPTIONS: (DocumentStatus | "")[] = ["", "PENDING", "PROCESSING", "C
 
 export function DocumentsPage() {
   const { token, user } = useAuth();
-  const [status, setStatus] = useState("");
+  const [searchParams] = useSearchParams();
+  // The dashboard links here with ?status=… (e.g. the documents that need review).
+  const [status, setStatus] = useState(() => {
+    const requested = searchParams.get("status") ?? "";
+    return STATUS_OPTIONS.includes(requested as DocumentStatus) ? requested : "";
+  });
   const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
@@ -128,7 +134,7 @@ export function DocumentsPage() {
                 <th className="py-2 font-medium">Type</th>
                 <th className="py-2 font-medium">Vendor</th>
                 <th className="py-2 text-right font-medium">Pages</th>
-                <th className="py-2 text-right font-medium">Size</th>
+                <th className="py-2 font-medium">Extraction</th>
                 <th className="py-2 pl-6 font-medium">Uploaded by</th>
                 <th className="px-5 py-2 font-medium">Uploaded</th>
               </tr>
@@ -166,8 +172,19 @@ export function DocumentsPage() {
                   </td>
                   <td className="py-2 text-slate-700">{document.vendor?.canonical_name ?? "—"}</td>
                   <td className="py-2 text-right tabular-nums">{document.current_version?.page_count ?? "—"}</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {document.current_version ? formatBytes(document.current_version.size_bytes) : "—"}
+                  <td className="py-2 text-xs">
+                    {document.extraction ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="tabular-nums text-slate-700">
+                          {formatPercent(document.extraction.overall_confidence)}
+                        </span>
+                        <span className={`rounded px-1.5 py-0.5 ${REVIEW_LEVEL_STYLES[document.extraction.review_level]}`}>
+                          {REVIEW_LEVEL_LABELS[document.extraction.review_level]}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="py-2 pl-6 text-slate-600">{document.owner.full_name}</td>
                   <td className="px-5 py-2 text-slate-600">{formatDateTime(document.created_at)}</td>

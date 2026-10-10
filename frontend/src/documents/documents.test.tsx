@@ -2,7 +2,6 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { saveSession } from "../auth/session";
 import { filenameFromDisposition } from "../lib/api";
 import type {
   Classification,
@@ -16,7 +15,7 @@ import type {
   PageDetail,
   PageSummary,
 } from "../lib/types";
-import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
+import { browserHasSession, CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
 import { documentsUrl, moneyText } from "./format";
 
 const LIST_URL = documentsUrl({ status: "", q: "", offset: 0 });
@@ -75,7 +74,7 @@ function page(items: DocumentSummary[]): Page<DocumentSummary> {
 const ANALYST_PERMISSIONS = ["documents:read", "documents:upload", "documents:process", "documents:review"];
 
 function signedIn(permissions: string[] = ANALYST_PERMISSIONS) {
-  saveSession({ token: "header.payload.signature", expiresAt: Date.now() + 60_000 });
+  browserHasSession();
   return { ...CURRENT_USER, permissions };
 }
 
@@ -87,7 +86,7 @@ describe("documents inbox", () => {
       [LIST_URL]: () =>
         jsonResponse(
           page([
-            document(),
+            document({ extraction: { overall_confidence: "0.9420", review_level: "AUTO" } }),
             document({ id: "d2", display_filename: "scan.tiff", status: "PROCESSING", duplicate_of_id: DOC_ID }),
           ]),
         ),
@@ -98,7 +97,10 @@ describe("documents inbox", () => {
     const rows = within(table).getAllByRole("row");
     expect(rows).toHaveLength(3);
     expect(within(rows[1] as HTMLElement).getByText("Processed")).toBeInTheDocument();
-    expect(within(rows[1] as HTMLElement).getByText("3.4 KB")).toBeInTheDocument();
+    // The current extraction's confidence and routing; nothing yet while processing.
+    expect(within(rows[1] as HTMLElement).getByText("94%")).toBeInTheDocument();
+    expect(within(rows[1] as HTMLElement).getByText("Auto-accepted")).toBeInTheDocument();
+    expect(within(rows[2] as HTMLElement).queryByText("Auto-accepted")).not.toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText("Processing")).toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText("duplicate")).toBeInTheDocument();
     expect(screen.getByText("1–2 of 2")).toBeInTheDocument();

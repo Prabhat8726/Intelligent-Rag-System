@@ -14,6 +14,7 @@ interface NavItem {
 // Only screens that exist are listed, and only to roles that may use them (the API enforces it
 // either way). Day-to-day work in the main navigation; settings and administration below it.
 const NAV_ITEMS: NavItem[] = [
+  { to: "/dashboard", label: "Dashboard", permission: "dashboard:read" },
   { to: "/documents", label: "Documents" },
   { to: "/search", label: "Search", permission: "documents:read" },
   { to: "/reviews", label: "Review queue", permission: "reviews:work" },

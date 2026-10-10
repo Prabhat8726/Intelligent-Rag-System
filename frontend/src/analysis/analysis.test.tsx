@@ -2,9 +2,8 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { saveSession } from "../auth/session";
 import type { AnalysisRun, ApiToken } from "../lib/types";
-import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
+import { browserHasSession, CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
 
 const DOC_ID = "5b0d8a3e-6b43-4c86-9f73-0b5b0f1f0a11";
 const PO_ID = "6c1e9b4f-7c54-4d97-8a84-1c6c1f2f1b22";
@@ -15,7 +14,7 @@ const VIEWER = ["documents:read", "knowledge:read", "analysis:read"];
 const REVIEWER = [...VIEWER, "analysis:run", "reviews:work", "comparisons:create"];
 
 function me(permissions: string[]) {
-  saveSession({ token: "header.payload.signature", expiresAt: Date.now() + 60_000 });
+  browserHasSession();
   return () => jsonResponse({ ...CURRENT_USER, permissions });
 }
 

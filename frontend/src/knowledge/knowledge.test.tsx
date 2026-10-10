@@ -2,10 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { saveSession } from "../auth/session";
 import { documentsUrl } from "../documents/format";
 import type { KnowledgeAnswer, KnowledgeChunk, KnowledgeDocument, KnowledgeDocumentDetail } from "../lib/types";
-import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
+import { browserHasSession, CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
 import { knowledgeUrl } from "./format";
 
 const DOC_ID = "4a1b2c3d-0000-4000-8000-000000000001";
@@ -17,7 +16,7 @@ const MANAGER = [...VIEWER, "knowledge:manage", "documents:upload"];
 
 /** Signs in now (the app checks the session on mount) and answers GET /auth/me. */
 function me(permissions: string[]) {
-  saveSession({ token: "header.payload.signature", expiresAt: Date.now() + 60_000 });
+  browserHasSession();
   const user = { ...CURRENT_USER, permissions };
   return () => jsonResponse(user);
 }

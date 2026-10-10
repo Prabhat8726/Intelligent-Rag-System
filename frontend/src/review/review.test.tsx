@@ -2,7 +2,6 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { saveSession } from "../auth/session";
 import { documentsUrl } from "../documents/format";
 import type {
   Comparison,
@@ -17,7 +16,7 @@ import type {
   VersionComparison,
   VersionInfo,
 } from "../lib/types";
-import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
+import { browserHasSession, CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "../test/utils";
 import { itemValue, reviewTasksUrl } from "./format";
 
 const DOC_ID = "5b0d8a3e-6b43-4c86-9f73-0b5b0f1f0a11";
@@ -43,7 +42,7 @@ const ANALYST = [
 const VIEWER = ["documents:read", "rules:read"];
 
 function signedIn(permissions: string[] = ANALYST) {
-  saveSession({ token: "header.payload.signature", expiresAt: Date.now() + 60_000 });
+  browserHasSession();
   return { ...CURRENT_USER, permissions };
 }
 

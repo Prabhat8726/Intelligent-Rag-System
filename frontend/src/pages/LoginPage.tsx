@@ -12,7 +12,7 @@ function redirectTarget(state: unknown): string {
       return from;
     }
   }
-  return "/documents";
+  return "/dashboard";
 }
 
 export function LoginPage() {

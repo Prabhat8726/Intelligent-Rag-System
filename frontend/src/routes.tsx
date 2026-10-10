@@ -5,6 +5,7 @@ import { UsersPage } from "./admin/UsersPage";
 import { AnalysisPage } from "./analysis/AnalysisPage";
 import { AnalysisRunPage } from "./analysis/AnalysisRunPage";
 import { ComparisonPage } from "./comparisons/ComparisonPage";
+import { DashboardPage } from "./dashboard/DashboardPage";
 import { AppLayout } from "./components/AppLayout";
 import { DocumentDetailPage } from "./documents/DocumentDetailPage";
 import { DocumentsPage } from "./documents/DocumentsPage";
@@ -31,7 +32,8 @@ export const routes: RouteObject[] = [
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <Navigate to="/documents" replace /> },
+          { index: true, element: <Navigate to="/dashboard" replace /> },
+          { path: "/dashboard", element: <DashboardPage /> },
           { path: "/documents", element: <DocumentsPage /> },
           { path: "/documents/:documentId", element: <DocumentDetailPage /> },
           { path: "/reviews", element: <ReviewQueuePage /> },

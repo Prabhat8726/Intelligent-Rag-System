@@ -2,8 +2,16 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { saveSession } from "./auth/session";
-import { CURRENT_USER, jsonResponse, mockFetch, problem, renderApp } from "./test/utils";
+import { refreshDelay } from "./auth/session";
+import {
+  browserHasSession,
+  CURRENT_USER,
+  jsonResponse,
+  mockFetch,
+  problem,
+  renderApp,
+  TOKEN_RESPONSE,
+} from "./test/utils";
 
 const READY = {
   status: "ready",
@@ -14,24 +22,23 @@ const READY = {
   },
 };
 
-const TOKEN_RESPONSE = {
-  access_token: "header.payload.signature",
-  token_type: "bearer",
-  expires_in: 1800,
-  user: CURRENT_USER,
-};
-
 function signedIn() {
-  saveSession({ token: "header.payload.signature", expiresAt: Date.now() + 60_000 });
+  browserHasSession();
+}
+
+function calls(fetchMock: ReturnType<typeof mockFetch>, url: string) {
+  return fetchMock.mock.calls.filter(([called]) => called === url);
 }
 
 describe("authentication flow", () => {
   it("redirects anonymous users to the login page", async () => {
-    mockFetch({});
+    const fetchMock = mockFetch({});
     const { router } = renderApp("/status");
 
     expect(await screen.findByRole("heading", { name: "Document Intelligence" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
+    // One attempt to restore a session from the cookie, then nothing.
+    expect(calls(fetchMock, "/api/v1/auth/refresh")).toHaveLength(1);
   });
 
   it("signs in and lands on the requested page", async () => {
@@ -51,17 +58,27 @@ describe("authentication flow", () => {
     expect(router.state.location.pathname).toBe("/status");
     expect(screen.getByText("Finance Analyst")).toBeInTheDocument();
 
-    const loginCall = fetchMock.mock.calls.find(([url]) => url === "/api/v1/auth/login");
+    const [loginCall] = calls(fetchMock, "/api/v1/auth/login");
     expect(JSON.parse(loginCall?.[1]?.body as string)).toEqual({
       email: "analyst@docintel.local",
       password: "correct horse battery staple",
     });
-    const meCall = fetchMock.mock.calls.find(([url]) => url === "/api/v1/auth/me");
-    expect(meCall?.[1]?.headers).toMatchObject({ Authorization: "Bearer header.payload.signature" });
+    // The web app asks for a session cookie; the token itself is never stored.
+    expect(loginCall?.[1]?.headers).toMatchObject({
+      "X-Docintel-Session": "1",
+    });
+    const [meCall] = calls(fetchMock, "/api/v1/auth/me");
+    expect(meCall?.[1]?.headers).toMatchObject({
+      Authorization: "Bearer header.payload.signature",
+    });
+    expect(window.sessionStorage.length).toBe(0);
+    expect(window.localStorage.length).toBe(0);
   });
 
   it("shows the server's message for invalid credentials", async () => {
-    mockFetch({ "/api/v1/auth/login": () => problem(401, "Invalid email or password.") });
+    mockFetch({
+      "/api/v1/auth/login": () => problem(401, "Invalid email or password."),
+    });
     const user = userEvent.setup();
     renderApp("/login");
 
@@ -72,30 +89,56 @@ describe("authentication flow", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid email or password.");
   });
 
-  it("ends the session when the API rejects the stored token", async () => {
+  it("restores the session from the cookie after a reload", async () => {
     signedIn();
-    mockFetch({ "/api/v1/auth/me": () => problem(401, "Invalid or expired token.") });
+    const fetchMock = mockFetch({
+      "/api/v1/auth/me": () => jsonResponse(CURRENT_USER),
+      "/health/ready": () => jsonResponse(READY),
+    });
+    renderApp("/status");
+
+    expect(await screen.findByRole("heading", { name: "System status" })).toBeInTheDocument();
+    const [refreshCall] = calls(fetchMock, "/api/v1/auth/refresh");
+    expect(refreshCall?.[1]).toMatchObject({
+      method: "POST",
+      credentials: "same-origin",
+    });
+    expect(refreshCall?.[1]?.headers).toMatchObject({
+      "X-Docintel-Session": "1",
+    });
+  });
+
+  it("renews a rejected token from the cookie once, then gives up", async () => {
+    let issued = 0;
+    let attempts = 0;
+    const fetchMock = mockFetch({
+      // Each refresh issues a new token; /me rejects every one of them.
+      "/api/v1/auth/refresh": () => {
+        issued += 1;
+        return jsonResponse({
+          ...TOKEN_RESPONSE,
+          access_token: `token-${String(issued)}`,
+        });
+      },
+      "/api/v1/auth/me": () => {
+        attempts += 1;
+        return problem(401, "Invalid or expired token.");
+      },
+    });
     const { router } = renderApp("/status");
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/login");
     });
-    expect(window.sessionStorage.length).toBe(0);
+    // Restore + one renewal after the rejection; the renewed token is rejected too: signed out,
+    // with no further renewals.
+    expect(calls(fetchMock, "/api/v1/auth/refresh")).toHaveLength(2);
+    expect(attempts).toBe(2);
   });
 
-  it("discards expired stored sessions without calling the API", async () => {
-    saveSession({ token: "old", expiresAt: Date.now() - 1 });
-    const fetchMock = mockFetch({});
-    const { router } = renderApp("/status");
-
-    await screen.findByLabelText("Email");
-    expect(router.state.location.pathname).toBe("/login");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("signs out from the header", async () => {
+  it("signs out from the header and revokes the session cookie", async () => {
     signedIn();
-    mockFetch({
+    const fetchMock = mockFetch({
       "/api/v1/auth/me": () => jsonResponse(CURRENT_USER),
       "/health/ready": () => jsonResponse(READY),
     });
@@ -107,6 +150,19 @@ describe("authentication flow", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/login");
     });
+    const [logoutCall] = calls(fetchMock, "/api/v1/auth/logout");
+    expect(logoutCall?.[1]).toMatchObject({ method: "POST" });
+    expect(logoutCall?.[1]?.headers).toMatchObject({
+      "X-Docintel-Session": "1",
+    });
+  });
+
+  it("renews the token a minute before it expires", () => {
+    const now = 1_000_000;
+    expect(refreshDelay({ token: "t", userId: "u", expiresAt: now + 15 * 60_000 }, now)).toBe(14 * 60_000);
+    // Short lifetimes renew at 80%, never sooner than a second.
+    expect(refreshDelay({ token: "t", userId: "u", expiresAt: now + 60_000 }, now)).toBe(48_000);
+    expect(refreshDelay({ token: "t", userId: "u", expiresAt: now }, now)).toBe(1_000);
   });
 });
 
@@ -136,8 +192,16 @@ describe("system status page", () => {
             status: "not_ready",
             version: "0.1.0",
             checks: {
-              database: { status: "fail", detail: "database unavailable", latency_ms: null },
-              migrations: { status: "fail", detail: "unknown (database unavailable)", latency_ms: null },
+              database: {
+                status: "fail",
+                detail: "database unavailable",
+                latency_ms: null,
+              },
+              migrations: {
+                status: "fail",
+                detail: "unknown (database unavailable)",
+                latency_ms: null,
+              },
             },
           },
           503,

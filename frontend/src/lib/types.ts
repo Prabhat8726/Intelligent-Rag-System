@@ -88,6 +88,8 @@ export interface DocumentSummary {
   vendor?: VendorSummary | null;
   /** The open review task: present exactly while the status is REVIEW_REQUIRED. */
   review?: ReviewTaskBrief | null;
+  /** The current extraction's confidence and routing (lists only). */
+  extraction?: { overall_confidence: string; review_level: ReviewLevel } | null;
 }
 
 export interface VendorSummary {
@@ -1047,4 +1049,56 @@ export interface AuditEvent {
 export interface AuditEventPage {
   items: AuditEvent[];
   next_before_id: number | null;
+}
+
+// ------------------------------------------------------------------------------ dashboard
+export interface DashboardSummary {
+  days: number;
+  since: string;
+  until: string;
+  documents: {
+    total: number;
+    uploaded_in_period: number;
+    by_status: Record<string, number>;
+    by_type: Record<string, number>;
+  };
+  processing: {
+    processed_in_period: number;
+    average_seconds: number | null;
+    p95_seconds: number | null;
+    failed_in_period: number;
+  };
+  review_queue: {
+    open: number;
+    overdue: number;
+    by_priority: Record<string, number>;
+    by_type: Record<string, number>;
+  };
+  discrepancies: {
+    documents_failing: number;
+    by_rule: { rule_code: string; documents: number }[];
+  };
+  investigations: {
+    scope: "all" | "mine";
+    in_period: number;
+    by_status: Record<string, number>;
+    by_recommendation: Record<string, number>;
+  };
+  workflows: {
+    awaiting_approval: number;
+    finished_in_period: number;
+    by_outcome: Record<string, number>;
+    by_status: Record<string, number>;
+  };
+  confidence: { day: string; processed: number; extraction_confidence: number | null; auto_accepted: number }[];
+  activity: {
+    id: number;
+    occurred_at: string;
+    action: string;
+    outcome: string;
+    actor: string;
+    document_id: string | null;
+    document_name: string | null;
+    workflow_id: string | null;
+  }[];
 }
