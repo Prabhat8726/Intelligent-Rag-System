@@ -972,6 +972,14 @@ async def run_workflow_suite(
             "The contract generator was changed in this phase (guideline ground truth; half of "
             "the contracts under the company's own law; notice periods up to 120 days); seed "
             f"{CONTRACT_SEED} was not used while developing the contract rules.",
+            "The documents are synthetic and come from the templates the extractors and rules "
+            "were developed on: these figures show that the workflows and their controls behave "
+            "as designed end to end, not accuracy on real-world documents.",
+            "REQUEST_VENDOR_CLARIFICATION is only proposed by a model (the deterministic "
+            "analysis holds such invoices for review); it is covered by an integration test "
+            "with a scripted model, not here. No contract in this dataset expires within 30 "
+            "days of the reference date, so the expiry rule is only exercised as PASS here (its "
+            "other outcomes are unit-tested).",
             "Model-assisted proposals (Gemini or a local model): Not yet measured - no model was "
             "available in the build environment.",
             f"Run time: {round(time.perf_counter() - started, 1)} s.",
