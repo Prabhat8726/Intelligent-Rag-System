@@ -126,14 +126,18 @@ ADDED_SENTENCES = (
     "Any change to this clause requires a written amendment signed by both Parties.",
 )
 _NUMBER = re.compile(r"(?<![\d,])\d+(?![\d,])")  # whole numbers, not "500" of "500,000"
-# The company's own law (Contract Management Guidelines 2.4) and four others Legal must approve.
+# The notice period in the generator's own "Term and Termination" template (after edits).
+_NOTICE_IN_TEMPLATE = re.compile(r"terminate this Agreement upon (\d+) days written notice")
+# The company's own law (Contract Management Guidelines 2.4) for half of the contracts; the
+# others name a supplier's law, which Legal must approve.
 _LAWS = (
+    "the State of Ohio",
     "England and Wales",
     "the State of Delaware",
     "Germany",
     "the Netherlands",
-    "the State of Ohio",
 )
+_LAW_WEIGHTS = (4, 1, 1, 1, 1)
 
 
 @dataclass(slots=True)
@@ -144,7 +148,19 @@ class ContractVersion:
     supplier: str
     effective: date
     expiration: date
+    law: str = ""
     clauses: list[tuple[str, str]] = field(default_factory=list)
+
+    def guidelines(self) -> dict[str, Any]:
+        """What the Contract Management Guidelines check, as the generator wrote it."""
+        bodies = dict(self.clauses)
+        termination = bodies.get("Term and Termination")
+        notice = _NOTICE_IN_TEMPLATE.search(termination) if termination else None
+        return {
+            "missing_required": [title for title in MANDATORY_CLAUSES if title not in bodies],
+            "governing_law": self.law if "Governing Law" in bodies else None,
+            "termination_notice_days": int(notice.group(1)) if notice else None,
+        }
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -153,13 +169,14 @@ class ContractVersion:
             "effective_date": self.effective.isoformat(),
             "expiration_date": self.expiration.isoformat(),
             "clauses": [{"number": i + 1, "title": t} for i, (t, _) in enumerate(self.clauses)],
+            "guidelines": self.guidelines(),
         }
 
 
 def _values(rng: random.Random) -> dict[str, Any]:
     return {
         "term": rng.choice((12, 24, 36)),
-        "notice": rng.choice((30, 60, 90)),
+        "notice": rng.choice((30, 60, 90, 120)),  # the guidelines allow at most 90
         "payment": rng.choice((30, 45, 60)),
         "interest": rng.choice((2, 4, 8)),
         "cap": rng.choice(("250,000", "500,000", "1,000,000")),
@@ -169,7 +186,7 @@ def _values(rng: random.Random) -> dict[str, Any]:
         "audit_notice": rng.choice((10, 15, 30)),
         "solicit": rng.choice((6, 12)),
         "negotiation": rng.choice((20, 30)),
-        "law": rng.choice(_LAWS),
+        "law": rng.choices(_LAWS, weights=_LAW_WEIGHTS)[0],
     }
 
 
@@ -205,6 +222,7 @@ def contract_family(
         supplier=rng.choice(VENDORS).name,
         effective=effective,
         expiration=effective + timedelta(days=rng.choice((365, 730, 1095))),
+        law=values["law"],
         clauses=[(library[i][0], library[i][1].format(**values)) for i in chosen],
     )
     family = [first]
@@ -248,6 +266,7 @@ def contract_family(
                 effective=previous.effective,
                 expiration=previous.expiration
                 + (timedelta(days=365) if rng.random() < 0.3 else timedelta(0)),
+                law=previous.law,
                 clauses=clauses,
             )
         )

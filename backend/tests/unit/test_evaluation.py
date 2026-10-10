@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,11 @@ from docintel.evaluation.metrics import (
 from docintel.evaluation.report import Report
 from docintel.evaluation.tables_suite import score_table
 from docintel.evaluation.versions_suite import score_segmentation, score_step
+from docintel.evaluation.workflow_suite import (
+    contract_deviations,
+    expected_contract_rules,
+    score_changes,
+)
 from docintel.matching.facts import DocumentFacts
 from docintel.processing.content import BBox, DocumentTable, TableRow
 from docintel.versions.clauses import segment
@@ -278,3 +284,61 @@ def test_version_scoring_by_change_type() -> None:
     assert wrong["modified"] == {"tp": 0, "fp": 1, "fn": 1}
     titles = {"clauses": [{"title": "Term"}, {"title": "Fees and Payment"}, {"title": "Insurance"}]}
     assert score_segmentation(old, titles) == {"count": True, "titles": True}
+
+
+def test_contract_workflow_expectations_come_from_the_generator_record() -> None:
+    version = {
+        "expiration_date": "2027-03-01",
+        "guidelines": {
+            "missing_required": [],
+            "governing_law": "the State of Ohio",
+            "termination_notice_days": 90,
+        },
+    }
+    today = date(2026, 10, 1)
+    clean = expected_contract_rules(version, today)
+    assert set(clean.values()) == {"PASS"}
+    assert contract_deviations(clean) == []
+
+    version["guidelines"] = {
+        "missing_required": ["Governing Law"],
+        "governing_law": None,
+        "termination_notice_days": 120,
+    }
+    version["expiration_date"] = "2026-10-20"
+    deviating = expected_contract_rules(version, today)
+    assert deviating == {
+        "CONTRACT_REQUIRED_CLAUSES": "FAIL",
+        "CONTRACT_TERMINATION_NOTICE": "FAIL",
+        "CONTRACT_GOVERNING_LAW": "NOT_APPLICABLE",
+        "CONTRACT_EXPIRY": "WARN",  # within 30 days
+    }
+    assert contract_deviations(deviating) == [
+        "CONTRACT_REQUIRED_CLAUSES",
+        "CONTRACT_TERMINATION_NOTICE",
+        "CONTRACT_EXPIRY",
+    ]
+    version["guidelines"]["governing_law"] = "Germany"
+    version["expiration_date"] = "2026-09-30"
+    assert expected_contract_rules(version, today)["CONTRACT_GOVERNING_LAW"] == "WARN"
+    assert expected_contract_rules(version, today)["CONTRACT_EXPIRY"] == "FAIL"
+
+
+def test_workflow_version_changes_are_scored_by_title_and_type() -> None:
+    compared = {
+        "clauses": [
+            {"title": "Preamble", "change": "MODIFIED"},  # not a clause
+            {"title": "Fees and Paymnet", "change": "MODIFIED"},  # one character off (OCR)
+            {"title": "Insurance", "change": "ADDED"},  # really removed
+        ]
+    }
+    truth = {"added": [], "removed": ["Insurance"], "modified": ["Fees and Payment"]}
+    assert score_changes(compared, truth) == {"tp": 1, "fp": 1, "fn": 1, "exact": False}
+    exact = {"clauses": [{"title": "Insurance", "change": "REMOVED"}]}
+    assert score_changes(exact, {"removed": ["Insurance"]})["exact"] is True
+    assert score_changes(None, {"added": ["Insurance"]}) == {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1,
+        "exact": False,
+    }

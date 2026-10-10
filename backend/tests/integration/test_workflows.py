@@ -354,9 +354,9 @@ async def resolve_open_task(env: Env, document_id: str) -> None:
 async def test_contract_review_against_the_guidelines_and_previous_versions(
     env: Env, tmp_path: Path
 ) -> None:
-    # Seed 37: versions 1 and 2 follow the guidelines (Ohio law, required clauses, notice
+    # Seed 167: versions 1 and 2 follow the guidelines (Ohio law, required clauses, notice
     # within 90 days); version 3 drops a required clause.
-    document_id, files = await contract(env, tmp_path, 37)
+    document_id, files = await contract(env, tmp_path, 167)
     findings = await env.client.get(
         f"/api/v1/documents/{document_id}/findings", headers=auth_headers(env.analyst)
     )

@@ -611,6 +611,7 @@ SUITES = (
     "retrieval",
     "search",
     "agent",
+    "workflow",
 )
 
 
@@ -626,6 +627,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
         from docintel.evaluation.search_suite import run_search_suite
         from docintel.evaluation.tables_suite import run_tables_suite
         from docintel.evaluation.versions_suite import run_versions_suite
+        from docintel.evaluation.workflow_suite import run_workflow_suite
     except ImportError as exc:  # reportlab is not installed in the runtime image
         _fail(f"evaluation needs the synthetic dependency group (uv sync): {exc}")
         return EXIT_USAGE
@@ -646,7 +648,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
                 report = await run_discrepancy_suite(
                     output, quick=args.quick, languages=args.languages
                 )
-            elif suite in ("retrieval", "search", "agent"):
+            elif suite in ("retrieval", "search", "agent", "workflow"):
                 database_url = args.database_url or os.environ.get(
                     "TEST_DATABASE_URL", os.environ.get("DATABASE_URL")
                 )
@@ -660,6 +662,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
                     "retrieval": run_retrieval_suite,
                     "search": run_search_suite,
                     "agent": run_agent_suite,
+                    "workflow": run_workflow_suite,
                 }[suite]
                 report = await run(output, database_url=database_url, quick=args.quick)
             elif suite == "versions":

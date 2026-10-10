@@ -439,9 +439,20 @@ def test_generated_contracts_carry_their_clauses_through_the_rules() -> None:
         for version in versions:
             titles = [title for title, _ in version.clauses]
             facts = contract(*version.clauses)
-            outcome = clause_outcomes(facts)["CONTRACT_REQUIRED_CLAUSES"][0]
+            outcomes = {code: found[0] for code, found in clause_outcomes(facts).items()}
             complete = all(
                 title in titles
                 for title in ("Term and Termination", "Limitation of Liability", "Governing Law")
             )
-            assert outcome == ("PASS" if complete else "FAIL")
+            assert outcomes["CONTRACT_REQUIRED_CLAUSES"] == ("PASS" if complete else "FAIL")
+            # The generator's ground truth for the evaluation agrees with the rules.
+            truth = version.guidelines()
+            assert bool(truth["missing_required"]) == (not complete)
+            notice = truth["termination_notice_days"]
+            assert outcomes["CONTRACT_TERMINATION_NOTICE"] == (
+                "NOT_APPLICABLE" if notice is None else "FAIL" if notice > 90 else "PASS"
+            )
+            law = truth["governing_law"]
+            assert outcomes["CONTRACT_GOVERNING_LAW"] == (
+                "NOT_APPLICABLE" if law is None else "PASS" if "Ohio" in law else "WARN"
+            )
