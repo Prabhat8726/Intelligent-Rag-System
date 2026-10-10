@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -287,7 +288,7 @@ def test_version_scoring_by_change_type() -> None:
 
 
 def test_contract_workflow_expectations_come_from_the_generator_record() -> None:
-    version = {
+    version: dict[str, Any] = {
         "expiration_date": "2027-03-01",
         "guidelines": {
             "missing_required": [],

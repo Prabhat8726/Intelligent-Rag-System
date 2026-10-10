@@ -70,9 +70,9 @@ def test_the_risk_table_agrees_with_the_agent() -> None:
         assert mine.requires_approval == policy.requires_approval
         assert (mine.required_role.value if mine.required_role else None) == policy.required_role
         assert mine.risk.value == policy.risk.value
-    for action, policy in ACTION_POLICIES.items():
-        assert policy.requires_approval == (policy.required_role is not None), action
-        assert policy.requires_approval == (policy.risk != ActionRisk.LOW), action
+    for kind, rule in ACTION_POLICIES.items():
+        assert rule.requires_approval == (rule.required_role is not None), kind
+        assert rule.requires_approval == (rule.risk != ActionRisk.LOW), kind
 
 
 @pytest.mark.parametrize(
