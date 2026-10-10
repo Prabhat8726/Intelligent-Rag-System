@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 from fastapi import Depends, FastAPI
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from docintel.api.deps import require_permission
@@ -16,9 +16,20 @@ from tests.conftest import TEST_PASSWORD, login, make_user
 pytestmark = pytest.mark.integration
 
 
+_floor: dict[str, int] = {"id": 0}
+
+
+@pytest.fixture(autouse=True)
+async def _only_this_tests_events(db_session: AsyncSession) -> None:
+    """Other tests commit audit events too (real logins): count only this test's."""
+    _floor["id"] = int(await db_session.scalar(select(func.max(AuditLog.id))) or 0)
+
+
 async def _audit(session: AsyncSession, action: str) -> list[AuditLog]:
     result = await session.scalars(
-        select(AuditLog).where(AuditLog.action == action).order_by(AuditLog.id)
+        select(AuditLog)
+        .where(AuditLog.action == action, AuditLog.id > _floor["id"])
+        .order_by(AuditLog.id)
     )
     return list(result)
 

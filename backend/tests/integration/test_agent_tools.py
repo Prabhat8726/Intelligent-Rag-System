@@ -79,6 +79,8 @@ async def test_read_tools_return_typed_scoped_results(env: Env, tmp_path: Path) 
         "compare_documents",
         "run_business_rules",
         "create_review_task",
+        "generate_report",
+        "get_workflow_status",
     ]
     viewer = as_user(env.viewer)
 

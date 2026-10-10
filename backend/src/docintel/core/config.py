@@ -56,6 +56,7 @@ class ModelPriceSetting(BaseModel):
 
 
 ReviewPriorityName = Literal["URGENT", "HIGH", "NORMAL", "LOW"]
+WorkflowTypeName = Literal["INVOICE_PROCESSING", "CONTRACT_REVIEW"]
 MAX_REVIEW_SLA_HOURS = 8760  # a year
 DEFAULT_REVIEW_SLA_HOURS: dict[ReviewPriorityName, int] = {
     "URGENT": 4,
@@ -253,11 +254,18 @@ class Settings(BaseSettings):
         default_factory=lambda: ["127.0.0.1:*", "localhost:*"]
     )
 
+    # ---------------------------------------------------------------- workflows (Phase 8)
+    # Workflow types started automatically when a document of their type finishes processing
+    # (as its uploader, if allowed to start workflows), e.g. "INVOICE_PROCESSING,CONTRACT_REVIEW".
+    workflow_auto_start: Annotated[list[WorkflowTypeName], NoDecode] = Field(default_factory=list)
+
     # ---------------------------------------------------------------- CLI
     seed_user_password: SecretStr | None = None
 
     # ---------------------------------------------------------------- validators
-    @field_validator("cors_allowed_origins", "mcp_allowed_hosts", mode="before")
+    @field_validator(
+        "cors_allowed_origins", "mcp_allowed_hosts", "workflow_auto_start", mode="before"
+    )
     @classmethod
     def _split_origins(cls, value: object) -> object:
         if isinstance(value, str):

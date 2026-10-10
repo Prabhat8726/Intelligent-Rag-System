@@ -137,6 +137,25 @@ DEFAULT_RULES: tuple[RuleDefinition, ...] = (
         [DocumentType.CONTRACT], Severity.HIGH, {"warn_within_days": 30},
     ),
     _rule(
+        "CONTRACT_REQUIRED_CLAUSES", "required_clauses", "Mandatory contract clauses missing",
+        "Every supplier contract contains term and termination, limitation of liability and "
+        "governing law clauses (Contract Management Guidelines, section 2).",
+        [DocumentType.CONTRACT], Severity.HIGH,
+        {"clauses": ["Termination", "Liability", "Governing Law"]},
+    ),
+    _rule(
+        "CONTRACT_TERMINATION_NOTICE", "clause_notice_period", "Termination notice too long",
+        "The company may terminate for convenience with no more than 90 days notice "
+        "(Contract Management Guidelines 2.1).",
+        [DocumentType.CONTRACT], Severity.MEDIUM, {"clause": "Termination", "max_days": 90},
+    ),
+    _rule(
+        "CONTRACT_GOVERNING_LAW", "governing_law", "Governing law needs Legal's approval",
+        "Contracts are governed by the law of the State of Ohio unless Legal approves another "
+        "jurisdiction (Contract Management Guidelines 2.4).",
+        [DocumentType.CONTRACT], Severity.MEDIUM, {"clause": "Governing Law", "allowed": ["Ohio"]},
+    ),
+    _rule(
         "POLICY_PAYMENT_TERMS", "payment_terms_limit", "Payment terms above policy",
         "Company policy caps vendor payment terms.",
         [INV], Severity.MEDIUM, {"max_days": 60},

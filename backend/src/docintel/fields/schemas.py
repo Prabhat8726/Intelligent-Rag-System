@@ -58,6 +58,9 @@ class FieldMeta:
     range_part: Literal["start", "end"] | None = None
     # Resolve against the vendor master (Phase 4 normalization).
     vendor: bool = False
+    # Contract parties: the defined names that identify this party in a preamble such as
+    # 'by and between X (the "Supplier") and Y (the "Customer")' (used when no label matches).
+    party_roles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -645,6 +648,7 @@ class ContractV1(ExtractionSchema):
             ValueType.ORGANIZATION,
             required=True,
             labels=("customer", "client", "buyer", "party a", "first party", "company"),
+            party_roles=("customer", "client", "buyer", "company", "purchaser", "licensee"),
         ),
     ] = Field(default=None, description="First party (usually the customer / buyer)")
     party_b: Annotated[
@@ -662,6 +666,16 @@ class ContractV1(ExtractionSchema):
                 "second party",
             ),
             vendor=True,
+            party_roles=(
+                "supplier",
+                "service provider",
+                "provider",
+                "contractor",
+                "vendor",
+                "consultant",
+                "seller",
+                "licensor",
+            ),
         ),
     ] = Field(default=None, description="Second party (usually the supplier / service provider)")
     effective_date: Annotated[

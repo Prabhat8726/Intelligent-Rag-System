@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 import uuid
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
@@ -13,9 +14,10 @@ from typing import Any, ClassVar
 import pytest
 
 from docintel.db.models import DocumentType
+from docintel.fields.schemas import ValueType
 from docintel.matching.compare import Tolerances, compare_delivery, compare_invoice
 from docintel.matching.duplicates import find_duplicates
-from docintel.matching.facts import DocumentFacts, facts_from_fields
+from docintel.matching.facts import ClauseFact, DocumentFacts, FactValue, facts_from_fields
 from docintel.rules.defaults import DEFAULT_RULES, duplicate_params, tolerances_from_rules
 from docintel.rules.engine import (
     Finding,
@@ -30,6 +32,7 @@ from docintel.rules.engine import (
     rule_types,
     validate_params,
 )
+from docintel.synthetic.contracts import contract_family
 from tests.factories.facts import delivery, document, invoice, line, purchase_order
 
 TODAY = date(2026, 3, 20)
@@ -349,3 +352,96 @@ async def test_a_resent_invoice_is_a_duplicate(tmp_path: Path) -> None:
     found = results(resent, order=facts["PO"], notes=[facts["DN"]], others=[first])
     assert failing(found) == {"INV_DUPLICATE"}
     assert failing(results(first, order=facts["PO"], notes=[facts["DN"]], others=[resent])) == set()
+
+
+# ------------------------------------------------------------------------------ contract clauses
+def contract(*clauses: tuple[str, str]) -> DocumentFacts:
+    return DocumentFacts(
+        DocumentType.CONTRACT,
+        {},
+        [],
+        clauses=[ClauseFact(str(i + 1), title, body, 1) for i, (title, body) in enumerate(clauses)],
+    )
+
+
+TERMINATION = ("Term and Termination", "Either Party may terminate upon 60 days written notice.")
+LIABILITY = ("Limitation of Liability", "Liability shall not exceed 500,000 USD.")
+OHIO = ("Governing Law", "This Agreement is governed by the laws of the State of Ohio.")
+CLAUSE_RULES = (
+    "CONTRACT_REQUIRED_CLAUSES",
+    "CONTRACT_TERMINATION_NOTICE",
+    "CONTRACT_GOVERNING_LAW",
+)
+
+
+def clause_outcomes(facts: DocumentFacts) -> dict[str, tuple[str, str]]:
+    found = results(facts)
+    return {code: (found[code].outcome.value, found[code].message) for code in CLAUSE_RULES}
+
+
+def test_a_contract_with_the_required_clauses_passes() -> None:
+    outcomes = clause_outcomes(contract(TERMINATION, LIABILITY, OHIO))
+    assert {code: outcome for code, (outcome, _) in outcomes.items()} == dict.fromkeys(
+        CLAUSE_RULES, "PASS"
+    )
+    assert "60 days" in outcomes["CONTRACT_TERMINATION_NOTICE"][1]
+
+
+def test_contract_deviations_from_the_guidelines() -> None:
+    long_notice = ("Term and Termination", "Termination requires 180 days' prior written notice.")
+    english = ("Governing Law", "Governed by the laws of England and Wales.")
+    outcomes = clause_outcomes(contract(long_notice, english))
+    assert outcomes["CONTRACT_REQUIRED_CLAUSES"] == (
+        "FAIL",
+        "Required clause(s) missing: Liability.",
+    )
+    assert outcomes["CONTRACT_TERMINATION_NOTICE"][0] == "FAIL"
+    assert "180 days exceeds the maximum of 90" in outcomes["CONTRACT_TERMINATION_NOTICE"][1]
+    assert outcomes["CONTRACT_GOVERNING_LAW"][0] == "WARN"
+    assert "England and Wales, not Ohio" in outcomes["CONTRACT_GOVERNING_LAW"][1]
+
+
+def test_clause_rules_without_clauses_or_numbers() -> None:
+    unknown = clause_outcomes(DocumentFacts(DocumentType.CONTRACT, {}, []))
+    assert {code: outcome for code, (outcome, _) in unknown.items()} == dict.fromkeys(
+        CLAUSE_RULES, "NOT_APPLICABLE"
+    )  # the text was not loaded (e.g. facts built from fields only)
+    vague = clause_outcomes(
+        contract(("Term and Termination", "Either Party may terminate on reasonable notice."))
+    )
+    assert vague["CONTRACT_TERMINATION_NOTICE"][0] == "WARN"
+    assert vague["CONTRACT_GOVERNING_LAW"][0] == "NOT_APPLICABLE"  # missing: the first rule
+    assert clause_outcomes(contract())["CONTRACT_REQUIRED_CLAUSES"][0] == "WARN"
+
+
+def test_an_extracted_notice_period_wins_over_the_clause_text() -> None:
+    facts = contract(TERMINATION, LIABILITY, OHIO)
+    facts.fields["termination_notice_days"] = FactValue(
+        path="termination_notice_days",
+        name="termination_notice_days",
+        value_type=ValueType.DAYS,
+        value=120,
+        display="120 days",
+        page=2,
+        source_text="120 days",
+        bbox=None,
+        confidence=0.95,
+        evidence="VERIFIED",
+    )
+    outcome, message = clause_outcomes(facts)["CONTRACT_TERMINATION_NOTICE"]
+    assert (outcome, "120 days" in message) == ("FAIL", True)
+
+
+def test_generated_contracts_carry_their_clauses_through_the_rules() -> None:
+    rng = random.Random(4)
+    for index in range(1, 8):
+        versions, _ = contract_family(rng, index)
+        for version in versions:
+            titles = [title for title, _ in version.clauses]
+            facts = contract(*version.clauses)
+            outcome = clause_outcomes(facts)["CONTRACT_REQUIRED_CLAUSES"][0]
+            complete = all(
+                title in titles
+                for title in ("Term and Termination", "Limitation of Liability", "Governing Law")
+            )
+            assert outcome == ("PASS" if complete else "FAIL")

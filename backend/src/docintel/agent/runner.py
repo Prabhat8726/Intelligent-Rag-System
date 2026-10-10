@@ -143,6 +143,86 @@ async def usage(
     return int(row[0]), row[1], row[2], row[3]
 
 
+async def record_run_result(
+    session: AsyncSession,
+    run: AgentRun,
+    state: InvestigationState,
+    run_context: RunContext,
+    finished_at: datetime,
+) -> dict[str, Any]:
+    """Store a finished investigation (result, trace, usage) and audit it. Returns the result."""
+    result = compose_result(state, run_context)
+    calls, input_tokens, output_tokens, cost = await usage(session, run.id)
+    run.status = AgentRunStatus.COMPLETED
+    run.plan = state["plan"]
+    run.result = result
+    run.trace = list(state.get("trace", []))
+    run.tool_calls = run_context.tool_calls
+    run.llm_calls = calls
+    run.input_tokens = input_tokens
+    run.output_tokens = output_tokens
+    run.estimated_cost_usd = cost
+    run.finished_at = finished_at
+    run.error = None
+    user = await session.get(User, run.requested_by_id)
+    recommendation = result["recommendation"]
+    record_audit_event(
+        session,
+        action=AuditAction.ANALYSIS_COMPLETED,
+        outcome=AuditOutcome.SUCCESS,
+        meta=SYSTEM_REQUEST,
+        actor=user,
+        actor_type=ActorType.AGENT,
+        entity_type="agent_run",
+        entity_id=run.id,
+        details={
+            "intent": result["intent"],
+            "documents": [d["document_id"] for d in result["documents"]],
+            "recommendation": recommendation["action"],
+            "recommendation_source": recommendation["source"],
+            "requires_approval": recommendation["requires_approval"],
+            "action": (result["action"] or {}).get("status"),
+            "confidence": result["confidence"]["level"],
+            "tool_calls": run_context.tool_calls,
+            "llm_calls": calls,
+            "model": result["model"],
+            "workflow_id": run.options.get("workflow_id"),
+        },
+    )
+    logger.info(
+        "agent.run_completed",
+        run_id=str(run.id),
+        intent=result["intent"],
+        recommendation=recommendation["action"],
+        tool_calls=run_context.tool_calls,
+        llm_calls=calls,
+    )
+    return result
+
+
+async def record_run_failure(session: AsyncSession, run: AgentRun, user_message: str) -> None:
+    """Mark a run FAILED with a user-safe reason, its usage so far, and audit it."""
+    run.status = AgentRunStatus.FAILED
+    run.error = user_message[:1000]
+    run.finished_at = datetime.now(UTC)
+    calls, input_tokens, output_tokens, cost = await usage(session, run.id)
+    run.llm_calls, run.input_tokens, run.output_tokens = calls, input_tokens, output_tokens
+    run.estimated_cost_usd = cost
+    run.tool_calls = await tool_call_count(session, run.id)
+    user = await session.get(User, run.requested_by_id)
+    record_audit_event(
+        session,
+        action=AuditAction.ANALYSIS_FAILED,
+        outcome=AuditOutcome.FAILURE,
+        meta=SYSTEM_REQUEST,
+        actor=user,
+        actor_type=ActorType.AGENT,
+        entity_type="agent_run",
+        entity_id=run.id,
+        details={"error": user_message[:300]},
+    )
+
+
 class AgentAnalysisHandler:
     def __init__(self, deps: AgentDeps) -> None:
         self._deps = deps
@@ -199,52 +279,7 @@ class AgentAnalysisHandler:
         )
         if run is None:
             return
-        state, run_context = context.state, context.context
-        result = compose_result(state, run_context)
-        calls, input_tokens, output_tokens, cost = await usage(session, run.id)
-        run.status = AgentRunStatus.COMPLETED
-        run.plan = state["plan"]
-        run.result = result
-        run.trace = list(state.get("trace", []))
-        run.tool_calls = run_context.tool_calls
-        run.llm_calls = calls
-        run.input_tokens = input_tokens
-        run.output_tokens = output_tokens
-        run.estimated_cost_usd = cost
-        run.finished_at = finished_at
-        run.error = None
-        user = await session.get(User, run.requested_by_id)
-        recommendation = result["recommendation"]
-        record_audit_event(
-            session,
-            action=AuditAction.ANALYSIS_COMPLETED,
-            outcome=AuditOutcome.SUCCESS,
-            meta=SYSTEM_REQUEST,
-            actor=user,
-            actor_type=ActorType.AGENT,
-            entity_type="agent_run",
-            entity_id=run.id,
-            details={
-                "intent": result["intent"],
-                "documents": [d["document_id"] for d in result["documents"]],
-                "recommendation": recommendation["action"],
-                "recommendation_source": recommendation["source"],
-                "requires_approval": recommendation["requires_approval"],
-                "action": (result["action"] or {}).get("status"),
-                "confidence": result["confidence"]["level"],
-                "tool_calls": run_context.tool_calls,
-                "llm_calls": calls,
-                "model": result["model"],
-            },
-        )
-        logger.info(
-            "agent.run_completed",
-            run_id=str(run.id),
-            intent=result["intent"],
-            recommendation=recommendation["action"],
-            tool_calls=run_context.tool_calls,
-            llm_calls=calls,
-        )
+        await record_run_result(session, run, context.state, context.context, finished_at)
 
     async def on_failure(
         self, session: AsyncSession, job: ClaimedJob, *, new_status: Any, user_message: str
@@ -259,22 +294,4 @@ class AgentAnalysisHandler:
         if new_status != JobStatus.FAILED:
             run.status = AgentRunStatus.QUEUED
             return
-        run.status = AgentRunStatus.FAILED
-        run.error = user_message[:1000]
-        run.finished_at = datetime.now(UTC)
-        calls, input_tokens, output_tokens, cost = await usage(session, run.id)
-        run.llm_calls, run.input_tokens, run.output_tokens = calls, input_tokens, output_tokens
-        run.estimated_cost_usd = cost
-        run.tool_calls = await tool_call_count(session, run.id)
-        user = await session.get(User, run.requested_by_id)
-        record_audit_event(
-            session,
-            action=AuditAction.ANALYSIS_FAILED,
-            outcome=AuditOutcome.FAILURE,
-            meta=SYSTEM_REQUEST,
-            actor=user,
-            actor_type=ActorType.AGENT,
-            entity_type="agent_run",
-            entity_id=run.id,
-            details={"error": user_message[:300]},
-        )
+        await record_run_failure(session, run, user_message)

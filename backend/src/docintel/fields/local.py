@@ -96,6 +96,17 @@ ANY_SCHEMA_LABELS = frozenset(
     for field in info.scalars
     for label in field.meta.labels
 )
+# 'by and between Altamira Components (the "Supplier") and Meridian Co. (the "Customer")'
+_QUOTES = "\"'\u201c\u201d\u2018\u2019"
+_PREAMBLE = re.compile(
+    r"\bbetween\s+(?P<first>[^()]{2,120}?)\s*\((?:the\s+)?[" + _QUOTES + r"]?"
+    r"(?P<first_role>[A-Za-z][A-Za-z ]{1,30}?)[" + _QUOTES + r"]?\)\s*,?\s*and\s+"
+    r"(?P<second>[^()]{2,120}?)\s*\((?:the\s+)?[" + _QUOTES + r"]?"
+    r"(?P<second_role>[A-Za-z][A-Za-z ]{1,30}?)[" + _QUOTES + r"]?\)",
+    re.IGNORECASE,
+)
+_PREAMBLE_PAGES = 2
+ANCHOR_PREAMBLE = 0.9
 _VALUE_START = re.compile(r"^[\d$€£¥₹(+-]|^[A-Z]{3}\s?\d")
 _SEPARATORS = ":#- " + chr(0x2013)  # colon, hash, hyphen, space, en dash
 _LIST_SPLIT = re.compile(r"\s*[,;•·|]\s*|\s+-\s+")
@@ -391,8 +402,34 @@ class LayoutExtractor:
             chosen = same_rank[0]
             chosen.candidate.conflicts = len({repr(item.key) for item in same_rank}) - 1
             return chosen.candidate
+        if field.meta.party_roles and layouts:
+            preamble = self._preamble(field, layouts)
+            if preamble is not None:
+                return preamble
         if field.meta.letterhead > 0 and layouts:
             return self._letterhead(field, layouts[0])
+        return None
+
+    @staticmethod
+    def _preamble(field: ScalarField, layouts: list[_Layout]) -> Candidate | None:
+        """A party named in the contract's preamble by the role it is defined as."""
+        roles = {role.casefold() for role in field.meta.party_roles}
+        for layout in layouts[:_PREAMBLE_PAGES]:
+            text = " ".join(layout.page.text.split())
+            match = _PREAMBLE.search(text)
+            if match is None:
+                continue
+            for side in ("first", "second"):
+                if match.group(f"{side}_role").strip().casefold() in roles:
+                    name = match.group(side).strip(" ,")
+                    return Candidate(
+                        name,
+                        layout.page.page_number,
+                        match.group(0),
+                        Origin.LOCAL,
+                        anchor=ANCHOR_PREAMBLE,
+                        method=f"preamble: defined as the {match.group(f'{side}_role').strip()}",
+                    )
         return None
 
     def _letterhead(self, field: ScalarField, layout: _Layout) -> Candidate | None:

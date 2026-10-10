@@ -32,6 +32,8 @@ TOKEN_SCOPES: tuple[Permission, ...] = (
     Permission.KNOWLEDGE_READ,
     Permission.COMPARISONS_CREATE,
     Permission.REVIEWS_WORK,
+    Permission.REPORTS_CREATE,
+    Permission.WORKFLOWS_READ,
 )
 
 

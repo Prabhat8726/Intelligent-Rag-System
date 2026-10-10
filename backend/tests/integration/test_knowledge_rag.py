@@ -10,11 +10,11 @@ from typing import Any
 
 import pytest
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from docintel.ai.base import LLMRequest, StructuredLLMResponse
 from docintel.ai.local_embeddings import HASHING_MODEL, HashingEmbeddingProvider
-from docintel.db.models import AuditLog, LLMCall, Sensitivity, User
+from docintel.db.models import AuditLog, KnowledgeDocument, LLMCall, Sensitivity, User
 from docintel.knowledge.embedding import ChunkEmbedder
 from docintel.knowledge.rag import build_rag_engines
 from docintel.processing.services import build_processing_services
@@ -35,6 +35,10 @@ def hashing_embedder() -> ChunkEmbedder:
 async def seed_knowledge_base(env: Env) -> dict[str, str]:
     """Upload the seed knowledge base under keys unique to this test; returns key -> test key.
     The Legal playbook is filed into the test's Legal department."""
+    async with env.maker() as session, session.begin():
+        # One copy at a time: copies left by earlier tests are organization-wide too and would
+        # crowd the same sections into the top results (retrieval would depend on test order).
+        await session.execute(delete(KnowledgeDocument))
     suffix = uuid.uuid4().hex[:8]
     keys: dict[str, str] = {}
     for path in sorted(KNOWLEDGE_BASE.glob("*.md")):

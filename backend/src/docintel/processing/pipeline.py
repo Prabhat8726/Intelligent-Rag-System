@@ -84,6 +84,7 @@ from docintel.processing.services import ProcessingServices
 from docintel.processing.tables import stitch_tables
 from docintel.storage import DocumentStorage, ObjectNotFoundError, page_preview_key
 from docintel.workers.queue import ClaimedJob
+from docintel.workflows.service import auto_start
 
 logger = get_logger(__name__)
 
@@ -662,6 +663,7 @@ class DocumentProcessingHandler:
             # the open review task (if any) decides the status.
             await MatchingService(session, self._services.settings).refresh(document)
             review = await _review_summary(session, document)
+            await auto_start(session, self._services.settings, document)
         outcome = context.classification
         record_audit_event(
             session,

@@ -152,6 +152,30 @@ class LineFacts:
         return next((cell.page for cell in self.cells.values() if cell.page is not None), None)
 
 
+@dataclass(frozen=True, slots=True)
+class ClauseFact:
+    """A numbered clause of a contract (from the deterministic clause segmentation)."""
+
+    number: str | None
+    title: str
+    text: str
+    page: int | None
+
+    @property
+    def label(self) -> str:
+        return f"{self.number}. {self.title}" if self.number else self.title
+
+
+def find_clause(clauses: Iterable[ClauseFact], keyword: str) -> ClauseFact | None:
+    """The first clause whose title contains every word of `keyword` (case-insensitive)."""
+    words = keyword.casefold().split()
+    for clause in clauses:
+        title = clause.title.casefold()
+        if clause.number is not None and all(word in title for word in words):
+            return clause
+    return None
+
+
 @dataclass(slots=True)
 class DocumentFacts:
     document_type: DocumentType
@@ -167,6 +191,8 @@ class DocumentFacts:
     failed_checks: list[dict[str, Any]] = field(default_factory=list)
     missing_required: list[str] = field(default_factory=list)
     review_level: str | None = None  # the extraction's routing (AUTO / ANALYST / MANDATORY)
+    # Contracts: the clauses of the extraction's version (None: the text was not loaded).
+    clauses: list[ClauseFact] | None = None
 
     def get(self, name: str) -> FactValue | None:
         item = self.fields.get(name)

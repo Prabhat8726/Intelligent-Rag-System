@@ -1,18 +1,21 @@
-"""Rule types. Each evaluator reads facts, comparison items or duplicate matches - never page
-text - so a rule can only report what the deterministic layers established."""
+"""Rule types. Each evaluator reads facts, comparison items, duplicate matches or (contracts)
+the deterministic clause segmentation - never free page text - so a rule can only report what
+the deterministic layers established."""
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import Annotated, Any, ClassVar
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from docintel.db.models import DocumentType
 from docintel.fields.schemas import SCHEMA_INFO
 from docintel.matching import compare as checks
 from docintel.matching.compare import ComparisonItem, ItemStatus
+from docintel.matching.facts import ClauseFact, find_clause
 from docintel.rules.engine import Finding, Outcome, RuleContext, RuleParams, register
 
 _SHOWN = 3  # findings named in a message; the evidence lists all of them
@@ -398,6 +401,162 @@ class PaymentTermsLimit:
         return Finding(Outcome.PASS, f"Payment terms of {days} days are within policy.")
 
 
+# ------------------------------------------------------------------------------ contract clauses
+ClauseKeyword = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=3, max_length=60)
+]
+# "60 days written notice", "90 days' prior written notice", "thirty (30) days notice"
+_NOTICE_DAYS = re.compile(
+    r"(\d{1,4})\s*\)?\s*(?:calendar\s+|business\s+)?days?['\u2019]?\s+"
+    r"(?:prior\s+)?(?:written\s+)?(?:advance\s+)?notice",
+    re.IGNORECASE,
+)
+_NOTICE_OF = re.compile(r"notice\s+(?:period\s+)?of\s+(\d{1,4})\s*(?:calendar\s+)?days", re.I)
+_LAW_OF = re.compile(r"laws?\s+of\s+(?P<place>[^.;\n]{2,80})", re.IGNORECASE)
+
+
+def _clause_evidence(clause: ClauseFact) -> dict[str, Any]:
+    return {"clause": clause.label, "page": clause.page}
+
+
+def _no_clauses(clauses: list[ClauseFact] | None) -> Finding | None:
+    if clauses is None:
+        return Finding(Outcome.NOT_APPLICABLE, "The contract text was not available.")
+    if not clauses:
+        return Finding(
+            Outcome.WARN,
+            "No numbered clauses were found in the contract; check it manually.",
+        )
+    return None
+
+
+class RequiredClausesParams(RuleParams):
+    clauses: list[ClauseKeyword] = Field(min_length=1, max_length=20)
+
+
+class RequiredClauses:
+    """Policy: a contract must contain clauses whose titles name each keyword."""
+
+    rule_type: ClassVar[str] = "required_clauses"
+    params_model: ClassVar[type[RuleParams]] = RequiredClausesParams
+
+    def evaluate(self, context: RuleContext, params: Any) -> Finding:
+        clauses = context.document.clauses
+        if (finding := _no_clauses(clauses)) is not None:
+            return finding
+        assert clauses is not None  # noqa: S101 - _no_clauses handled None
+        found = {keyword: find_clause(clauses, keyword) for keyword in params.clauses}
+        missing = [keyword for keyword, clause in found.items() if clause is None]
+        present = {k: c.label for k, c in found.items() if c is not None}
+        if missing:
+            return Finding(
+                Outcome.FAIL,
+                f"Required clause(s) missing: {', '.join(missing)}.",
+                {"missing": missing, "present": present},
+            )
+        return Finding(
+            Outcome.PASS,
+            f"All required clauses are present ({'; '.join(present.values())}).",
+            {"present": present},
+        )
+
+
+class NoticePeriodParams(RuleParams):
+    clause: ClauseKeyword = "Termination"
+    max_days: int = Field(default=90, ge=1, le=3650)
+
+
+def notice_days(text: str) -> tuple[int, str] | None:
+    """The longest notice period stated in days, with the words it was read from."""
+    found = [
+        (int(match.group(1)), match.group(0))
+        for pattern in (_NOTICE_DAYS, _NOTICE_OF)
+        for match in pattern.finditer(text)
+    ]
+    return max(found, key=lambda item: item[0]) if found else None
+
+
+class NoticePeriodLimit:
+    """Policy: the notice period in a clause (termination for convenience) has a maximum."""
+
+    rule_type: ClassVar[str] = "clause_notice_period"
+    params_model: ClassVar[type[RuleParams]] = NoticePeriodParams
+
+    def evaluate(self, context: RuleContext, params: Any) -> Finding:
+        extracted = context.document.get("termination_notice_days")
+        clauses = context.document.clauses
+        clause = find_clause(clauses, params.clause) if clauses else None
+        days: int | None = None
+        evidence: dict[str, Any] = {"max_days": params.max_days}
+        if extracted is not None and isinstance(extracted.value, int):
+            days = extracted.value
+            evidence |= {"source": "extracted field", "page": extracted.page}
+        elif clause is not None:
+            read = notice_days(clause.text)
+            if read is not None:
+                days = read[0]
+                evidence |= {**_clause_evidence(clause), "quote": read[1]}
+        if days is None:
+            if clause is None:
+                return Finding(Outcome.NOT_APPLICABLE, f"No {params.clause.lower()} clause.")
+            return Finding(
+                Outcome.WARN,
+                f"Clause {clause.label} states no notice period in days; check it manually.",
+                _clause_evidence(clause),
+            )
+        evidence["days"] = days
+        if days > params.max_days:
+            return Finding(
+                Outcome.FAIL,
+                f"A notice period of {days} days exceeds the maximum of {params.max_days}.",
+                evidence,
+            )
+        return Finding(
+            Outcome.PASS,
+            f"A notice period of {days} days is within the maximum of {params.max_days}.",
+            evidence,
+        )
+
+
+class GoverningLawParams(RuleParams):
+    clause: ClauseKeyword = "Governing Law"
+    allowed: list[ClauseKeyword] = Field(min_length=1, max_length=10)
+
+
+class GoverningLaw:
+    """Policy: contracts are governed by an approved law; another one needs Legal (WARN)."""
+
+    rule_type: ClassVar[str] = "governing_law"
+    params_model: ClassVar[type[RuleParams]] = GoverningLawParams
+
+    def evaluate(self, context: RuleContext, params: Any) -> Finding:
+        clauses = context.document.clauses
+        clause = find_clause(clauses, params.clause) if clauses else None
+        if clause is None:
+            return Finding(Outcome.NOT_APPLICABLE, f"No {params.clause.lower()} clause.")
+        text = " ".join(clause.text.split())
+        match = _LAW_OF.search(text)
+        place = match.group("place").strip() if match else None
+        evidence = {**_clause_evidence(clause), "jurisdiction": place, "allowed": params.allowed}
+        folded = text.casefold()
+        if any(allowed.casefold() in folded for allowed in params.allowed):
+            return Finding(
+                Outcome.PASS, f"Governed by the laws of {place or 'an approved law'}.", evidence
+            )
+        if place is None:
+            return Finding(
+                Outcome.WARN,
+                f"Clause {clause.label} names no governing law; check it manually.",
+                evidence,
+            )
+        return Finding(
+            Outcome.WARN,
+            f"Governed by the laws of {place}, not {' or '.join(params.allowed)}: "
+            "another jurisdiction needs Legal's approval.",
+            evidence,
+        )
+
+
 for _evaluator in (
     DuplicateDocument(),
     LineUnitPrice(),
@@ -411,5 +570,8 @@ for _evaluator in (
     KnownVendor(),
     ContractExpiry(),
     PaymentTermsLimit(),
+    RequiredClauses(),
+    NoticePeriodLimit(),
+    GoverningLaw(),
 ):
     register(_evaluator)

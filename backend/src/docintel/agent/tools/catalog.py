@@ -1,7 +1,5 @@
 """The controlled tools (Module 15). Each wraps an existing service; none adds a capability the
-REST API does not already give the same user.
-
-`generate_report` and `get_workflow_status` arrive with reports and workflows (Phase 8).
+REST API does not already give the same user. None can start, approve or reject a workflow.
 """
 
 from __future__ import annotations
@@ -10,7 +8,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Any
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, model_validator
 from sqlalchemy import select
 
 from docintel.agent.tools.base import (
@@ -29,6 +27,8 @@ from docintel.comparisons.service import ComparisonService
 from docintel.core.errors import NotFoundError
 from docintel.core.text import QueryText
 from docintel.db.models import (
+    ActionStatus,
+    ActorType,
     ComparisonItemStatus,
     ComparisonRole,
     Document,
@@ -36,10 +36,15 @@ from docintel.db.models import (
     DocumentType,
     DocumentVersion,
     KnowledgeCategory,
+    ReportType,
     ReviewPriority,
     RuleOutcome,
     RuleResultRecord,
     Sensitivity,
+    User,
+    WorkflowActionType,
+    WorkflowStatus,
+    WorkflowType,
 )
 from docintel.documents.extraction import ExtractionService
 from docintel.documents.findings import FindingsService
@@ -48,8 +53,10 @@ from docintel.knowledge.rag import KnowledgeQueryService, today
 from docintel.knowledge.retrieval import KnowledgeScope
 from docintel.matching.facts import NUMBER_FIELD
 from docintel.matching.service import PROCESSED, MatchingService
+from docintel.reports.service import ReportService
 from docintel.review.service import ReviewRequestService
 from docintel.search.service import DocumentSearchService
+from docintel.workflows.service import WorkflowService
 
 FieldPath = Annotated[
     str,
@@ -62,6 +69,7 @@ MAX_COMPARISON_ITEMS = 60
 SNIPPET_CHARS = 300
 PASSAGE_CHARS = 1500
 SOURCE_TEXT_CHARS = 500
+MAX_WORKFLOWS = 5
 
 
 async def _visible_document(scope: ToolScope, document_id: uuid.UUID) -> Document:
@@ -723,6 +731,144 @@ async def create_review_task(scope: ToolScope, args: ReviewRequestInput) -> Revi
     )
 
 
+# ------------------------------------------------------------------------------ generate_report
+class ReportInput(ToolInput):
+    report_type: ReportType = Field(
+        description="INVOICE_VERIFICATION, CONTRACT_REVIEW or COMPLIANCE_REVIEW of a document; "
+        "DOCUMENT_COMPARISON of a comparison; AI_ANALYSIS of an investigation"
+    )
+    subject_id: uuid.UUID = Field(description="The document, comparison or investigation")
+
+
+class ReportOutput(ToolOutput):
+    report_id: uuid.UUID
+    title: str
+    report_type: ReportType
+    document_ids: list[uuid.UUID]
+    content_sha256: str
+    as_of: datetime
+    download_path: str
+
+
+async def generate_report(scope: ToolScope, args: ReportInput) -> ReportOutput:
+    report = await ReportService(scope.session, scope.settings).generate(
+        scope.actor,
+        args.report_type,
+        args.subject_id,
+        meta=scope.caller.meta,
+        actor_type=ActorType.AGENT if scope.caller.run_id else ActorType.USER,
+    )
+    return ReportOutput(
+        report_id=report.id,
+        title=clip(report.title, 300) or "",
+        report_type=report.report_type,
+        document_ids=list(report.document_ids),
+        content_sha256=report.content_sha256,
+        as_of=report.as_of,
+        download_path=f"/api/v1/reports/{report.id}/download",
+    )
+
+
+# ------------------------------------------------------------------------------ get_workflow_status
+class WorkflowStatusInput(ToolInput):
+    workflow_id: uuid.UUID | None = Field(default=None, description="One workflow")
+    document_id: uuid.UUID | None = Field(
+        default=None, description="Or the latest workflows of a document"
+    )
+
+    @model_validator(mode="after")
+    def _one_subject(self) -> WorkflowStatusInput:
+        if (self.workflow_id is None) == (self.document_id is None):
+            msg = "give exactly one of workflow_id and document_id"
+            raise ValueError(msg)
+        return self
+
+
+class WorkflowActionStatus(ToolOutput):
+    action_type: WorkflowActionType
+    status: ActionStatus
+    required_role: str | None
+    decided_by: str | None
+    decided_at: datetime | None
+    decision_reason: str | None
+    error: str | None
+
+
+class WorkflowStatusItem(ToolOutput):
+    workflow_id: uuid.UUID
+    workflow_type: WorkflowType
+    document_id: uuid.UUID
+    status: WorkflowStatus
+    outcome: str | None
+    current_step: str | None
+    steps: dict[str, str]
+    actions: list[WorkflowActionStatus]
+    created_at: datetime
+    finished_at: datetime | None
+
+
+class WorkflowStatusOutput(ToolOutput):
+    workflows: list[WorkflowStatusItem]
+
+
+async def get_workflow_status(scope: ToolScope, args: WorkflowStatusInput) -> WorkflowStatusOutput:
+    service = WorkflowService(scope.session, scope.settings)
+    if args.workflow_id is not None:
+        workflows = [await service.get(scope.actor, args.workflow_id)]
+    else:
+        await _visible_document(scope, args.document_id)  # type: ignore[arg-type]
+        workflows, _ = await service.workflows(
+            scope.actor, document_id=args.document_id, limit=MAX_WORKFLOWS
+        )
+    deciders = {
+        action.decided_by_id
+        for workflow in workflows
+        for action in workflow.actions
+        if action.decided_by_id is not None
+    }
+    emails = (
+        dict(
+            (
+                await scope.session.execute(
+                    select(User.id, User.email).where(User.id.in_(deciders))
+                )
+            ).all()
+        )
+        if deciders
+        else {}
+    )
+    return WorkflowStatusOutput(
+        workflows=[
+            WorkflowStatusItem(
+                workflow_id=workflow.id,
+                workflow_type=workflow.workflow_type,
+                document_id=workflow.document_id,
+                status=workflow.status,
+                outcome=workflow.outcome,
+                current_step=workflow.current_step,
+                steps={step.step_name: step.status.value for step in workflow.steps},
+                actions=[
+                    WorkflowActionStatus(
+                        action_type=action.action_type,
+                        status=action.status,
+                        required_role=action.required_role,
+                        decided_by=emails.get(action.decided_by_id)
+                        if action.decided_by_id
+                        else None,
+                        decided_at=action.decided_at,
+                        decision_reason=clip(action.decision_reason, 300),
+                        error=clip(action.error, 300),
+                    )
+                    for action in workflow.actions
+                ],
+                created_at=workflow.created_at,
+                finished_at=workflow.finished_at,
+            )
+            for workflow in workflows
+        ]
+    )
+
+
 # ------------------------------------------------------------------------------ the catalog
 TOOLS: tuple[Tool[Any, Any], ...] = (
     Tool(
@@ -836,6 +982,37 @@ TOOLS: tuple[Tool[Any, Any], ...] = (
             "created": out.created,
             "task_id": str(out.task_id) if out.task_id else None,
             "priority": out.task_priority,
+        },
+    ),
+    Tool(
+        name="generate_report",
+        description="Generate and store a report (invoice verification, contract review, "
+        "compliance review, document comparison or AI analysis) from the current data: source "
+        "documents, values with evidence, rule results, analysis and human decisions.",
+        input_model=ReportInput,
+        output_model=ReportOutput,
+        permission=Permission.REPORTS_CREATE,
+        side_effect=SideEffect.RECORD,
+        handler=generate_report,
+        summarize=lambda out: {
+            "report_id": str(out.report_id),
+            "report_type": out.report_type.value,
+            "sha256": out.content_sha256,
+        },
+    ),
+    Tool(
+        name="get_workflow_status",
+        description="Status of a workflow (or a document's latest workflows): steps, the "
+        "proposed action, who must approve it and the decisions taken. Read-only: approving "
+        "and rejecting stay with people in the web application.",
+        input_model=WorkflowStatusInput,
+        output_model=WorkflowStatusOutput,
+        permission=Permission.WORKFLOWS_READ,
+        side_effect=SideEffect.READ,
+        handler=get_workflow_status,
+        summarize=lambda out: {
+            "workflows": len(out.workflows),
+            "statuses": sorted({item.status.value for item in out.workflows}),
         },
     ),
 )

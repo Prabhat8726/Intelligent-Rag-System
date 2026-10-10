@@ -19,6 +19,7 @@ from docintel.audit.service import SYSTEM_REQUEST, AuditAction, record_audit_eve
 from docintel.db import migrations_runner
 from docintel.db.base import Base
 from docintel.db.models import AuditOutcome
+from docintel.rules.defaults import DEFAULT_RULES
 from tests.conftest import base_database_url, create_database, drop_database
 
 pytestmark = pytest.mark.integration
@@ -108,7 +109,7 @@ async def test_phase5_migration_opens_tasks_for_documents_waiting_for_review(
         "reason:LOW_OCR_CONFIDENCE",
         "reason:MISSING_REQUIRED_FIELDS",
     ]
-    assert rules == 19
+    assert rules == len(DEFAULT_RULES)  # the migrations seed exactly the rules in code
 
 
 # Alembic cannot compare generated-column expressions; it warns and skips them.

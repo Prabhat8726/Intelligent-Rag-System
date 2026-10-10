@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from docintel.db.models import DocumentType
 from docintel.fields.evidence import EvidenceLocator, EvidenceStatus
-from docintel.fields.local import LayoutExtractor, map_columns, numeric_cell
+from docintel.fields.local import _PREAMBLE, LayoutExtractor, map_columns, numeric_cell
 from docintel.fields.schemas import SCHEMA_INFO
 from docintel.processing.content import BBox, DocumentTable, PageContent, TableRow, Word
 from docintel.processing.inspection import PageMethod
@@ -291,3 +293,30 @@ def test_letterhead_never_picks_labels_of_any_schema_or_split_titles() -> None:
         .scalars["vendor_name"]
     )
     assert candidate.raw_value == "Northwind Freight"
+
+
+@pytest.mark.parametrize(
+    ("text", "parties"),
+    [
+        (
+            'This Agreement is entered into by and between Altamira Components (the "Supplier") '
+            'and Meridian Manufacturing Co. (the "Customer").',
+            ("Altamira Components", "Supplier", "Meridian Manufacturing Co.", "Customer"),
+        ),
+        (
+            "made between Beta LLC (“Consultant”), and ACME Corp. (“Client”)",
+            ("Beta LLC", "Consultant", "ACME Corp.", "Client"),
+        ),
+    ],
+)
+def test_contract_parties_are_read_from_the_preamble(
+    text: str, parties: tuple[str, str, str, str]
+) -> None:
+    match = _PREAMBLE.search(text)
+    assert match is not None
+    assert (
+        match.group("first").strip(),
+        match.group("first_role"),
+        match.group("second").strip(),
+        match.group("second_role"),
+    ) == parties

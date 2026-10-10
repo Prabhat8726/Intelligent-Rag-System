@@ -41,6 +41,7 @@ from docintel.processing.pipeline import (
 from docintel.processing.services import ProcessingServices, build_processing_services
 from docintel.storage import DocumentStorage, StorageError
 from docintel.workers.queue import JOBS_CHANNEL, ClaimedJob, JobQueue
+from docintel.workflows.engine import WorkflowHandler
 
 logger = get_logger(__name__)
 
@@ -119,6 +120,7 @@ class Worker:
                 storage, self.services, self.services.embedder, self.services.chunking
             ),
             JobType.AGENT_ANALYSIS: AgentAnalysisHandler(agent),
+            JobType.WORKFLOW: WorkflowHandler(agent, sessionmaker, settings),
         }
         self._wakeup = asyncio.Event()
         self._heartbeat_file = settings.worker_heartbeat_file

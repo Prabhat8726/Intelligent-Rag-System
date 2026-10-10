@@ -20,16 +20,19 @@ from docintel.api.middleware import (
 )
 from docintel.api.problems import register_exception_handlers
 from docintel.api.routers import (
+    admin,
     analysis,
     auth,
     comparisons,
     documents,
     health,
     knowledge,
+    reports,
     reviews,
     rules,
     search,
     vendors,
+    workflows,
 )
 from docintel.core.config import Settings, get_settings
 from docintel.core.logging import configure_logging, get_logger
@@ -90,6 +93,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api_v1.include_router(knowledge.router)
     api_v1.include_router(search.router)
     api_v1.include_router(analysis.router)
+    api_v1.include_router(workflows.router)
+    api_v1.include_router(reports.router)
+    api_v1.include_router(admin.router)
     app.include_router(health.router)
     app.include_router(api_v1)
 

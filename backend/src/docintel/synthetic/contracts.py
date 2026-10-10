@@ -117,13 +117,23 @@ CLAUSE_LIBRARY: tuple[tuple[str, str], ...] = (
         "above.",
     ),
 )
+# Contract Management Guidelines, section 2 (rules CONTRACT_REQUIRED_CLAUSES and the others).
+MANDATORY_CLAUSES = ("Term and Termination", "Limitation of Liability", "Governing Law")
+MANDATORY_CLAUSE_RATE = 0.85
 ADDED_SENTENCES = (
     "This obligation survives the termination of this Agreement.",
     "The Customer may review this provision annually.",
     "Any change to this clause requires a written amendment signed by both Parties.",
 )
 _NUMBER = re.compile(r"(?<![\d,])\d+(?![\d,])")  # whole numbers, not "500" of "500,000"
-_LAWS = ("England and Wales", "the State of Delaware", "Germany", "the Netherlands", "India")
+# The company's own law (Contract Management Guidelines 2.4) and four others Legal must approve.
+_LAWS = (
+    "England and Wales",
+    "the State of Delaware",
+    "Germany",
+    "the Netherlands",
+    "the State of Ohio",
+)
 
 
 @dataclass(slots=True)
@@ -180,7 +190,13 @@ def contract_family(
     """Versions of one contract and, per step (v1->v2, v2->v3), what changed."""
     values = _values(rng)
     library = list(CLAUSE_LIBRARY)
-    chosen = sorted(rng.sample(range(len(library)), rng.randint(6, 9)))
+    chosen = rng.sample(range(len(library)), rng.randint(6, 9))
+    # Most supplier contracts carry the clauses the company requires; a few leave one out.
+    for title in MANDATORY_CLAUSES:
+        position = next(i for i, (name, _) in enumerate(library) if name == title)
+        if position not in chosen and rng.random() < MANDATORY_CLAUSE_RATE:
+            chosen.append(position)
+    chosen.sort()
     effective = date(2026, 1, 1) + timedelta(days=rng.randint(0, 200))
     first = ContractVersion(
         number=1,

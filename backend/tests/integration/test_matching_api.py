@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from docintel.db.models import AuditLog
+from docintel.rules.defaults import DEFAULT_RULES
 from docintel.synthetic.contracts import generate_contract_versions
 from docintel.synthetic.generator import generate_dataset
 from docintel.synthetic.scenarios import Scenario
@@ -286,7 +287,7 @@ async def test_rules_are_read_by_all_changed_by_admins_and_re_evaluated(
     listing = await env.client.get("/api/v1/rules", headers=auth_headers(env.viewer))
     assert listing.status_code == 200
     rules = {rule["code"]: rule for rule in listing.json()}
-    assert len(rules) == 19
+    assert len(rules) == len(DEFAULT_RULES)
     price = rules["INV_PO_UNIT_PRICE"]
     assert price["params"] == {"tolerance_pct": "0", "tolerance_abs": "0.01"}
     assert "tolerance_pct" in price["params_schema"]["properties"]

@@ -9,10 +9,17 @@ from decimal import Decimal
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from docintel.db.models import BusinessRule, Document, DocumentExtraction, DocumentType
+from docintel.db.models import (
+    BusinessRule,
+    Document,
+    DocumentExtraction,
+    DocumentPage,
+    DocumentType,
+)
 from docintel.fields.store import resolved_from_row
-from docintel.matching.facts import DocumentFacts, facts_from_fields
+from docintel.matching.facts import ClauseFact, DocumentFacts, facts_from_fields
 from docintel.rules.engine import RuleDefinition, Severity
+from docintel.versions.clauses import segment
 
 _LOCK_NAMESPACE = 0x6D61  # "ma": matching
 
@@ -63,10 +70,28 @@ async def load_facts(session: AsyncSession, document: Document) -> DocumentFacts
         created_at=document.created_at,
     )
     facts.review_level = record.review_level.value
+    if facts.document_type == DocumentType.CONTRACT and record.document_version_id is not None:
+        facts.clauses = await load_clauses(session, record.document_version_id)
     if document.vendor_id is not None:  # the document's vendor link is authoritative
         facts.vendor_id = str(document.vendor_id)
         facts.vendor_name = document.vendor.canonical_name if document.vendor else facts.vendor_name
     return facts
+
+
+async def load_clauses(session: AsyncSession, version_id: uuid.UUID) -> list[ClauseFact]:
+    """Numbered clauses of a processed version (its page texts, segmented)."""
+    pages = list(
+        await session.scalars(
+            select(DocumentPage.text)
+            .where(DocumentPage.document_version_id == version_id)
+            .order_by(DocumentPage.page_number)
+        )
+    )
+    return [
+        ClauseFact(clause.number, clause.title, clause.text, clause.page)
+        for clause in segment(pages)
+        if clause.number is not None
+    ]
 
 
 def apply_key_facts(document: Document, facts: DocumentFacts | None) -> None:

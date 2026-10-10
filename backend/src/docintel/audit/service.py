@@ -56,6 +56,22 @@ class AuditAction(StrEnum):
     API_TOKEN_REVOKED = "api_token.revoked"  # noqa: S105 - an action name
     MCP_AUTH_FAILED = "mcp.auth_failed"
     MCP_TOOL_CALLED = "mcp.tool_called"
+    WORKFLOW_STARTED = "workflow.started"
+    WORKFLOW_COMPLETED = "workflow.completed"
+    WORKFLOW_REJECTED = "workflow.rejected"
+    WORKFLOW_FAILED = "workflow.failed"
+    WORKFLOW_CANCELLED = "workflow.cancelled"
+    WORKFLOW_ACTION_PROPOSED = "workflow.action.proposed"
+    WORKFLOW_ACTION_AWAITING_APPROVAL = "workflow.action.awaiting_approval"
+    WORKFLOW_ACTION_APPROVED = "workflow.action.approved"
+    WORKFLOW_ACTION_REJECTED = "workflow.action.rejected"
+    WORKFLOW_ACTION_EXECUTED = "workflow.action.executed"
+    WORKFLOW_ACTION_FAILED = "workflow.action.failed"
+    WORKFLOW_APPROVAL_DENIED = "workflow.approval_denied"
+    REPORT_GENERATED = "report.generated"
+    REPORT_DOWNLOADED = "report.downloaded"
+    USER_UPDATED = "user.updated"
+    USER_PASSWORD_RESET = "user.password_reset"  # noqa: S105 - an action name
 
 
 @dataclass(frozen=True, slots=True)
