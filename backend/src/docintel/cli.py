@@ -56,7 +56,8 @@ from docintel.processing.ocr import OCRUnavailableError, TesseractOCRProvider
 from docintel.processing.services import build_processing_services, load_corrections
 from docintel.storage import build_storage
 from docintel.vendors.seed import seed_demo_vendors
-from docintel.workers.runner import Worker, heartbeat_age_seconds
+from docintel.workers.health import check as worker_health_check
+from docintel.workers.runner import Worker
 
 logger = get_logger(__name__)
 
@@ -473,15 +474,9 @@ async def _mcp(settings: Settings, args: argparse.Namespace) -> int:
 
 
 def _worker_health(settings: Settings) -> int:
-    path = settings.worker_heartbeat_file
-    if path is None:
-        _fail("WORKER_HEARTBEAT_FILE is not configured")
-        return EXIT_FAILURE
-    age = heartbeat_age_seconds(path)
-    # A healthy worker touches the file at least once per poll interval or lease heartbeat.
-    limit = max(60.0, settings.worker_poll_interval_seconds * 3, settings.job_lease_seconds / 2)
-    if age is None or age > limit:
-        _fail(f"worker heartbeat is stale (age={age}, limit={limit})")
+    problem = worker_health_check(settings)
+    if problem is not None:
+        _fail(problem)
         return EXIT_FAILURE
     return EXIT_OK
 

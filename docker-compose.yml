@@ -69,7 +69,7 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "docintel", "worker-health"]
+      test: ["CMD", "python", "-m", "docintel.workers.health"]
       interval: 15s
       timeout: 5s
       start_period: 20s

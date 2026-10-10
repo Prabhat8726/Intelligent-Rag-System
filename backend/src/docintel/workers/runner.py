@@ -15,9 +15,7 @@ import asyncio
 import contextlib
 import os
 import socket
-import time
 import uuid
-from pathlib import Path
 from typing import Any, Protocol
 
 import psycopg
@@ -301,11 +299,3 @@ class Worker:
             await self._handlers[job.job_type].on_failure(
                 session, job, new_status=new_status, user_message=message
             )
-
-
-def heartbeat_age_seconds(path: Path) -> float | None:
-    """Seconds since the worker last touched its heartbeat file (None if missing)."""
-    try:
-        return time.time() - path.stat().st_mtime
-    except FileNotFoundError:
-        return None

@@ -94,7 +94,7 @@ never part of a key (ADR-014).
 | `JOB_LEASE_SECONDS` | `300` | A claimed job belongs to its worker for this long; the worker renews the lease every third of it. Expired leases (crashed worker) are reclaimed by any worker |
 | `JOB_MAX_ATTEMPTS` | `3` | Attempts per job, including reclaims after a crash, before it is marked `FAILED` |
 | `JOB_RETRY_BASE_SECONDS` | `30` | Retry backoff: base × 2^(attempt−1) plus up to 10 % jitter, capped at 1 hour |
-| `WORKER_HEARTBEAT_FILE` | unset | File the worker touches while alive; `docintel worker-health` fails if it is older than max(60 s, 3 × poll interval, lease / 2). Compose sets `/tmp/docintel-worker.heartbeat` |
+| `WORKER_HEARTBEAT_FILE` | unset | File the worker touches while alive; `docintel worker-health` (or the lighter `python -m docintel.workers.health` that compose uses) fails if it is older than max(60 s, 3 × poll interval, lease / 2). Compose sets `/tmp/docintel-worker.heartbeat` |
 
 ### OCR and document understanding
 

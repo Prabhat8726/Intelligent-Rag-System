@@ -318,6 +318,11 @@ Frontend
 - ✅ Workflows (awaiting my decision / all, detail with steps, investigation, proposed action, why you cannot decide, decision with reason, history), reports (list, content, verify, downloads, generate from a document, comparison or investigation), audit log (filters, paging), users (create, edit, deactivate, reset password), the document page's workflows and reports, a badge with the decisions waiting (`workflows/workflows.test.tsx`)
 
 Delivery
-- ⏳ Filled in after verification (tests, Docker stack, smoke, browser check, gitleaks, actionlint)
+- ✅ 824 backend tests, ruff, ruff format, mypy --strict (src and tests); 68 frontend tests, ESLint, `tsc`, production build
+- ✅ Docker images rebuilt (sandbox-only base-image shim); on a fresh stack migration 0008 applies (schema at `0008`, contract rules seeded) and the smoke test passes; the existing stack upgraded in place
+- ✅ Verification found and fixed: the worker's container probe imported the whole CLI (scikit-learn, LangGraph, the workflow engine) and took about 5 s against a 5 s timeout, so a busy host marked the worker unhealthy; compose now runs `python -m docintel.workers.health` (about 1 s including `docker exec`; a test keeps the processing and agent stacks out of it); `mypy` errors in two test files
+- ✅ Browser check on the stack with the synthetic dataset: an analyst starts invoice processing from a document and sees why they cannot decide; the manager's badge and "Awaiting my decision" list it; the manager approves with a reason (payment reference, history of four transitions, report verified against its hash); a duplicate's rejection proposed and approved by the manager; an administrator filters the audit log and creates a user; the manager sees the department's audit log and no Users page; a viewer reads a workflow without a decision form; no console errors
+- ✅ gitleaks clean on history; `actionlint` clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 8 (by design): connections to external systems (ERP payment, e-mail, e-signature — executors record decisions only), PDF reports, workflow definitions edited at run time, escalation and reminders for decisions waiting too long.
