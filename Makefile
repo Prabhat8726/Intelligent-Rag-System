@@ -14,11 +14,13 @@ DEMO_URL ?= http://localhost:8080
 DATASET ?= ../synthetic_data/generated
 # Extra flags for `make process`, e.g. INGEST_FLAGS=--require-completed (CI).
 INGEST_FLAGS ?=
+# Flags for `make loadtest`, e.g. LOADTEST_ARGS="--users 16 --duration 120".
+LOADTEST_ARGS ?=
 
 .PHONY: help demo e2e env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
         reset-db logs seed-docker generate-documents process seed-knowledge reembed worker test \
         test-backend test-frontend lint format check-ai check-ocr llm-usage evaluate evaluate-quick \
-        evaluation-gates evaluation-readme match smoke mcp mcp-http clean
+        evaluation-gates evaluation-readme match smoke mcp mcp-http purge-deleted storage-reconcile loadtest alerts-test clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -101,8 +103,9 @@ test-backend: db-up ## Backend unit, integration and security tests (needs Docke
 test-frontend: ## Frontend unit/component tests
 	cd frontend && npm test
 
-lint: ## Static checks: ruff, mypy --strict, eslint, tsc
+lint: ## Static checks: ruff, mypy --strict, import-linter architecture contracts, eslint, tsc
 	cd backend && uv run ruff check src tests && uv run ruff format --check src tests && uv run mypy src tests
+	cd backend && uv run lint-imports
 	cd frontend && npm run lint && npm run typecheck
 
 format: ## Auto-format backend code
@@ -144,6 +147,19 @@ demo: require-env ## The final demonstration, 17 steps through the API of the ru
 
 e2e: require-env ## Browser test of the demo path against the running stack (make up && make seed-docker first)
 	cd frontend && set -a && . ../.env && set +a && E2E_BASE_URL=$(E2E_BASE_URL) npx playwright test
+
+purge-deleted: ## Purge documents deleted RETENTION_DELETED_DAYS ago, in the running stack (DRY_RUN=1 to count)
+	$(COMPOSE) exec -T api docintel purge-deleted $(if $(DRY_RUN),--dry-run,)
+
+storage-reconcile: ## Compare stored files with the database in the running stack (report only)
+	$(COMPOSE) exec -T api docintel storage-reconcile
+
+loadtest: require-env ## NFR-09 load test through the running stack (LOADTEST_ARGS="--users 8 --duration 60 ...")
+	$(BACKEND) docintel loadtest --api-url $(DEMO_URL) $(LOADTEST_ARGS)
+
+alerts-test: ## Check and unit-test the Prometheus alert rules (promtool in Docker)
+	docker run --rm -v "$(CURDIR)/deploy/observability:/o:ro" -w /o --entrypoint promtool \
+		prom/prometheus:v3.5.0 test rules alerts.test.yml
 
 smoke: ## Smoke-test the running Docker stack through nginx
 	./scripts/smoke_test.sh

@@ -6,6 +6,7 @@ boto3 is synchronous; calls run in worker threads (boto3 clients are thread-safe
 from __future__ import annotations
 
 import asyncio
+import functools
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,6 +18,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from docintel.core.config import StorageBackendName
 from docintel.storage.base import (
     DEFAULT_CHUNK_SIZE,
+    ListedObject,
     ObjectNotFoundError,
     StorageError,
     StorageUnavailableError,
@@ -127,3 +129,19 @@ class S3Storage:
         except ObjectNotFoundError:
             return False
         return True
+
+    async def list_objects(self, prefix: str) -> AsyncIterator[ListedObject]:
+        base = f"{self._prefix}/" if self._prefix else ""
+        arguments: dict[str, Any] = {"Bucket": self._bucket, "Prefix": base + prefix}
+        while True:
+            request = functools.partial(self._client.list_objects_v2, **arguments)
+            page: dict[str, Any] = dict(await self._call(prefix, request))
+            for item in page.get("Contents", []):
+                yield ListedObject(
+                    key=item["Key"][len(base) :],
+                    size_bytes=int(item["Size"]),
+                    modified_at=item["LastModified"],
+                )
+            if not page.get("IsTruncated"):
+                return
+            arguments["ContinuationToken"] = page["NextContinuationToken"]

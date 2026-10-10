@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, Request, Response, status
 
 from docintel.api.deps import CurrentUser, RequestMetaDep, SessionDep, SettingsDep
+from docintel.api.rate_limit import LOGIN_LIMIT
 from docintel.api.schemas.auth import (
     ApiTokenCreate,
     ApiTokenCreated,
@@ -63,6 +64,7 @@ def _require_session_header(request: Request) -> None:
 
 @router.post(
     "/login",
+    dependencies=[LOGIN_LIMIT],
     response_model=TokenResponse,
     summary="Exchange credentials for a JWT",
     description=f"With the header `{CSRF_HEADER}: 1` (the web app) the response also sets an "

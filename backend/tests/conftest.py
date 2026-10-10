@@ -51,6 +51,8 @@ def make_settings(**overrides: Any) -> Settings:
         "cors_allowed_origins": [],
         "auth_max_failed_logins": 3,
         "auth_lockout_minutes": 15,
+        # Every test client shares one address; the limits are tested with them switched on.
+        "rate_limit_enabled": False,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)

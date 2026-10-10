@@ -622,8 +622,8 @@ NOT_MEASURED: tuple[NotMeasured, ...] = (
     ),
     NotMeasured("Model latency and cost per document", "no model in the build environment"),
     NotMeasured(
-        "Latency and throughput of a deployment (network, nginx, several workers)",
-        "no deployment yet: Phase 11",
+        "Latency and throughput on a deployment host (own load generator, real network)",
+        "no deployment yet; a local load test through nginx: docs/operations/load-testing.md",
     ),
 )
 

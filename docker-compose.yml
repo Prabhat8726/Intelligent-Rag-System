@@ -8,6 +8,13 @@ x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-docintel}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-docintel}
   STORAGE_LOCAL_ROOT: /data/storage
 
+# Application containers (ADR-077): read-only root filesystem, no Linux capabilities, no
+# privilege gain; writes go to the storage volume and a size-capped /tmp.
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
 services:
   db:
     image: pgvector/pgvector:0.8.7-pg17
@@ -20,6 +27,7 @@ services:
     # Bound to localhost only, for host-based development (`make dev`) and tests.
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    security_opt: ["no-new-privileges:true"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -28,6 +36,7 @@ services:
     restart: unless-stopped
 
   migrate:
+    <<: *hardened
     build: ./backend
     image: docintel-backend:local
     command: ["alembic", "upgrade", "head"]
@@ -39,6 +48,7 @@ services:
     restart: "no"
 
   api:
+    <<: *hardened
     image: docintel-backend:local
     env_file:
       - path: .env
@@ -49,12 +59,23 @@ services:
       FORWARDED_ALLOW_IPS: "*"
     volumes:
       - docstore:/data/storage
+    tmpfs:
+      - /tmp:size=256m  # upload spooling
     depends_on:
       migrate:
         condition: service_completed_successfully
+    # One uvicorn process per container; scale out with API_REPLICAS (nginx spreads requests).
+    deploy:
+      replicas: ${API_REPLICAS:-1}
+      resources:
+        limits:
+          cpus: "${API_CPUS:-2}"
+          memory: 1g
+          pids: 256
     restart: unless-stopped
 
   worker:
+    <<: *hardened
     image: docintel-backend:local
     command: ["docintel", "worker"]
     env_file:
@@ -63,11 +84,22 @@ services:
     environment:
       <<: *backend-env
       WORKER_HEARTBEAT_FILE: /tmp/docintel-worker.heartbeat
+      # Prometheus metrics on the internal network only (not published).
+      WORKER_METRICS_PORT: "9100"
     volumes:
       - docstore:/data/storage
+    tmpfs:
+      - /tmp:size=1g  # downloaded files, rendered pages and OCR images of the current jobs
     depends_on:
       migrate:
         condition: service_completed_successfully
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+      resources:
+        limits:
+          cpus: "${WORKER_CPUS:-2}"
+          memory: 2g
+          pids: 256
     healthcheck:
       test: ["CMD", "python", "-m", "docintel.workers.health"]
       interval: 15s
@@ -79,15 +111,31 @@ services:
     restart: unless-stopped
 
   web:
+    <<: *hardened
     build: ./frontend
     image: docintel-web:local
     environment:
       API_UPSTREAM: http://api:8000
+      # Edge limits per client address; a load test from one machine raises them.
+      NGINX_API_RATE: ${NGINX_API_RATE:-30r/s}
+      NGINX_API_BURST: ${NGINX_API_BURST:-60}
     ports:
       - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    # The entrypoint renders the config into conf.d at start; nginx keeps temp files and its
+    # pid file in /tmp and caches in /var/cache/nginx.
+    tmpfs:
+      - /tmp:size=64m
+      - /etc/nginx/conf.d:size=1m,uid=101,gid=101  # 101 = the image's nginx user
+      - /var/cache/nginx:size=64m,uid=101,gid=101
     depends_on:
       api:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256m
+          pids: 128
     restart: unless-stopped
 
 volumes:

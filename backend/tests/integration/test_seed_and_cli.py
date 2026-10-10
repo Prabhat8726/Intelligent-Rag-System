@@ -88,6 +88,7 @@ async def test_cli_seed_refuses_in_production(capsys: pytest.CaptureFixture[str]
     settings = make_settings(
         app_env="production",
         jwt_secret_key=PRODUCTION_SECRET,
+        metrics_token=PRODUCTION_SECRET,
         seed_user_password=SEED_PASSWORD,
     )
     assert await cli._seed(settings) == cli.EXIT_USAGE

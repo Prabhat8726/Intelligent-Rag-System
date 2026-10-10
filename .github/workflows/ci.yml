@@ -66,6 +66,9 @@ jobs:
       - name: Type check (mypy --strict)
         run: uv run mypy src tests
 
+      - name: Architecture contracts (import-linter)
+        run: uv run lint-imports
+
       - name: Migrations apply and match the ORM models
         run: |
           uv run alembic upgrade head
@@ -124,6 +127,42 @@ jobs:
           fetch-depth: 0
       - name: Scan git history for secrets
         run: docker run --rm -v "$GITHUB_WORKSPACE:/repo" zricethezav/gitleaks:v8.30.1 git /repo --redact --no-banner
+
+  deploy-config:
+    name: Deployment and monitoring configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compose files resolve with the production template
+        run: |
+          cp deploy/production.env.example .env
+          docker compose -f docker-compose.yml -f deploy/compose.prod.yml \
+            -f deploy/compose.observability.yml config --quiet
+          docker compose -f docker-compose.yml -f deploy/compose.loadtest.yml config --quiet
+          rm .env
+
+      - name: Caddyfile
+        run: |
+          docker run --rm -e DOMAIN=docintel.example.com -e CADDY_TLS=ops@example.com \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10-alpine \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Prometheus configuration, alert rules and their unit tests
+        run: |
+          promtool() {
+            docker run --rm -v "$PWD/deploy/observability:/o:ro" -w /o \
+              --entrypoint promtool prom/prometheus:v3.5.0 "$@"
+          }
+          promtool check config --syntax-only prometheus.yml
+          promtool check rules alerts.yml
+          promtool test rules alerts.test.yml
+
+      - name: Scripts
+        run: |
+          bash -n deploy/deploy.sh scripts/smoke_test.sh
+          sh -n deploy/backup.sh
 
   containers:
     name: Containers - build, compose up, smoke test, dataset ingest, end-to-end demo

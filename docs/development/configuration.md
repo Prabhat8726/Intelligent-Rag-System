@@ -70,6 +70,28 @@ below them.
 | `AUTH_COOKIE_SECURE` | unset | Secure flag on the refresh cookie; unset = on in staging and production, off for local http stacks |
 | `SEED_USER_PASSWORD` | unset | Password for demo users created by `make seed` (min. 12 chars). Seeding is refused in staging/production |
 
+### Request rate limits
+
+Counted per minute in the database (`rate_limit_counters`, migration 0011), so every API replica
+shares them; over a limit the API answers 429 with `Retry-After` (ADR-074). Failed requests count.
+
+| Variable | Default | Description |
+|---|---|---|
+| `RATE_LIMIT_ENABLED` | `true` | Per-caller limits on the endpoints below |
+| `RATE_LIMIT_LOGIN_PER_MINUTE` | `20` | `POST /auth/login` per client address (the lockout above counts per account) |
+| `RATE_LIMIT_UPLOADS_PER_MINUTE` | `30` | Per user: document uploads, new versions, reprocessing, knowledge uploads |
+| `RATE_LIMIT_SEARCH_PER_MINUTE` | `60` | Per user: document search and knowledge search |
+| `RATE_LIMIT_AI_PER_MINUTE` | `10` | Per user: knowledge questions, investigations, workflow starts, report generation |
+
+The web container also limits each client address at the edge (nginx `limit_req`, answered
+with a 429 problem document):
+
+| Variable (web image) | Default | Description |
+|---|---|---|
+| `NGINX_API_RATE` / `NGINX_API_BURST` | `30r/s` / `60` | All of `/api/` |
+| `NGINX_LOGIN_RATE` / `NGINX_LOGIN_BURST` | `30r/m` / `20` | `POST /api/v1/auth/login` |
+| `NGINX_REAL_IP_FROM` | `127.0.0.1` | Address or CIDR of a proxy in front of nginx (the TLS proxy in `deploy/`) whose `X-Forwarded-For` names the client. nginx passes the API only the client address it determined, never a client-supplied `X-Forwarded-For` |
+
 ### Uploads and storage
 
 | Variable | Default | Description |
@@ -89,6 +111,10 @@ below them.
 Object keys are `documents/{document_id}/v{n}/original.{ext}`; user-supplied filenames are
 never part of a key (ADR-014).
 
+| Variable | Default | Description |
+|---|---|---|
+| `RETENTION_DELETED_DAYS` | `30` | A deleted document (soft delete: hidden, kept for the audit trail) is removed for good this many days later by `docintel purge-deleted` (`make purge-deleted`): its rows, then its files. Ended browser sessions' refresh tokens go too. See ADR-075 |
+
 ### Background worker
 
 | Variable | Default | Description |
@@ -99,6 +125,17 @@ never part of a key (ADR-014).
 | `JOB_MAX_ATTEMPTS` | `3` | Attempts per job, including reclaims after a crash, before it is marked `FAILED` |
 | `JOB_RETRY_BASE_SECONDS` | `30` | Retry backoff: base × 2^(attempt−1) plus up to 10 % jitter, capped at 1 hour |
 | `WORKER_HEARTBEAT_FILE` | unset | File the worker touches while alive; `docintel worker-health` (or the lighter `python -m docintel.workers.health` that compose uses) fails if it is older than max(60 s, 3 × poll interval, lease / 2). Compose sets `/tmp/docintel-worker.heartbeat` |
+
+### Metrics
+
+| Variable | Default | Description |
+|---|---|---|
+| `METRICS_ENABLED` | `true` | Serve Prometheus metrics: `GET /metrics` on the API (outside `/api/`, not proxied by the web container) and, with `WORKER_METRICS_PORT`, on each worker. `false` removes both |
+| `METRICS_TOKEN` | — | **Secret.** Bearer token a scraper must send (`Authorization: Bearer …`, compared in constant time); at least 32 characters. Required in staging and production while metrics are enabled; unset locally = no token needed |
+| `WORKER_METRICS_PORT` | unset | Port (1024–65535) of the worker's metrics endpoint; compose sets `9100` and does not publish it. Unset = the worker serves none (`docintel worker --until-idle` never does) |
+
+The metric names, labels and the gauges read from the database are listed in
+[Operations](../operations/monitoring.md).
 
 ### OCR and document understanding
 

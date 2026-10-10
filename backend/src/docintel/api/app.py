@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from docintel import __version__
 from docintel.api.middleware import (
     BodySizeLimitMiddleware,
+    HTTPMetricsMiddleware,
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
 )
@@ -29,6 +30,7 @@ from docintel.api.routers import (
     evaluations,
     health,
     knowledge,
+    metrics,
     reports,
     reviews,
     rules,
@@ -85,23 +87,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_exception_handlers(app)
 
+    v1_routers = [
+        auth.router,
+        dashboard.router,
+        documents.router,
+        vendors.router,
+        comparisons.router,
+        rules.router,
+        reviews.router,
+        knowledge.router,
+        search.router,
+        analysis.router,
+        workflows.router,
+        reports.router,
+        admin.router,
+        evaluations.router,
+    ]
+    root_routers = [health.router, *([metrics.router] if settings.metrics_enabled else [])]
     api_v1 = APIRouter(prefix=API_V1_PREFIX)
-    api_v1.include_router(auth.router)
-    api_v1.include_router(dashboard.router)
-    api_v1.include_router(documents.router)
-    api_v1.include_router(vendors.router)
-    api_v1.include_router(comparisons.router)
-    api_v1.include_router(rules.router)
-    api_v1.include_router(reviews.router)
-    api_v1.include_router(knowledge.router)
-    api_v1.include_router(search.router)
-    api_v1.include_router(analysis.router)
-    api_v1.include_router(workflows.router)
-    api_v1.include_router(reports.router)
-    api_v1.include_router(admin.router)
-    api_v1.include_router(evaluations.router)
-    app.include_router(health.router)
+    for router in v1_routers:
+        api_v1.include_router(router)
+    for router in root_routers:
+        app.include_router(router)
     app.include_router(api_v1)
+    # Full route templates for the metrics labels (nested routers keep relative paths).
+    templates = {
+        id(route): API_V1_PREFIX + getattr(route, "path", "")
+        for r in v1_routers
+        for route in r.routes
+    }
+    templates |= {id(route): getattr(route, "path", "") for r in root_routers for route in r.routes}
 
     # add_middleware wraps: the last added is outermost.
     if settings.cors_allowed_origins:
@@ -129,5 +144,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ],
     )
     app.add_middleware(RequestContextMiddleware)
+    if settings.metrics_enabled:
+        app.add_middleware(HTTPMetricsMiddleware, templates=templates)
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.hsts_enabled)
     return app

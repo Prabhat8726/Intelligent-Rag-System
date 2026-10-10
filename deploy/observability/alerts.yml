@@ -1,0 +1,128 @@
+# Alert rules (ADR-079), evaluated by Prometheus; tested by observability/alerts.test.yml
+# (`promtool test rules`). Gauges read from the database are the same on every API replica,
+# hence `max`. Thresholds follow NFR-09 and the operating model in docs/operations/.
+groups:
+  - name: docintel-availability
+    rules:
+      - alert: DocintelApiDown
+        expr: up{job="api"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "API replica {{ $labels.instance }} is not answering scrapes"
+          runbook: docs/operations/runbooks.md#api-down
+
+      - alert: DocintelWorkerDown
+        expr: up{job="worker"} == 0 or absent(up{job="worker"})
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "No worker is answering scrapes: documents are not being processed"
+          runbook: docs/operations/runbooks.md#worker-down
+
+      - alert: DocintelDatabaseUnreadable
+        expr: max(docintel_snapshot_success) == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "The API cannot read the database (metrics snapshot failing)"
+          runbook: docs/operations/runbooks.md#database-unavailable
+
+  - name: docintel-api
+    rules:
+      - alert: DocintelHighServerErrorRate
+        expr: |
+          sum(rate(docintel_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(docintel_http_requests_total[5m])) > 0.05
+          and sum(rate(docintel_http_requests_total[5m])) > 0.1
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "More than 5% of API requests fail with a server error"
+          runbook: docs/operations/runbooks.md#server-errors
+
+      - alert: DocintelSlowReads
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(docintel_http_request_duration_seconds_bucket{method="GET"}[5m]))
+          ) > 0.3
+          and sum(rate(docintel_http_request_duration_seconds_count{method="GET"}[5m])) > 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "p95 read latency is above 300 ms (NFR-09)"
+          runbook: docs/operations/runbooks.md#slow-api
+
+      - alert: DocintelRateLimiting
+        expr: sum(rate(docintel_rate_limited_requests_total[10m])) * 600 > 50
+        for: 10m
+        labels: {severity: info}
+        annotations:
+          summary: "Over 50 requests refused by the per-caller limits in 10 minutes"
+          runbook: docs/operations/runbooks.md#rate-limited
+
+  - name: docintel-processing
+    rules:
+      - alert: DocintelQueueBacklog
+        expr: max(docintel_jobs_oldest_ready_age_seconds) > 600
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "A runnable job has waited more than 10 minutes"
+          runbook: docs/operations/runbooks.md#queue-backlog
+
+      - alert: DocintelJobsFailing
+        expr: sum(max by (job_type) (docintel_jobs_failed_last_hour)) >= 3
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} jobs failed permanently in the last hour"
+          runbook: docs/operations/runbooks.md#failed-jobs
+
+      - alert: DocintelStuckJobs
+        expr: max(docintel_jobs_expired_leases) > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Running jobs with expired leases are not being reclaimed"
+          runbook: docs/operations/runbooks.md#worker-down
+
+      - alert: DocintelSlowScannedPages
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(docintel_ocr_page_duration_seconds_bucket[30m]))) > 5
+          and sum(rate(docintel_ocr_page_duration_seconds_count[30m])) > 0
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "p95 OCR time per page is above 5 s (NFR-09)"
+          runbook: docs/operations/runbooks.md#slow-processing
+
+  - name: docintel-review-and-ai
+    rules:
+      - alert: DocintelReviewsOverdue
+        expr: sum(max by (priority) (docintel_review_tasks_overdue{priority=~"URGENT|HIGH"})) > 0
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} urgent or high-priority review tasks are past their due date"
+          runbook: docs/operations/runbooks.md#review-backlog
+
+      - alert: DocintelModelBudgetNearlyUsed
+        expr: |
+          sum(max by (provider, status) (docintel_llm_calls_today))
+            / max(docintel_llm_daily_request_budget) > 0.8
+          and max(docintel_llm_daily_request_budget) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Over 80% of today's model request budget is used"
+          runbook: docs/operations/runbooks.md#model-budget
+
+      - alert: DocintelModelErrors
+        expr: |
+          sum(rate(docintel_llm_calls_total{status="FAILED"}[15m]))
+            / sum(rate(docintel_llm_calls_total[15m])) > 0.2
+          and sum(rate(docintel_llm_calls_total[15m])) > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 20% of model calls fail (results fall back to local methods)"
+          runbook: docs/operations/runbooks.md#model-errors

@@ -44,6 +44,7 @@ from docintel.db.models.knowledge import (
     KnowledgeFormat,
     KnowledgeStatus,
 )
+from docintel.db.models.limits import RateLimitCounter
 from docintel.db.models.matching import (
     HUMAN_RESOLUTIONS,
     OPEN_TASK_STATUSES,
@@ -152,6 +153,7 @@ __all__ = [
     "LLMCallStatus",
     "ProcessingJob",
     "ProposerType",
+    "RateLimitCounter",
     "RefreshToken",
     "Report",
     "ReportSubject",

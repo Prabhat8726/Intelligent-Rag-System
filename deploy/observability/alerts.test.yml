@@ -1,0 +1,132 @@
+# Unit tests of alerts.yml: docker run --rm -v "$PWD/deploy/observability:/o" -w /o \
+#   --entrypoint promtool prom/prometheus:v3.5.0 test rules alerts.test.yml   (make alerts-test)
+rule_files: [alerts.yml]
+evaluation_interval: 1m
+
+tests:
+  - name: an API replica that stops answering pages after two minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="api", instance="172.30.0.5:8000"}'
+        values: "1 0 0 0 0"
+      - series: 'up{job="worker", instance="172.30.0.7:9100"}'
+        values: "1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DocintelApiDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: DocintelApiDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: api, instance: "172.30.0.5:8000"}
+            exp_annotations:
+              summary: "API replica 172.30.0.5:8000 is not answering scrapes"
+              runbook: docs/operations/runbooks.md#api-down
+      - eval_time: 4m
+        alertname: DocintelWorkerDown
+        exp_alerts: []
+
+  - name: no worker at all is an outage too
+    interval: 1m
+    input_series:
+      - series: 'up{job="api", instance="172.30.0.5:8000"}'
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DocintelWorkerDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: worker}
+            exp_annotations:
+              summary: "No worker is answering scrapes: documents are not being processed"
+              runbook: docs/operations/runbooks.md#worker-down
+
+  - name: server errors above 5% of traffic
+    interval: 1m
+    input_series:
+      - series: 'docintel_http_requests_total{method="GET", route="/api/v1/documents", status="200"}'
+        values: "0+600x15"  # 10 requests per second
+      - series: 'docintel_http_requests_total{method="GET", route="/api/v1/documents", status="500"}'
+        values: "0+60x15"  # 1 per second: 9% of the requests
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: DocintelHighServerErrorRate
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "More than 5% of API requests fail with a server error"
+              runbook: docs/operations/runbooks.md#server-errors
+
+  - name: a queue that does not move, and one that does
+    interval: 1m
+    input_series:
+      - series: 'docintel_jobs_oldest_ready_age_seconds{instance="a", job_type="DOCUMENT_PROCESSING"}'
+        values: "700+60x10"
+      - series: 'docintel_jobs_oldest_ready_age_seconds{instance="b", job_type="DOCUMENT_PROCESSING"}'
+        values: "700+60x10"  # the same gauge from a second replica: max, not sum
+      - series: 'docintel_jobs_oldest_ready_age_seconds{instance="a", job_type="WORKFLOW"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: DocintelQueueBacklog
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: DocintelQueueBacklog
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "A runnable job has waited more than 10 minutes"
+              runbook: docs/operations/runbooks.md#queue-backlog
+
+  - name: failed jobs are counted once however many replicas report them
+    interval: 1m
+    input_series:
+      - series: 'docintel_jobs_failed_last_hour{instance="a", job_type="DOCUMENT_PROCESSING"}'
+        values: "2 3"
+      - series: 'docintel_jobs_failed_last_hour{instance="b", job_type="DOCUMENT_PROCESSING"}'
+        values: "2 3"
+      - series: 'docintel_jobs_failed_last_hour{instance="a", job_type="WORKFLOW"}'
+        values: "0 0"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: DocintelJobsFailing
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: DocintelJobsFailing
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "3 jobs failed permanently in the last hour"
+              runbook: docs/operations/runbooks.md#failed-jobs
+
+  - name: the model budget warns at 80% and never without a budget
+    interval: 1m
+    input_series:
+      - series: 'docintel_llm_calls_today{instance="a", provider="gemini", status="SUCCEEDED"}'
+        values: "100 170"
+      - series: 'docintel_llm_calls_today{instance="a", provider="gemini", status="FAILED"}'
+        values: "0 10"
+      - series: 'docintel_llm_daily_request_budget{instance="a"}'
+        values: "200 200"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: DocintelModelBudgetNearlyUsed
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: DocintelModelBudgetNearlyUsed
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Over 80% of today's model request budget is used"
+              runbook: docs/operations/runbooks.md#model-budget
+
+  - name: no budget configured means no budget alert
+    interval: 1m
+    input_series:
+      - series: 'docintel_llm_calls_today{instance="a", provider="ollama", status="SUCCEEDED"}'
+        values: "5000"
+      - series: 'docintel_llm_daily_request_budget{instance="a"}'
+        values: "0"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: DocintelModelBudgetNearlyUsed
+        exp_alerts: []

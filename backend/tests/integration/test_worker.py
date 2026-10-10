@@ -15,6 +15,7 @@ from pathlib import Path
 import psycopg
 import pytest
 from fastapi import UploadFile
+from prometheus_client import REGISTRY
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -149,6 +150,16 @@ def make_worker(
 
 
 PROCESSED = (DocumentStatus.COMPLETED, DocumentStatus.REVIEW_REQUIRED)
+
+
+def job_count(outcome: str) -> float:
+    labels = {"job_type": JobType.DOCUMENT_PROCESSING.value, "outcome": outcome}
+    return REGISTRY.get_sample_value("docintel_worker_jobs_total", labels) or 0.0
+
+
+def stage_count(stage: str) -> float:
+    name = "docintel_pipeline_stage_duration_seconds_count"
+    return REGISTRY.get_sample_value(name, {"stage": stage}) or 0.0
 
 
 def assert_processed(document: Document) -> None:
@@ -328,6 +339,8 @@ async def test_transient_failure_is_retried_then_succeeds(
     flaky = FlakyStorage(storage_root, failures=1)
     document_id = await ingest(maker, flaky, worker_settings, uploader, invoice_pdf_bytes())
     worker = make_worker(worker_settings, maker, flaky)
+    before = {outcome: job_count(outcome) for outcome in ("retried", "completed")}
+    stages_before = stage_count("extract")
 
     assert await worker.run_once()
     document, _, (job,) = await load(maker, document_id)
@@ -342,6 +355,12 @@ async def test_transient_failure_is_retried_then_succeeds(
     assert job.status == JobStatus.COMPLETED
     assert job.attempts == 2
     assert_processed(document)
+    # One attempt of each outcome, and the stage timings of the completed one.
+    assert {outcome: job_count(outcome) - count for outcome, count in before.items()} == {
+        "retried": 1,
+        "completed": 1,
+    }
+    assert stage_count("extract") == stages_before + 1
 
 
 async def test_retries_are_exhausted_then_failed(

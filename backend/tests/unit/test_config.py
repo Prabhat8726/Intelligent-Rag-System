@@ -32,12 +32,19 @@ def test_placeholder_secret_allowed_locally_but_refused_in_production() -> None:
 
 def test_wildcard_cors_refused_outside_local() -> None:
     with pytest.raises(ValidationError, match="CORS"):
-        make_settings(app_env="staging", jwt_secret_key=STRONG_SECRET, cors_allowed_origins="*")
+        make_settings(
+            app_env="staging",
+            jwt_secret_key=STRONG_SECRET,
+            metrics_token=STRONG_SECRET,
+            cors_allowed_origins="*",
+        )
 
 
 def test_environment_derived_defaults() -> None:
     local = make_settings(app_env="local")
-    production = make_settings(app_env="production", jwt_secret_key=STRONG_SECRET)
+    production = make_settings(
+        app_env="production", jwt_secret_key=STRONG_SECRET, metrics_token=STRONG_SECRET
+    )
     assert local.effective_log_format == LogFormat.CONSOLE
     assert local.effective_api_docs_enabled is True
     assert local.hsts_enabled is False
@@ -66,3 +73,16 @@ def test_secrets_are_not_exposed_in_repr() -> None:
     settings = make_settings(gemini_api_key="AIza-very-secret-value")
     assert "AIza-very-secret-value" not in repr(settings)
     assert STRONG_SECRET not in repr(make_settings(jwt_secret_key=STRONG_SECRET))
+
+
+def test_metrics_token_is_required_when_deployed_unless_metrics_are_off() -> None:
+    assert make_settings(app_env="local").metrics_token is None
+    with pytest.raises(ValidationError, match="METRICS_TOKEN is required"):
+        make_settings(app_env="staging", jwt_secret_key=STRONG_SECRET)
+    off = make_settings(app_env="production", jwt_secret_key=STRONG_SECRET, metrics_enabled=False)
+    assert off.metrics_enabled is False
+    with pytest.raises(ValidationError, match="at least 32"):
+        make_settings(metrics_token="short")
+    assert make_settings(metrics_token="  ").metrics_token is None  # empty = not set
+    with pytest.raises(ValidationError):
+        make_settings(worker_metrics_port=80)  # privileged port: the containers run unprivileged

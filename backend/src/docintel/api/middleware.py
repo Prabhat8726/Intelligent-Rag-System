@@ -1,6 +1,6 @@
 """Pure-ASGI middleware (no BaseHTTPMiddleware: keeps contextvars and streaming intact).
 
-Order in the app (outermost first): SecurityHeaders → RequestContext → routing.
+Order in the app (outermost first): SecurityHeaders → HTTPMetrics → RequestContext → routing.
 RequestContext also converts unhandled exceptions into a problem response so even 500s carry
 the request id and security headers.
 """
@@ -11,7 +11,7 @@ import json
 import re
 import time
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 import structlog
 from fastapi import HTTPException
@@ -21,6 +21,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from docintel.api.problems import PROBLEM_CONTENT_TYPE
 from docintel.core.context import current_request_id, request_id_var
 from docintel.core.logging import get_logger
+from docintel.core.metrics import HTTP_DURATION, HTTP_REQUESTS
 
 logger = get_logger("docintel.http")
 
@@ -82,6 +83,53 @@ class RequestContextMiddleware:
             )
             structlog.contextvars.unbind_contextvars("request_id")
             request_id_var.reset(token)
+
+
+_METRIC_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
+UNMATCHED_ROUTE = "unmatched"
+
+
+class HTTPMetricsMiddleware:
+    """Counts and times requests by route template (`/api/v1/documents/{document_id}`).
+
+    The label is the template of the route that matched, never the raw path, and unknown
+    methods share one label, so a client cannot create time series. Requests that match no
+    route (404s, bodies refused before routing) are "unmatched". `templates` maps a route
+    object's id to its full template: FastAPI keeps the paths of nested routers relative.
+    """
+
+    def __init__(self, app: ASGIApp, *, templates: Mapping[int, str]) -> None:
+        self.app = app
+        self.templates = dict(templates)
+
+    def _route_label(self, scope: Scope) -> str:
+        route = scope.get("route")
+        if route is None:
+            return UNMATCHED_ROUTE
+        template = self.templates.get(id(route)) or getattr(route, "path", None)
+        return template if isinstance(template, str) and template else UNMATCHED_ROUTE
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = time.perf_counter()
+        status_code = 500
+
+        async def send_with_status(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_status)
+        finally:
+            method = scope.get("method", "")
+            method = method if method in _METRIC_METHODS else "other"
+            route = self._route_label(scope)
+            HTTP_REQUESTS.labels(method, route, str(status_code)).inc()
+            HTTP_DURATION.labels(method, route).observe(time.perf_counter() - started)
 
 
 async def _send_internal_error(send: Send, scope: Scope, request_id: str) -> None:

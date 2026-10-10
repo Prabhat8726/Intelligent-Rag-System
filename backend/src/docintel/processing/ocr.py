@@ -20,6 +20,8 @@ from typing import Protocol, runtime_checkable
 
 from PIL import Image
 
+from docintel.core.metrics import OCR_PAGES
+
 # Estimated font size from a word's box height: boxes span ascenders/descenders of the letters
 # actually present, about 0.75x the font size on average (calibrated on synthetic pages).
 HEIGHT_TO_SIZE = 1 / 0.75
@@ -229,7 +231,12 @@ class TesseractOCRProvider:
         args = ["stdin", "stdout", "-l", self._languages, "--psm", str(self._psm)]
         args += ["--dpi", str(dpi), "tsv"]
         started = time.perf_counter()
-        code, stdout, stderr = await self._run(args, payload)
+        try:
+            code, stdout, stderr = await self._run(args, payload)
+        except Exception:
+            OCR_PAGES.labels("error").observe(time.perf_counter() - started)
+            raise
+        OCR_PAGES.labels("ok" if code == 0 else "error").observe(time.perf_counter() - started)
         if code != 0:
             detail = stderr.decode(errors="replace").strip().splitlines()[-1:] or ["no output"]
             msg = f"tesseract exited with {code}: {detail[0][:200]}"

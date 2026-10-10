@@ -15,6 +15,7 @@ dependencies = [
     "numpy>=2.5,<3",
     "pgvector>=0.5.0,<0.5.1",
     "pillow>=12.3,<13",
+    "prometheus-client>=0.26,<0.27",
     "psycopg[binary]>=3.3.6,<4",
     "pwdlib[argon2]>=0.3.1,<0.4",
     "pydantic>=2.13,<3",
@@ -40,6 +41,7 @@ local-embeddings = [
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.15,<3",
     "moto[s3,server]>=5.2.3,<6",
     "mypy>=2.4,<3",
     "pytest>=9.1,<10",
@@ -117,3 +119,62 @@ markers = [
     "integration: needs a PostgreSQL server (TEST_DATABASE_URL)",
 ]
 filterwarnings = ["error::DeprecationWarning:docintel.*"]
+
+# Architecture contracts, checked by `lint-imports` in `make lint` and CI (ADR-076).
+[tool.importlinter]
+root_package = "docintel"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers: entry points > HTTP API > domain > infrastructure > database > core"
+type = "layers"
+# "|" = independent siblings, ":" = siblings that may use each other. The domain packages
+# share one layer: they call each other (documents -> processing -> workers -> documents).
+layers = [
+    "docintel.cli",
+    "docintel.evaluation | docintel.tools",
+    "docintel.api",
+    """docintel.agent : docintel.auth : docintel.classification : docintel.comparisons
+    : docintel.dashboard : docintel.documents : docintel.fields : docintel.knowledge
+    : docintel.matching : docintel.observability : docintel.processing : docintel.reports
+    : docintel.review : docintel.rules : docintel.search : docintel.synthetic
+    : docintel.vendors : docintel.versions : docintel.workers : docintel.workflows""",
+    "docintel.ai | docintel.audit | docintel.storage",
+    "docintel.db",
+    "docintel.core",
+]
+ignore_imports = [
+    # The table of headline metrics (stdlib only), shared with the README generator.
+    "docintel.api.routers.evaluations -> docintel.evaluation.headlines",
+]
+
+[[tool.importlinter.contracts]]
+name = "The web framework stays in the HTTP API (and the MCP HTTP server's Starlette)"
+type = "forbidden"
+source_modules = [
+    "docintel.agent", "docintel.ai", "docintel.audit", "docintel.auth",
+    "docintel.classification", "docintel.comparisons", "docintel.core", "docintel.dashboard",
+    "docintel.db", "docintel.documents", "docintel.fields", "docintel.knowledge",
+    "docintel.matching", "docintel.observability", "docintel.processing", "docintel.reports",
+    "docintel.review", "docintel.rules", "docintel.search", "docintel.storage",
+    "docintel.synthetic", "docintel.vendors", "docintel.versions", "docintel.workers",
+    "docintel.workflows",
+]
+forbidden_modules = ["fastapi"]
+allow_indirect_imports = true  # direct imports only: a service may be called from the API
+ignore_imports = [
+    # The upload services take the framework's UploadFile (a spooled file and its headers).
+    "docintel.documents.service -> fastapi",
+    "docintel.knowledge.service -> fastapi",
+]
+
+[[tool.importlinter.contracts]]
+name = "Model providers are reached only through docintel.ai"
+type = "forbidden"
+source_modules = [
+    "docintel.agent", "docintel.api", "docintel.classification", "docintel.documents",
+    "docintel.fields", "docintel.knowledge", "docintel.processing", "docintel.search",
+    "docintel.workers", "docintel.workflows",
+]
+forbidden_modules = ["google"]  # the Gemini SDK (google.genai)
+allow_indirect_imports = true  # through docintel.ai, which is the point

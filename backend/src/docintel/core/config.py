@@ -146,9 +146,25 @@ class Settings(BaseSettings):
     fastembed_cache_dir: str | None = None
     fastembed_threads: int | None = Field(default=None, ge=1, le=256)
 
+    # ---------------------------------------------------------------- metrics (Module 24)
+    # Prometheus text at GET /metrics on the API, and on WORKER_METRICS_PORT for a worker.
+    metrics_enabled: bool = True
+    # Bearer token Prometheus presents; required in staging/production when metrics are on.
+    metrics_token: SecretStr | None = None
+    # None = the worker serves no metrics endpoint (one-off runs, tests).
+    worker_metrics_port: int | None = Field(default=None, ge=1024, le=65535)
+
     # ---------------------------------------------------------------- HTTP limits
     # Request bodies on non-upload endpoints (JSON APIs).
     api_max_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    # Requests per minute, counted in the database so every API replica shares them (ADR-074);
+    # over the limit = 429 with Retry-After. Login is counted per client IP, the rest per user.
+    rate_limit_enabled: bool = True
+    rate_limit_login_per_minute: int = Field(default=20, ge=1, le=100_000)
+    rate_limit_uploads_per_minute: int = Field(default=30, ge=1, le=100_000)
+    rate_limit_search_per_minute: int = Field(default=60, ge=1, le=100_000)
+    # Model-backed or heavy work: questions, investigations, workflow starts, reports.
+    rate_limit_ai_per_minute: int = Field(default=10, ge=1, le=100_000)
 
     # ---------------------------------------------------------------- uploads
     upload_max_bytes: int = Field(default=25 * 1024 * 1024, ge=1024, le=500 * 1024 * 1024)
@@ -165,6 +181,9 @@ class Settings(BaseSettings):
     s3_access_key_id: str | None = None
     s3_secret_access_key: SecretStr | None = None
     s3_key_prefix: str = ""
+    # Soft-deleted documents are purged for good (rows, then files) this many days after their
+    # deletion by `docintel purge-deleted` (ADR-075).
+    retention_deleted_days: int = Field(default=30, ge=1, le=3650)
 
     # ---------------------------------------------------------------- background jobs
     worker_concurrency: int = Field(default=1, ge=1, le=32)
@@ -288,7 +307,9 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return value
 
-    @field_validator("gemini_api_key", "s3_secret_access_key", "mcp_api_token", mode="before")
+    @field_validator(
+        "gemini_api_key", "s3_secret_access_key", "mcp_api_token", "metrics_token", mode="before"
+    )
     @classmethod
     def _empty_key_is_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
@@ -331,6 +352,12 @@ class Settings(BaseSettings):
             if "*" in self.cors_allowed_origins:
                 msg = "CORS_ALLOWED_ORIGINS must not contain '*' outside local/test"
                 raise ValueError(msg)
+            if self.metrics_enabled and self.metrics_token is None:
+                msg = "METRICS_TOKEN is required outside local/test (or set METRICS_ENABLED=false)"
+                raise ValueError(msg)
+        if self.metrics_token is not None and len(self.metrics_token.get_secret_value()) < 32:
+            msg = "METRICS_TOKEN must be at least 32 characters"
+            raise ValueError(msg)
         if self.storage_backend == StorageBackendName.S3 and not self.s3_bucket:
             msg = "S3_BUCKET is required when STORAGE_BACKEND=s3"
             raise ValueError(msg)

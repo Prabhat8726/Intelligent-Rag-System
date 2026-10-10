@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from docintel.tools.http import RetryAfterTransport
 from docintel.tools.ingest import IngestError
 
 KNOWLEDGE_EXTENSIONS = {
@@ -86,7 +87,9 @@ async def ingest_knowledge(
         msg = f"no knowledge files ({', '.join(sorted(KNOWLEDGE_EXTENSIONS))}) in {directory}"
         raise IngestError(msg)
     items = [KnowledgeItem(file=str(path.relative_to(directory))) for path in files]
-    async with httpx.AsyncClient(base_url=api_url, timeout=60.0, transport=transport) as client:
+    async with httpx.AsyncClient(
+        base_url=api_url, timeout=60.0, transport=RetryAfterTransport(transport)
+    ) as client:
         client.headers["Authorization"] = f"Bearer {await _login(client, email, password)}"
         for path, item in zip(files, items, strict=True):
             response = await client.post(

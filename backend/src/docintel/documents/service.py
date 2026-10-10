@@ -20,6 +20,7 @@ from fastapi import UploadFile
 from sqlalchemy import Select, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from docintel.audit.service import AuditAction, RequestMeta, record_audit_event
 from docintel.auth.policies import visible_documents
@@ -420,7 +421,10 @@ class DocumentService:
             select(func.count()).select_from(statement.order_by(None).subquery())
         )
         page = await self._session.scalars(
-            statement.order_by(Document.created_at.desc(), Document.id).limit(limit).offset(offset)
+            statement.options(selectinload(Document.owner))  # fewer joins to plan (ADR-080)
+            .order_by(Document.created_at.desc(), Document.id)
+            .limit(limit)
+            .offset(offset)
         )
         return list(page.unique()), int(total or 0)
 

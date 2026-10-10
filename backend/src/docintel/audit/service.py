@@ -31,6 +31,7 @@ class AuditAction(StrEnum):
     DOCUMENT_UPLOADED = "document.uploaded"
     DOCUMENT_DOWNLOADED = "document.downloaded"
     DOCUMENT_DELETED = "document.deleted"
+    DOCUMENT_PURGED = "document.purged"
     DOCUMENT_REPROCESS_REQUESTED = "document.reprocess_requested"
     DOCUMENT_PROCESSING_COMPLETED = "document.processing.completed"
     DOCUMENT_PROCESSING_FAILED = "document.processing.failed"

@@ -17,6 +17,7 @@ from docintel.api.deps import (
     SettingsDep,
     require_permission,
 )
+from docintel.api.rate_limit import AI_LIMIT
 from docintel.api.schemas.analysis import AnalysisResult
 from docintel.api.schemas.common import PROBLEM_RESPONSES, ProblemDetail
 from docintel.api.schemas.workflows import (
@@ -200,6 +201,7 @@ async def _detail(
 
 @router.post(
     "",
+    dependencies=[AI_LIMIT],
     status_code=status.HTTP_202_ACCEPTED,
     response_model=WorkflowRead,
     summary="Start a workflow for a processed document (runs in the background)",

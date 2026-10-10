@@ -1,0 +1,30 @@
+# TLS termination in front of the web container (deploy/compose.prod.yml).
+# DOMAIN and CADDY_TLS (an ACME e-mail address, or "internal") come from the environment.
+{
+	admin off
+	# With CADDY_TLS=internal, do not try to add the local CA to this container's trust store.
+	skip_install_trust
+}
+
+{$DOMAIN} {
+	tls {$CADDY_TLS}
+	encode zstd gzip
+
+	# The Prometheus endpoint is scraped on the internal network, never through the edge.
+	@metrics path /metrics /metrics/*
+	respond @metrics 404
+
+	# Caddy sets X-Forwarded-For to the address it saw (a client-supplied value is dropped)
+	# and X-Forwarded-Proto to https.
+	reverse_proxy web:8080
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

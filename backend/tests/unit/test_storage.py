@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3
@@ -24,6 +25,7 @@ from docintel.storage import (
     build_storage,
     document_object_key,
 )
+from docintel.storage.base import knowledge_object_key, page_preview_key
 from tests.conftest import make_settings
 
 BUCKET = "docintel-test"
@@ -92,6 +94,31 @@ async def test_put_stream_download_delete_round_trip(
     await storage.delete(key)
     assert not await storage.exists(key)
     await storage.delete(key)  # idempotent
+
+
+async def test_list_objects_by_prefix(storage: DocumentStorage, tmp_path: Path) -> None:
+    document_id = uuid.uuid4()
+    keys = [
+        document_object_key(document_id, 1, "pdf"),
+        page_preview_key(document_id, 1, 1),
+        knowledge_object_key(uuid.uuid4(), "md"),
+    ]
+    for key in keys:
+        await storage.put_file(key, _source(tmp_path, b"12345"), content_type="text/plain")
+
+    documents = [listed async for listed in storage.list_objects("documents/")]
+    everything = {
+        listed.key
+        for prefix in ("documents/", "knowledge/")
+        async for listed in storage.list_objects(prefix)
+    }
+
+    assert {listed.key for listed in documents} == set(keys[:2])
+    assert everything == set(keys)  # keys come back without the backend's own prefix
+    assert all(listed.size_bytes == 5 for listed in documents)
+    assert all(
+        abs((datetime.now(UTC) - listed.modified_at).total_seconds()) < 300 for listed in documents
+    )
 
 
 async def test_overwrite_replaces_content(storage: DocumentStorage, tmp_path: Path) -> None:

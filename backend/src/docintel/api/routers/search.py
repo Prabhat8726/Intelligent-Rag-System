@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from docintel.api.deps import RagDep, SessionDep, SettingsDep, require_permission
+from docintel.api.rate_limit import SEARCH_LIMIT
 from docintel.api.schemas.common import PROBLEM_RESPONSES
 from docintel.api.schemas.documents import DocumentRead
 from docintel.api.schemas.search import (
@@ -33,6 +34,7 @@ def _comparison(value: Comparison | None) -> ComparisonRead | None:
 
 @router.post(
     "",
+    dependencies=[SEARCH_LIMIT],
     response_model=DocumentSearchResponse,
     summary="Search documents in natural language: filters on extracted data plus text search",
     description="Understood without a model: document types (invoices, purchase orders, "

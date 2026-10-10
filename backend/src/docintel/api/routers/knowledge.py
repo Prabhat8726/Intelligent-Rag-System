@@ -17,6 +17,7 @@ from docintel.api.deps import (
     StorageDep,
     require_permission,
 )
+from docintel.api.rate_limit import AI_LIMIT, SEARCH_LIMIT, UPLOAD_LIMIT
 from docintel.api.schemas.common import PROBLEM_RESPONSES, ProblemDetail
 from docintel.api.schemas.documents import ProcessingJobRead
 from docintel.api.schemas.knowledge import (
@@ -63,6 +64,7 @@ Manager = Annotated[User, Depends(require_permission(Permission.KNOWLEDGE_MANAGE
 
 @router.post(
     "/documents",
+    dependencies=[UPLOAD_LIMIT],
     status_code=status.HTTP_201_CREATED,
     response_model=KnowledgeDocumentRead,
     summary="Add a knowledge document or a new version of one (Markdown, text, PDF, image)",
@@ -277,6 +279,7 @@ def _retrieval_info(retrieval: Retrieval) -> RetrievalInfo:
 
 @router.post(
     "/search",
+    dependencies=[SEARCH_LIMIT],
     response_model=KnowledgeSearchResponse,
     summary="Hybrid (vector + full-text) search over the knowledge base, without generation",
 )
@@ -296,6 +299,7 @@ async def search_knowledge(
 
 @router.post(
     "/query",
+    dependencies=[AI_LIMIT],
     response_model=KnowledgeAnswerResponse,
     summary="Answer a question from the knowledge base with source citations",
     description="Statuses: ANSWERED (every claim cites a provided source and matches it), "

@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from docintel.core.config import Settings
+from docintel.core.metrics import instrument_engine
 
 
 def create_engine(settings: Settings) -> AsyncEngine:
-    return create_async_engine(
+    engine = create_async_engine(
         settings.database_url,
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
@@ -26,6 +27,8 @@ def create_engine(settings: Settings) -> AsyncEngine:
             "application_name": "docintel",
         },
     )
+    instrument_engine(engine)  # statement latency for /metrics
+    return engine
 
 
 def create_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

@@ -11,6 +11,8 @@ docintel ingest DIR                upload a directory through the REST API and w
 docintel evaluate --suite ...      OCR / classification / table / extraction / discrepancy /
                                    version-comparison metrics
 docintel match                     re-run matching for every processed document
+docintel purge-deleted [--dry-run] purge documents deleted RETENTION_DELETED_DAYS ago
+docintel storage-reconcile         compare stored files with the database (--delete-orphans)
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
+import json
 import math
 import os
 import secrets
@@ -27,6 +30,7 @@ import tarfile
 import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Literal
 
@@ -47,6 +51,7 @@ from docintel.auth.service import UserService
 from docintel.core.config import LLMProviderName, LogFormat, Settings, get_settings
 from docintel.core.errors import ConflictError
 from docintel.core.logging import configure_logging, get_logger
+from docintel.core.metrics import serve_metrics
 from docintel.db.models import (
     OPEN_TASK_STATUSES,
     Document,
@@ -423,6 +428,7 @@ async def _worker(settings: Settings, *, until_idle: bool) -> int:
     engine = create_engine(settings)
     sessionmaker = create_sessionmaker(engine)
     services = None
+    metrics_server: ThreadingHTTPServer | None = None
     try:
         async with sessionmaker() as session:
             corrections = await load_corrections(session)
@@ -440,6 +446,13 @@ async def _worker(settings: Settings, *, until_idle: bool) -> int:
             processed = await worker.run_until_idle()
             _ok(f"processed {processed} job(s); queue idle")
             return EXIT_OK
+        if settings.metrics_enabled and settings.worker_metrics_port is not None:
+            token = settings.metrics_token
+            metrics_server = serve_metrics(
+                settings.worker_metrics_port,
+                token=token.get_secret_value() if token is not None else None,
+            )
+            logger.info("worker.metrics_serving", port=settings.worker_metrics_port)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGTERM, signal.SIGINT):
@@ -447,9 +460,78 @@ async def _worker(settings: Settings, *, until_idle: bool) -> int:
         await worker.run(stop)
         return EXIT_OK
     finally:
+        if metrics_server is not None:
+            metrics_server.shutdown()
         if services is not None:
             await services.aclose()
         await engine.dispose()
+
+
+async def _purge_deleted(settings: Settings, args: argparse.Namespace) -> int:
+    from docintel.documents.retention import purge_deleted_documents
+
+    days = args.older_than_days or settings.retention_deleted_days
+    if days < 1:
+        _fail("--older-than-days must be at least 1")
+        return EXIT_USAGE
+    engine = create_engine(settings)
+    try:
+        result = await purge_deleted_documents(
+            create_sessionmaker(engine),
+            build_storage(settings),
+            older_than=timedelta(days=days),
+            dry_run=args.dry_run,
+        )
+    finally:
+        await engine.dispose()
+    verb = "would purge" if result.dry_run else "purged"
+    _ok(
+        f"{verb} {result.documents} document(s) deleted before {result.cutoff:%Y-%m-%d %H:%M} "
+        f"UTC, {result.files} file(s), {result.refresh_tokens} ended session token(s)"
+    )
+    if result.files_failed:
+        _fail(
+            f"{result.files_failed} file(s) could not be deleted; "
+            "`docintel storage-reconcile --delete-orphans` removes them later"
+        )
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
+async def _storage_reconcile(settings: Settings, args: argparse.Namespace) -> int:
+    from docintel.documents.retention import reconcile_storage
+
+    engine = create_engine(settings)
+    try:
+        result = await reconcile_storage(
+            create_sessionmaker(engine),
+            build_storage(settings),
+            min_age=timedelta(hours=args.min_age_hours),
+            delete_orphans=args.delete_orphans,
+        )
+    finally:
+        await engine.dispose()
+    print(
+        f"  {result.listed} stored file(s), {result.referenced} referenced; "
+        f"{len(result.orphans)} orphan(s), {result.too_recent} too recent to judge, "
+        f"{len(result.missing)} missing"
+    )
+    for orphan in result.orphans[:20]:
+        print(f"  orphan   {orphan.key} ({orphan.size_bytes} bytes, {orphan.modified_at:%Y-%m-%d})")
+    for key in result.missing[:20]:
+        print(f"  missing  {key}")
+    if args.delete_orphans:
+        _ok(f"deleted {result.deleted} orphan(s)")
+    elif result.orphans:
+        print("  (run with --delete-orphans to delete them)")
+    if result.missing or result.delete_failed:
+        _fail(
+            f"{len(result.missing)} referenced file(s) missing, "
+            f"{result.delete_failed} orphan deletion(s) failed"
+        )
+        return EXIT_FAILURE
+    _ok("storage and database agree" if not result.orphans else "no referenced file is missing")
+    return EXIT_OK
 
 
 async def _mcp(settings: Settings, args: argparse.Namespace) -> int:
@@ -578,9 +660,58 @@ async def _ingest(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _write_load_report(target: Path, report: dict[str, Any], markdown: str) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    target.with_suffix(".md").write_text(markdown, encoding="utf-8")
+    return target
+
+
+async def _loadtest(args: argparse.Namespace) -> int:
+    """NFR-09 measurements through a running stack's public entry point."""
+    from docintel.tools.ingest import IngestError
+    from docintel.tools.loadtest import LoadTestError, render_markdown, run_load_test
+
+    if args.password_stdin:
+        password = sys.stdin.readline().rstrip("\n")
+    elif os.environ.get("SEED_USER_PASSWORD"):
+        password = os.environ["SEED_USER_PASSWORD"]
+    else:
+        _fail("Provide the password with --password-stdin or SEED_USER_PASSWORD.")
+        return EXIT_USAGE
+    if args.users < 1 or args.duration <= 0:
+        _fail("--users must be at least 1 and --duration positive")
+        return EXIT_USAGE
+    labels = dict(label.split("=", 1) for label in args.label if "=" in label)
+    try:
+        report = await run_load_test(
+            api_url=args.api_url,
+            email=args.email,
+            password=password,
+            users=args.users,
+            duration_seconds=args.duration,
+            warmup_seconds=args.warmup,
+            dataset=Path(args.dataset) if args.dataset else None,
+            labels=labels,
+        )
+    except (LoadTestError, IngestError) as exc:
+        _fail(str(exc))
+        return EXIT_FAILURE
+    except httpx.HTTPError as exc:
+        _fail(f"{args.api_url} is not reachable ({exc.__class__.__name__}); is the stack up?")
+        return EXIT_FAILURE
+    markdown = render_markdown(report)
+    print(markdown)
+    if args.output:
+        target = _write_load_report(Path(args.output), report, markdown)
+        _ok(f"report written to {target} and {target.with_suffix('.md')}")
+    return EXIT_OK if all(check["met"] for check in report["targets"].values()) else EXIT_FAILURE
+
+
 async def _demo(args: argparse.Namespace) -> int:
     """The final demonstration (master prompt §50) through the API of a running stack."""
     from docintel.tools.demo import Demo, DemoError, DemoUsers, login
+    from docintel.tools.http import RetryAfterTransport
 
     if args.password_stdin:
         password = sys.stdin.readline().rstrip("\n")
@@ -591,7 +722,9 @@ async def _demo(args: argparse.Namespace) -> int:
         return EXIT_USAGE
     seed = args.seed if args.seed is not None else secrets.randbelow(1_000_000_000)
     try:
-        async with httpx.AsyncClient(base_url=args.api_url, timeout=60.0) as client:
+        async with httpx.AsyncClient(
+            base_url=args.api_url, timeout=60.0, transport=RetryAfterTransport()
+        ) as client:
             users = DemoUsers(
                 analyst=await login(client, "analyst@docintel.local", password),
                 reviewer=await login(client, "reviewer@docintel.local", password),
@@ -951,6 +1084,28 @@ def _build_parser() -> argparse.ArgumentParser:
         "--until-idle", action="store_true", help="process runnable jobs, then exit"
     )
     commands.add_parser("worker-health", help="exit 0 if the worker heartbeat is fresh")
+    purge = commands.add_parser(
+        "purge-deleted", help="remove documents deleted longer ago than the retention period"
+    )
+    purge.add_argument(
+        "--older-than-days",
+        type=int,
+        default=None,
+        help="retention in days (default RETENTION_DELETED_DAYS)",
+    )
+    purge.add_argument("--dry-run", action="store_true", help="count, change nothing")
+    reconcile = commands.add_parser(
+        "storage-reconcile", help="find stored files without rows and rows without files"
+    )
+    reconcile.add_argument(
+        "--delete-orphans", action="store_true", help="delete unreferenced files"
+    )
+    reconcile.add_argument(
+        "--min-age-hours",
+        type=float,
+        default=24.0,
+        help="only files older than this count as orphans (default 24)",
+    )
     mcp = commands.add_parser("mcp", help="serve the controlled tools to MCP clients")
     mcp.add_argument("--transport", choices=["stdio", "http"], default="stdio")
     mcp.add_argument("--host", default="127.0.0.1", help="HTTP: interface to listen on")
@@ -987,6 +1142,20 @@ def _build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--seed", type=int, help="generator seed (default: random, a fresh case)")
     demo.add_argument("--password-stdin", action="store_true")
     demo.add_argument("--timeout", type=float, default=300.0, help="seconds per waiting step")
+    load = commands.add_parser(
+        "loadtest", help="concurrent reads (and optional uploads) through a running stack"
+    )
+    load.add_argument("--api-url", default="http://localhost:8080")
+    load.add_argument("--email", default="analyst@docintel.local")
+    load.add_argument("--password-stdin", action="store_true")
+    load.add_argument("--users", type=int, default=8, help="concurrent virtual users")
+    load.add_argument("--duration", type=float, default=60.0, help="measured seconds")
+    load.add_argument("--warmup", type=float, default=5.0, help="seconds not recorded")
+    load.add_argument("--dataset", help="upload this directory while reading (processing times)")
+    load.add_argument(
+        "--label", action="append", default=[], metavar="KEY=VALUE", help="describe the stack"
+    )
+    load.add_argument("--output", help="write the report here (.json, plus a .md beside it)")
     evaluate = commands.add_parser("evaluate", help="run evaluation suites and write reports")
     evaluate.add_argument(
         "--suite",
@@ -1058,6 +1227,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "demo":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_demo(args))
+    if args.command == "loadtest":
+        configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
+        return asyncio.run(_loadtest(args))
     if args.command == "knowledge-ingest":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_knowledge_ingest(args))
@@ -1094,6 +1266,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_worker(settings, until_idle=args.until_idle))
         case "worker-health":
             return _worker_health(settings)
+        case "purge-deleted":
+            return asyncio.run(_purge_deleted(settings, args))
+        case "storage-reconcile":
+            return asyncio.run(_storage_reconcile(settings, args))
         case "mcp":
             configure_logging(
                 level=settings.log_level,

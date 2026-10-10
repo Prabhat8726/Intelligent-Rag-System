@@ -11,11 +11,19 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.30-alpine AS runtime
 
 ENV API_UPSTREAM=http://api:8000
+# Edge limits per client address (nginx limit_req); a proxy allowed to name the client.
+ENV NGINX_API_RATE=30r/s \
+    NGINX_API_BURST=60 \
+    NGINX_LOGIN_RATE=30r/m \
+    NGINX_LOGIN_BURST=20 \
+    NGINX_REAL_IP_FROM=127.0.0.1 \
+    NGINX_FORWARDED_PROTO=\$scheme
 # The entrypoint exports NGINX_LOCAL_RESOLVERS (the template's resolver) from /etc/resolv.conf.
 ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY nginx/api-proxy.conf /etc/nginx/snippets/api-proxy.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 8080

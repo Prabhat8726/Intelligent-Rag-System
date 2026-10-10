@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import os
 import socket
+import time
 import uuid
 from typing import Any, Protocol
 
@@ -28,7 +29,8 @@ from docintel.agent.runner import AgentAnalysisHandler, build_agent_deps
 from docintel.ai.errors import ProviderError
 from docintel.core.config import Settings
 from docintel.core.logging import get_logger
-from docintel.db.models import JobType
+from docintel.core.metrics import JOB_DURATION, JOBS, observe_stages
+from docintel.db.models import JobStatus, JobType
 from docintel.knowledge.processing import KnowledgeProcessingHandler
 from docintel.processing.ocr import OCRError
 from docintel.processing.pipeline import (
@@ -213,20 +215,31 @@ class Worker:
 
     # ------------------------------------------------------------------------ job execution
     async def _process(self, job: ClaimedJob) -> None:
+        started = time.perf_counter()
+        outcome = "error"  # the attempt raised (e.g. the database went away)
+        try:
+            outcome = await self._attempt(job)
+        finally:
+            JOBS.labels(job.job_type.value, outcome).inc()
+            JOB_DURATION.labels(job.job_type.value, outcome).observe(time.perf_counter() - started)
+
+    async def _attempt(self, job: ClaimedJob) -> str:
+        """Run one attempt of a job; returns its outcome for the metrics."""
         log = logger.bind(job_id=str(job.id), job_type=job.job_type.value, attempt=job.attempts)
         handler = self._handlers[job.job_type]
 
         if job.attempts > job.max_attempts:
             log.warning("worker.job_exhausted")
-            await self._fail(job, "Processing was interrupted repeatedly; giving up.", False, {})
-            return
+            return await self._fail(
+                job, "Processing was interrupted repeatedly; giving up.", False, {}
+            )
 
         async with self._sessionmaker() as session, session.begin():
             context = await handler.prepare(session, job)
             if context is None:
                 await self._queue.cancel(session, job.id, reason="document deleted")
                 log.info("worker.job_skipped", reason="document deleted")
-                return
+                return "skipped"
 
         lease_lost = asyncio.Event()
         heartbeat = asyncio.create_task(self._heartbeat(job, lease_lost))
@@ -244,7 +257,7 @@ class Worker:
             await handler.execute(context, on_stage)
         except LeaseLostError:
             log.warning("worker.lease_lost")
-            return
+            return "lease_lost"
         except Exception as exc:
             retryable, message = classify_failure(exc, job.id)
             log.warning(
@@ -253,8 +266,7 @@ class Worker:
                 error_type=type(exc).__name__,
                 exc_info=not isinstance(exc, PermanentProcessingError),
             )
-            await self._fail(job, message, retryable, context.stage_timings)
-            return
+            return await self._fail(job, message, retryable, context.stage_timings)
         finally:
             heartbeat.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -267,14 +279,16 @@ class Worker:
                 )
                 if finished_at is None:
                     log.warning("worker.lease_lost_before_commit")
-                    return
+                    return "lease_lost"
                 await handler.on_success(session, context, finished_at)
         except Exception as exc:
             retryable, message = classify_failure(exc, job.id)
             log.exception("worker.result_commit_failed")
-            await self._fail(job, message, retryable, context.stage_timings)
-            return
+            return await self._fail(job, message, retryable, context.stage_timings)
         log.info("worker.job_completed", stage_timings_ms=context.stage_timings)
+        if job.job_type == JobType.DOCUMENT_PROCESSING:
+            observe_stages(context.stage_timings)
+        return "completed"
 
     async def _heartbeat(self, job: ClaimedJob, lease_lost: asyncio.Event) -> None:
         interval = max(1.0, self._settings.job_lease_seconds / 3)
@@ -288,14 +302,16 @@ class Worker:
 
     async def _fail(
         self, job: ClaimedJob, message: str, retryable: bool, timings: dict[str, Any]
-    ) -> None:
+    ) -> str:
+        """Record a failed attempt; returns "retried", "failed" or "lease_lost"."""
         async with self._sessionmaker() as session, session.begin():
             new_status = await self._queue.fail(
                 session, job, error=message, retryable=retryable, stage_timings=dict(timings)
             )
             if new_status is None:
                 logger.warning("worker.lease_lost_on_failure", job_id=str(job.id))
-                return
+                return "lease_lost"
             await self._handlers[job.job_type].on_failure(
                 session, job, new_status=new_status, user_message=message
             )
+        return "failed" if new_status == JobStatus.FAILED else "retried"

@@ -18,6 +18,7 @@ from docintel.api.deps import (
     StorageDep,
     require_permission,
 )
+from docintel.api.rate_limit import UPLOAD_LIMIT
 from docintel.api.routers.comparisons import comparison_summary
 from docintel.api.schemas.common import PROBLEM_RESPONSES, ProblemDetail
 from docintel.api.schemas.documents import (
@@ -89,6 +90,7 @@ def _content_disposition(filename: str) -> str:
 
 @router.post(
     "",
+    dependencies=[UPLOAD_LIMIT],
     status_code=status.HTTP_201_CREATED,
     response_model=DocumentRead,
     summary="Upload a document (PDF, PNG, JPEG, TIFF) and queue it for processing",
@@ -415,6 +417,7 @@ async def delete_document(
 
 @router.post(
     "/{document_id}/process",
+    dependencies=[UPLOAD_LIMIT],
     status_code=status.HTTP_202_ACCEPTED,
     response_model=ProcessingJobRead,
     summary="Queue the current version for (re)processing",
@@ -494,6 +497,7 @@ async def list_versions(
 
 @router.post(
     "/{document_id}/versions",
+    dependencies=[UPLOAD_LIMIT],
     status_code=status.HTTP_201_CREATED,
     response_model=DocumentRead,
     summary="Upload a new version of the document (e.g. a revised contract)",

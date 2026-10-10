@@ -1,0 +1,33 @@
+# Scrape configuration (ADR-079). Every API replica and worker is found through Docker's DNS
+# (the service name resolves to all replicas), so scaling needs no change here.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: api
+    metrics_path: /metrics
+    authorization:
+      credentials_file: /run/secrets/metrics_token
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 8000
+        refresh_interval: 30s
+
+  - job_name: worker
+    metrics_path: /metrics
+    authorization:
+      credentials_file: /run/secrets/metrics_token
+    dns_sd_configs:
+      - names: [worker]
+        type: A
+        port: 9100
+        refresh_interval: 30s
+
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]

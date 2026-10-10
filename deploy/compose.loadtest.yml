@@ -1,0 +1,13 @@
+# Load test settings (ADR-080), layered over the local stack:
+#   API_REPLICAS=2 docker compose -f docker-compose.yml -f deploy/compose.loadtest.yml up -d
+# Every virtual user of `docintel loadtest` comes from one address and logs in as one user, and
+# the dataset is uploaded in one go, so the edge and upload limits are raised; everything else
+# is the normal configuration.
+services:
+  api:
+    environment:
+      RATE_LIMIT_UPLOADS_PER_MINUTE: "100000"
+  web:
+    environment:
+      NGINX_API_RATE: 100000r/s
+      NGINX_API_BURST: "100000"

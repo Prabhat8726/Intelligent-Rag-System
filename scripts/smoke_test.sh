@@ -57,6 +57,17 @@ if [[ -n "${SEED_PASSWORD}" ]]; then
     | python3 -c 'import json,sys; print(json.load(sys.stdin).get("role", ""))')"
   check "/auth/me through nginx returns the analyst role" test "$role" = "ANALYST"
 
+  # nginx gives the API the address it saw itself, never one the client claims.
+  admin_token="$(curl -s -X POST "${BASE_URL}/api/v1/auth/login" -H 'content-type: application/json' \
+    -H 'X-Forwarded-For: 198.51.100.77' \
+    -d "{\"email\":\"admin@docintel.local\",\"password\":\"${SEED_PASSWORD}\"}" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("access_token", ""))')"
+  login_ip="$(curl -s "${BASE_URL}/api/v1/audit-logs?action=auth.login.succeeded&limit=1" \
+    -H "Authorization: Bearer ${admin_token}" \
+    | python3 -c 'import json,sys; items = json.load(sys.stdin)["items"]; print(items[0]["ip_address"] or "" if items else "")')"
+  check "a client-supplied X-Forwarded-For is ignored (audit address ${login_ip})" \
+    test -n "$login_ip" -a "$login_ip" != "198.51.100.77"
+
   # Upload a synthetic invoice and wait for the worker to process it.
   document_id="$(curl -s -X POST "${BASE_URL}/api/v1/documents" -H "Authorization: Bearer ${token}" \
     -F "file=@scripts/fixtures/smoke-invoice.pdf;type=application/pdf" \
@@ -87,5 +98,13 @@ print(outcomes.get("INV_MISSING_PO"), "task" if "INV_MISSING_PO" in codes else "
 else
   echo "  SKIP login round-trip (SEED_USER_PASSWORD not set in .env)"
 fi
+
+# Last, as it uses up this address's burst for a moment: the edge limit answers 429 with a
+# problem document.
+codes="$(for _ in $(seq 150); do
+  curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "${BASE_URL}/api/v1/auth/me"
+done)"
+check "nginx limits requests per address at the edge" \
+  grep -q "^429 application/problem+json" <<<"$codes"
 
 echo "All smoke checks passed."

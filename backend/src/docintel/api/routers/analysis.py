@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from docintel.agent.service import AnalysisService
 from docintel.agent.state import Plan
 from docintel.api.deps import RequestMetaDep, SessionDep, SettingsDep, require_permission
+from docintel.api.rate_limit import AI_LIMIT
 from docintel.api.schemas.analysis import (
     AnalysisCreate,
     AnalysisPage,
@@ -74,6 +75,7 @@ def detail(run: AgentRun, calls: list[AgentToolCall]) -> AnalysisRead:
 
 @router.post(
     "",
+    dependencies=[AI_LIMIT],
     status_code=status.HTTP_202_ACCEPTED,
     response_model=AnalysisRead,
     summary="Start an investigation (runs in the background)",

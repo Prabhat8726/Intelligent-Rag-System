@@ -9,6 +9,7 @@ from typing import Literal
 
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from docintel.auth.policies import visible_documents
 from docintel.core.errors import NotFoundError
@@ -44,6 +45,16 @@ class ReviewFilters:
     overdue: bool = False
 
 
+# People on a task or document load in small batched queries, not as more joins (each user
+# brings its department) in the listing statement: planning an eleven-table join cost more than
+# running it under load (ADR-080).
+_LIST_OPTIONS = (
+    selectinload(ReviewTask.assigned_to),
+    selectinload(ReviewTask.resolved_by),
+    selectinload(Document.owner),
+)
+
+
 class ReviewQueue:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -72,7 +83,11 @@ class ReviewQueue:
             conditions.append(ReviewTask.status.in_(OPEN_TASK_STATUSES))
             conditions.append(ReviewTask.due_at < datetime.now(UTC))
         where = and_(*conditions)
-        base = select(ReviewTask, Document).join(Document, Document.id == ReviewTask.document_id)
+        base = (
+            select(ReviewTask, Document)
+            .join(Document, Document.id == ReviewTask.document_id)
+            .options(*_LIST_OPTIONS)
+        )
         total = await self._session.scalar(
             select(func.count())
             .select_from(ReviewTask)

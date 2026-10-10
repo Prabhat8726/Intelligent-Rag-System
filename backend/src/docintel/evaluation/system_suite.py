@@ -155,6 +155,9 @@ def _settings(database_url: str, storage_root: Path, concurrency: int) -> Settin
         "seed_user_password": None,
         "log_level": "WARNING",
         "worker_concurrency": concurrency,
+        # The suite times the handlers; one user's repeated searches would hit the per-user
+        # limit, which is tested on its own.
+        "rate_limit_enabled": False,
     }
     return Settings(_env_file=None, **values)
 

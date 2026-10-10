@@ -7,6 +7,7 @@ import os
 import shutil
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import anyio
@@ -14,6 +15,7 @@ import anyio
 from docintel.core.config import StorageBackendName
 from docintel.storage.base import (
     DEFAULT_CHUNK_SIZE,
+    ListedObject,
     ObjectNotFoundError,
     StorageKeyError,
     StoredObject,
@@ -93,3 +95,27 @@ class LocalStorage:
     async def exists(self, key: str) -> bool:
         path = self._path(key)
         return await asyncio.to_thread(path.is_file)
+
+    def _list_sync(self, prefix: str) -> list[ListedObject]:
+        listed = []
+        for directory, _, files in os.walk(self._root):
+            for name in files:
+                if name.startswith("."):  # a write in progress (see _put_sync)
+                    continue
+                path = Path(directory) / name
+                key = path.relative_to(self._root).as_posix()
+                if not key.startswith(prefix):
+                    continue
+                stat = path.stat()
+                listed.append(
+                    ListedObject(
+                        key=key,
+                        size_bytes=stat.st_size,
+                        modified_at=datetime.fromtimestamp(stat.st_mtime, UTC),
+                    )
+                )
+        return listed
+
+    async def list_objects(self, prefix: str) -> AsyncIterator[ListedObject]:
+        for listed in await asyncio.to_thread(self._list_sync, prefix):
+            yield listed

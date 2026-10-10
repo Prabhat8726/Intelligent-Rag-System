@@ -28,6 +28,7 @@ from docintel.audit.service import AuditAction, record_audit_event
 from docintel.auth.permissions import Permission, permissions_for
 from docintel.core.errors import AppError, ConflictError, NotFoundError, UnprocessableContentError
 from docintel.core.logging import get_logger
+from docintel.core.metrics import TOOL_CALLS
 from docintel.db.models import AgentToolCall, AuditOutcome, ToolCallStatus, ToolChannel, User
 
 logger = get_logger(__name__)
@@ -141,6 +142,9 @@ class ToolRegistry:
                 output = None
 
             latency = round((time.perf_counter() - started) * 1000, 2)
+            TOOL_CALLS.labels(
+                name if name in self._tools else "unknown", caller.via.value, status.value
+            ).inc()
             if user is not None:
                 # A rollback expired the user: reload it (inside the session's async context).
                 user = await session.get(User, caller.user_id, populate_existing=True)

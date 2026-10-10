@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from docintel.core.metrics import EXTRACTION_CONFIDENCE
 from docintel.db.models import (
     DocumentExtraction,
     EvidenceStatusValue,
@@ -176,6 +177,7 @@ def extraction_record(
             row.corrected_at = previous.corrected_at
             row.correction_note = previous.correction_note
         rows.append(row)
+    EXTRACTION_CONFIDENCE.labels(scoring.level.value).observe(scoring.confidence)
     return DocumentExtraction(
         document_id=document_id,
         document_version_id=version_id,

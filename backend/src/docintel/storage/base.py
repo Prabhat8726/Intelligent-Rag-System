@@ -10,6 +10,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -80,6 +81,13 @@ class StoredObject:
     size_bytes: int
 
 
+@dataclass(frozen=True, slots=True)
+class ListedObject:
+    key: str
+    size_bytes: int
+    modified_at: datetime  # timezone-aware (UTC)
+
+
 @runtime_checkable
 class DocumentStorage(Protocol):
     @property
@@ -102,3 +110,10 @@ class DocumentStorage(Protocol):
         ...
 
     async def exists(self, key: str) -> bool: ...
+
+    def list_objects(self, prefix: str) -> AsyncIterator[ListedObject]:
+        """Every stored object whose key starts with `prefix` ("documents/"), in no set order.
+
+        Used by storage reconciliation; files still being written are not listed.
+        """
+        ...

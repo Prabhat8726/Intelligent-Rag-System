@@ -28,6 +28,7 @@ from docintel.ai.routing import ExternalAIGate
 from docintel.audit.service import SYSTEM_REQUEST, AuditAction, record_audit_event
 from docintel.core.config import Settings
 from docintel.core.logging import get_logger
+from docintel.core.metrics import AGENT_RUNS
 from docintel.db.models import (
     FINISHED_RUN_STATUSES,
     ActorType,
@@ -164,6 +165,9 @@ async def record_run_result(
     run.estimated_cost_usd = cost
     run.finished_at = finished_at
     run.error = None
+    AGENT_RUNS.labels(AgentRunStatus.COMPLETED.value).observe(
+        (finished_at - run.created_at).total_seconds()
+    )
     user = await session.get(User, run.requested_by_id)
     recommendation = result["recommendation"]
     record_audit_event(
@@ -205,6 +209,9 @@ async def record_run_failure(session: AsyncSession, run: AgentRun, user_message:
     run.status = AgentRunStatus.FAILED
     run.error = user_message[:1000]
     run.finished_at = datetime.now(UTC)
+    AGENT_RUNS.labels(AgentRunStatus.FAILED.value).observe(
+        (run.finished_at - run.created_at).total_seconds()
+    )
     calls, input_tokens, output_tokens, cost = await usage(session, run.id)
     run.llm_calls, run.input_tokens, run.output_tokens = calls, input_tokens, output_tokens
     run.estimated_cost_usd = cost

@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from docintel.documents.validation import SUPPORTED_EXTENSIONS
+from docintel.tools.http import RetryAfterTransport
 
 TERMINAL_STATUSES = frozenset({"COMPLETED", "FAILED", "REVIEW_REQUIRED"})
 REPORT_NAME = "ingest-report.json"
@@ -139,7 +140,9 @@ async def ingest_directory(
     if not items:
         msg = f"no supported files found in {directory}"
         raise IngestError(msg)
-    async with httpx.AsyncClient(base_url=api_url, timeout=60.0, transport=transport) as client:
+    async with httpx.AsyncClient(
+        base_url=api_url, timeout=60.0, transport=RetryAfterTransport(transport)
+    ) as client:
         client.headers["Authorization"] = f"Bearer {await _login(client, email, password)}"
         for item in items:
             await _upload(client, directory, item)

@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from docintel.api.deps import RequestMetaDep, SessionDep, SettingsDep, require_permission
+from docintel.api.rate_limit import AI_LIMIT
 from docintel.api.schemas.common import PROBLEM_RESPONSES, ProblemDetail
 from docintel.api.schemas.reports import (
     ReportCreate,
@@ -60,6 +61,7 @@ def detail(report: Report) -> ReportRead:
 
 @router.post(
     "",
+    dependencies=[AI_LIMIT],
     status_code=status.HTTP_201_CREATED,
     response_model=ReportRead,
     summary="Generate a report from the current data",

@@ -1,0 +1,88 @@
+name: Deploy
+
+# Deploys a released commit to the staging or production host over SSH (ADR-078): the host's
+# checkout moves to the commit and deploy/deploy.sh starts its images (sha-<commit>), with a
+# database backup, migrations, health checks and an automatic return to the previous release.
+#
+# Per GitHub environment ("staging", "production"; give production required reviewers):
+#   secrets  DEPLOY_SSH_KEY (private key), DEPLOY_KNOWN_HOSTS (the host's key line)
+#   vars     DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH (the checkout on the host), DOMAIN
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        required: true
+      ref:
+        description: Commit SHA or v* tag whose images the release workflow pushed
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.ref }} to ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://${{ vars.DOMAIN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve the commit and its image tag
+        id: release
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${sha:0:7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Both images were released for this commit
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          for image in docintel-backend docintel-web; do
+            docker buildx imagetools inspect "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${image}:${TAG}" >/dev/null
+          done
+
+      - name: SSH access to the host
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy on the host
+        env:
+          HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          SHA: ${{ steps.release.outputs.sha }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${HOST}" \
+            "cd '${DEPLOY_PATH}' && git fetch --quiet --tags origin && git checkout --quiet --detach '${SHA}' && deploy/deploy.sh '${TAG}'"
+
+      - name: Readiness through the public URL
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 5 "https://${DOMAIN}/health/ready"

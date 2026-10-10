@@ -29,6 +29,7 @@ from docintel.ai.base import (
 )
 from docintel.ai.errors import ProviderError
 from docintel.core.logging import get_logger
+from docintel.core.metrics import observe_model_call
 from docintel.db.models import LLMCall, LLMCallStatus
 
 logger = get_logger(__name__)
@@ -119,6 +120,18 @@ class AccountedLLMProvider:
         return self._inner.model_for(tier)
 
     async def _record(self, entry: LLMCallEntry) -> None:
+        observe_model_call(
+            provider=entry.provider,
+            purpose=entry.purpose,
+            status=entry.status.value,
+            latency_ms=entry.latency_ms,
+            tokens={
+                "input": entry.input_tokens,
+                "output": entry.output_tokens,
+                "thinking": entry.thinking_tokens,
+            },
+            cost_usd=float(entry.estimated_cost_usd) if entry.estimated_cost_usd else None,
+        )
         try:
             await self._log.record(entry)
         except Exception as exc:  # accounting must never break the call it accounts for
