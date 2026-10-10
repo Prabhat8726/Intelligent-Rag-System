@@ -15,7 +15,7 @@ INGEST_FLAGS ?=
 .PHONY: help env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
         reset-db logs seed-docker generate-documents process seed-knowledge reembed worker test \
         test-backend test-frontend lint format check-ai check-ocr llm-usage evaluate match smoke \
-        clean
+        mcp mcp-http clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -115,8 +115,14 @@ llm-usage: require-env ## LLM requests, tokens and estimated cost per day (last 
 match: migrate ## Re-run comparisons, rules and review tasks for every processed document
 	$(BACKEND) docintel match
 
-evaluate: db-up ## Run all evaluation suites (OCR ... retrieval) -> evaluation/reports (several minutes)
+evaluate: db-up ## Run all evaluation suites (OCR ... agent) -> evaluation/reports (several minutes)
 	$(BACKEND) docintel evaluate --output ../evaluation/reports
+
+mcp: migrate ## MCP server over stdio for a local MCP client (needs MCP_API_TOKEN)
+	$(BACKEND) docintel mcp --transport stdio
+
+mcp-http: migrate ## MCP server over streamable HTTP on 127.0.0.1:8001 (bearer API tokens)
+	$(BACKEND) docintel mcp --transport http --host 127.0.0.1 --port 8001
 
 smoke: ## Smoke-test the running Docker stack through nginx
 	./scripts/smoke_test.sh

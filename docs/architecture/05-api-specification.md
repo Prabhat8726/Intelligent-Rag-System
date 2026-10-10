@@ -111,11 +111,17 @@ document content.
 
 Query and question text with control characters is rejected (422).
 
-### Agent analysis
+### Agent analysis, review requests, API tokens
 | Method | Path | Permission | Status |
 |---|---|---|---|
-| POST | `/api/v1/analysis` `{query, document_ids?}` → 202 | `analysis:run` | 🔜 7 |
-| GET | `/api/v1/analysis` · `/analysis/{id}` (status, findings, tool-call summary, recommendation) | `analysis:read` | 🔜 7 |
+| POST | `/api/v1/analysis` `{query (3–1000), document_ids? (≤ 5, visible to the caller), allow_safe_actions? (default true)}` → 202 + `Location`; 404 for a document the caller cannot see; 429 + `Retry-After` beyond `AGENT_MAX_ACTIVE_RUNS_PER_USER` queued or running runs | `analysis:run` | ✅ 7 |
+| GET | `/api/v1/analysis` (`status`, `limit`, `offset`; own runs, administrators all) · `/analysis/{id}` → status, plan, `result` (summary, documents, findings with evidence labels, evidence catalogue, sources, comparisons, confidence with factors, recommendation, action, notices, model), trace, `tool_call_log`, usage (tool calls, model calls, tokens, estimated cost) | `analysis:read` | ✅ 7 |
+| POST | `/api/v1/review-tasks/requests` `{document_id, reason (5–1000), priority: HIGH/NORMAL/LOW}` → 201 (200 when the same request is already on file) | `reviews:work` + scope | ✅ 7 |
+| POST | `/api/v1/auth/tokens` `{name, scopes ⊆ documents:read, knowledge:read, comparisons:create, reviews:work (and the caller's own), expires_in_days ≤ API_TOKEN_MAX_DAYS}` → 201 with the token (shown once) | authenticated | ✅ 7 |
+| GET / DELETE | `/api/v1/auth/tokens` · `/auth/tokens/{id}` (own tokens; revoke → 204) | authenticated | ✅ 7 |
+
+MCP (not REST): `docintel mcp --transport stdio|http` serves the controlled tools to
+MCP clients with an API token (docs/architecture/08 §7).
 
 ### Workflows & HITL
 | Method | Path | Permission | Status |

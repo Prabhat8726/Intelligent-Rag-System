@@ -1,6 +1,6 @@
 # 12 — Technology Choices & Free/Low-Cost Strategy
 
-Versions were checked against PyPI / npm / the Gemini SDK source on 2026-10-08.
+Versions were checked against PyPI / npm / the Gemini SDK source on 2026-10-08 (LangGraph and the MCP SDK on 2026-10-09).
 Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 
 ## 1. Backend
@@ -21,8 +21,8 @@ Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 | Metrics | prometheus-client (Phase 11) | De-facto standard, free | OpenTelemetry metrics (can be added) |
 | LLM SDK | **google-genai 2.x** | Google's current unified SDK; `google-generativeai` is legacy | REST by hand |
 | Local LLM | **Ollama** HTTP API via httpx (`/api/chat` with a JSON-schema `format`, Phase 4) | Self-hosted models keep confidential documents in the deployment (ADR-029); no extra SDK — one small client with the same retries, errors and accounting as Gemini | `ollama` Python package (thin wrapper), vLLM / llama.cpp server (OpenAI-compatible; possible later) |
-| Agent framework | **LangGraph 1.x** (Phase 7) | Explicit state graphs, conditional edges, mature | Custom state machine, CrewAI |
-| MCP | official `mcp` Python SDK (Phase 7) | Reference implementation | — |
+| Agent framework | **LangGraph 1.2** (`StateGraph` only; no LangChain model wrappers, no checkpointer — runs are stored in `agent_runs`) | Explicit typed state, conditional edges and bounded loops; nodes call our own `LLMProvider`, so accounting, budget and the sensitivity gate apply | Custom state machine (would re-implement routing and tracing), CrewAI / free-form ReAct agents (model picks tools: harder to bound and test) |
+| MCP | official `mcp` Python SDK **2.2** (low-level `Server` with list/call handlers; stdio and streamable HTTP with its bearer-token middleware) | Reference implementation; the low-level server lets the tool registry's own schemas be served as they are | `MCPServer` decorators (would duplicate the tool schemas) |
 | PDF | **pypdfium2** 5.x (validation, rendering, text layer with character boxes) | Permissive licence, one parser for every PDF task, C speed | PyMuPDF (AGPL), pdfplumber (second parser of untrusted input; dropped in Phase 3, ADR-021), Docling (heavy torch deps; optional future upgrade) |
 | OCR | **Tesseract 5** called as a subprocess (TSV output) | Free, local, word boxes + confidences; subprocess gives real timeouts | pytesseract (thin wrapper, adds nothing), PaddleOCR / docTR / EasyOCR (torch-heavy) |
 | Image maths | NumPy 2 + SciPy (deskew, line detection) | Vectorized, already required by scikit-learn | OpenCV (large binary for two operations) |

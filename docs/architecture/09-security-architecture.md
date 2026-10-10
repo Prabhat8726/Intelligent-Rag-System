@@ -74,9 +74,35 @@ and model output as untrusted input** at every boundary.
   are audited with a SHA-256 fingerprint of the question, never its text. Query text with
   control characters is rejected before it reaches PostgreSQL; tsquery operands are quoted, so
   no operator can be injected.
-* Tool allowlist; no shell/OS/network/SQL tools; authz per call as the requesting user.
-* Budgets: max steps, max LLM calls, timeouts per tool and per run.
-* Outputs validated: citations exist, evidence ids exist, findings can't contradict deterministic facts, recommendations in allowlist, guardrail rules.
+* Agent (Phase 7, docs/architecture/08, ADR-049 … ADR-055):
+  * Eight controlled tools and nothing else — no shell, file, network, SQL or code tool. The
+    model never names tools: it fills a typed plan (intent enum, bounded strings, document
+    numbers, field names matching `[a-z][a-z0-9_]*`) and the graph chooses the tools.
+  * Every tool call runs as the requesting user: the user is reloaded (inactive → DENIED), the
+    tool's permission is checked against the role (narrowed by API-token scopes), inputs are
+    validated with unknown keys rejected and error messages that never echo values, the
+    handler uses the same services and SQL access predicates as the REST API, and inaccessible
+    resources are "not found or not permitted". `run_business_rules` hides comparisons and
+    duplicates involving documents the caller cannot see. Every call is logged in
+    `agent_tool_calls`, whatever its outcome.
+  * Budgets: `AGENT_MAX_TOOL_CALLS`, `AGENT_MAX_LLM_CALLS`, one follow-up round, per-tool and
+    per-run timeouts, output size caps, `AGENT_MAX_ACTIVE_RUNS_PER_USER` (429).
+  * Outputs validated: model findings must cite evidence that exists, keep to its numbers and
+    never clear a failed or unconfirmed rule (cited, issue-level or blanket); summaries and
+    rationales get the same checks; recommendations come from an allowlist and guardrails
+    overrule a model's proposal; only HOLD_FOR_REVIEW can execute (a review request), every
+    other action is proposed for a person to approve.
+  * Facts and the request reach the model only inside per-request random markers declared
+    untrusted; documents above `AI_EXTERNAL_MAX_SENSITIVITY` mean no analysis call, passages
+    above it are not sent or citable, and the request itself is checked for restricted data
+    before planning. Runs are personal (requester and administrators); the request is
+    audited by fingerprint only.
+* MCP (Phase 7): personal API tokens (SHA-256 stored, shown once, scoped to tool permissions
+  and the owner's role, expiring, revocable) checked on every call, so revocation, deactivation
+  and demotion apply inside open sessions; streamable HTTP requires a bearer token and has
+  DNS-rebinding protection (`MCP_ALLOWED_HOSTS`); stdio logs to stderr; calls audited
+  (`mcp.tool_called`, `mcp.auth_failed` with the token prefix only). No investigation,
+  approval or administration tools are exposed.
 * Sensitivity routing to keep confidential content away from external providers (C1). Implemented
   in Phase 3 (`docintel/ai/routing.py`, ADR-026): effective sensitivity = max(upload label,
   detected payment cards / SSNs → RESTRICTED, resume / bank statement → CONFIDENTIAL); above
@@ -135,8 +161,10 @@ and model output as untrusted input** at every boundary.
 | Cross-user / cross-department access | Documents, evidence, search, RAG, agent tools (2, 6, 7) |
 | Privilege escalation | VIEWER cannot upload/approve; proposer cannot approve own action (5, 8). Phase 5: viewers cannot work the review queue or change rules; another user's claimed task needs a manager (**5**, `tests/integration/test_matching_api.py`) |
 | Cross-department matching | Documents are never compared or flagged as duplicates across departments; comparisons, findings and review tasks of other departments return 404 / are not listed (**5**, `tests/security/test_matching_security.py`) |
-| Prompt injection | Document text cannot close the data block; injected values never reach AUTO, whether they disagree with the layout reading or only the model reports them (**4**, `tests/security/test_prompt_injection.py`); payloads must not change rule results, recommendations or tool calls (5, 7, 10) |
+| Prompt injection | Document text cannot close the data block; injected values never reach AUTO, whether they disagree with the layout reading or only the model reports them (**4**, `tests/security/test_prompt_injection.py`); payloads must not change rule results, recommendations or tool calls (5, **7**, 10) |
 | Field corrections | Only `documents:review`; inaccessible documents 404; audit details carry no values (**4**, `tests/integration/test_extraction_api.py`) |
-| Tool argument abuse | Out-of-range limits, foreign ids, extra fields rejected and logged (7) |
+| Tool argument abuse | Unknown tools, extra fields (`sql`), control characters, out-of-range limits, malformed field paths and non-object arguments rejected as INVALID without echoing values; foreign ids "not found"; every call logged (**7**, `tests/integration/test_agent_tools.py`) |
+| Agent scope and steering | Viewers cannot start investigations; documents of other departments cannot be named (404) or found; runs are personal; a hostile request cannot escape its markers, choose tools or get a payment recommendation past the guardrails; blanket and contradicting model statements are removed; tool and time budgets end runs cleanly (**7**, `tests/security/test_agent_security.py`, `tests/integration/test_agent_analysis.py`) |
+| MCP access | Tokens shown once and stored hashed; scopes cannot exceed the role or the tool permissions; missing, forged or revoked tokens and foreign Host headers rejected; calls logged and audited (**7**, `tests/integration/test_mcp.py`) |
 | Data leakage | Restricted knowledge never returned to other departments on any read path (detail, chunks, list, search, query, even when named by key); CONFIDENTIAL sources and content-detected RESTRICTED chunks never sent to an external model or embedder; superseded and archived content not cited (**6**, `tests/security/test_knowledge_security.py`, `tests/integration/test_knowledge_rag.py`, `test_knowledge_api.py`) |
 | RAG injection | Instructions planted in a knowledge document stay inside the nonce-delimited sources block; hostile query strings (SQL, tsquery operators, NUL bytes) are plain text or a 422 (**6**, `tests/security/test_knowledge_security.py`) |

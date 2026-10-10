@@ -246,3 +246,35 @@ Delivery
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 6 (by design): agent use of retrieval and policy explanations of rule results (Phase 7); reranking (only if measured to help, Phase 10); calibrating `RAG_MIN_DENSE_SIMILARITY` for Gemini or fastembed (needs those models).
+
+
+## 7. Phase 7 acceptance criteria
+
+Status as of 2026-10-10, same legend as §1. Metrics live in `evaluation/reports/agent.md`.
+
+Agent workflow (Module 14)
+- ✅ LangGraph `StateGraph` with explicit, JSON-compatible state: understand request → identify documents → inspect extraction → run rules → (compare documents) → retrieve knowledge → analyse (one bounded follow-up round) → determine confidence → recommend → approval gate → request a review / propose for approval → finish (`agent/graph.py`, `integration/test_agent_analysis.py`)
+- ✅ Runs in the worker as `AGENT_ANALYSIS` jobs (one attempt), plan, result, trace, tool calls and model usage stored; audited as AGENT on behalf of the requester, the request by fingerprint (`test_agent_analysis.py::test_a_price_mismatch_is_investigated_and_sent_for_review`)
+- ✅ Deterministic without a model; with one, the model only plans (typed, bounded) and writes findings that must cite existing evidence, keep to its numbers and never clear a failed rule; guardrails overrule its proposals (`::test_model_findings_are_validated_and_guardrails_overrule_the_model`, `unit/test_agent.py`)
+- ✅ Content above the external AI limit is not sent to the model (`::test_content_above_the_sensitivity_limit_is_not_sent_to_the_model`)
+- ✅ Recommendations from an allowlist with a risk table: payment and duplicate rejection proposed for a manager, vendor clarification for a reviewer, review requests executed only when allowed (`::test_clean_invoices_are_proposed_for_payment_and_duplicates_for_rejection`)
+
+Agent tools (Module 15)
+- ✅ search_documents, get_document, get_extracted_fields, get_document_evidence, search_knowledge_base, compare_documents, run_business_rules (dry run), create_review_task (review requests that survive re-evaluation until resolved): typed inputs and outputs, permissions narrowed by token scopes, validation, safe errors, timeouts, output caps and a log row per call (`integration/test_agent_tools.py`)
+- ⏳ generate_report and get_workflow_status — need reports and workflows (Phase 8)
+
+MCP (Module 16)
+- ✅ `docintel mcp` over stdio and streamable HTTP, the same registry and schemas; personal API tokens (hashed, scoped, expiring, revocable, re-checked per call); DNS-rebinding protection; calls logged and audited (`integration/test_mcp.py`)
+
+Security
+- ✅ Personal runs; no access to other departments' documents by id, search or rules; hostile requests cannot escape their markers, choose tools or pass the guardrails; tool and time budgets (`security/test_agent_security.py`)
+
+Evaluation (deterministic mode, synthetic data)
+- ✅ Development dataset (seed 7, 70 runs) and held-out dataset (seed 11, 60 runs, run only after development): task success 100% named, 100% found from the question, 100% policy questions (development); 0 unsafe recommendations; planted defect reported 100%; 0 false failures on clean invoices; tool selection precision 99.3% / 99.2%, recall 100%; every finding's evidence exists; governing policy among the sources 85.7% (vendor mismatches missed with lexical embeddings); scripted adversary: 0 payment recommendations, 0 statements or summaries kept
+- ✅ The suite changed the code: identification by document number (exact matches only), the keyword planner (questions without a document go to the knowledge base, "Which …?" questions, team names read as vendors) and a guardrail (clearing an issue while a rule fails)
+- ⏳ Model-assisted planning and analysis (Gemini or a local model) — no model in the build environment
+
+Frontend
+- ✅ AI analysis pages (start, follow, findings with evidence, sources, confidence, recommendation, action, steps and tool calls), Investigate from a document, API tokens page (`analysis/analysis.test.tsx`)
+
+Not in Phase 7 (by design): approving and executing proposed actions (HITL state machine, workflow actions — Phase 8), reports, contract ↔ policy and resume ↔ job comparisons as agent tools (need extraction ground truth for those types).

@@ -215,15 +215,15 @@ is_current`); older ones are kept as history.
 | `documents.vendor_id` | FK → `vendors` `ON DELETE SET NULL` (index): the vendor the current extraction matched. |
 | `document_extractions` | One extraction run: `document_id` / `document_version_id` FK `CASCADE`, `schema_name`, `schema_version` CHECK ≥ 1, `status` CHECK (`SUCCEEDED, PARTIAL, FAILED`), `method` CHECK (`LOCAL, LLM, COMBINED`), `provider`, `model`, `prompt_version`, `input_hash` (partial index where `llm_output IS NOT NULL`: the LLM cache), `llm_output jsonb` (validated model output), `output jsonb` / `normalized_output jsonb` (merged result), `checks jsonb` (consistency checks), `validation_errors jsonb`, `signals jsonb` (LLM use, gate decision, normalization context), `overall_confidence` CHECK 0–1, `review_level` CHECK (`AUTO, ANALYST_REVIEW, MANDATORY_REVIEW`), `is_current`, `created_at`. Indexes `(document_id, created_at)`, `(document_version_id)`. |
 | `extracted_fields` | Field-level provenance + correction, one row per scalar, table cell and list item: `extraction_id` FK `CASCADE`, `position`, `field_path` (UNIQUE per extraction, e.g. `line_items[2].quantity`), `field_name`, `group_name`, `row_index`, `value_type` CHECK (14 types), `is_required`, `original_value` (as printed), `normalized_value jsonb`, `page_number` CHECK ≥ 1, `source_text`, `bbox jsonb`, `evidence_status` CHECK (`VERIFIED, FUZZY, UNSUPPORTED, NOT_FOUND, HUMAN`), `origin` CHECK (`LOCAL, LLM, BOTH, DERIVED, HUMAN`), `method`, `confidence` CHECK 0–1, `confidence_signals jsonb`, `alternatives jsonb` (the competing reading), `corrected_value`, `corrected_normalized jsonb`, `correction_note`, `corrected_by_id` FK `RESTRICT`, `corrected_at`. |
-| `llm_calls` | AI usage accounting, no prompt or output content: `created_at`, `provider`, `model`, `purpose`, `document_id` FK `SET NULL`, `prompt_version`, `status` CHECK (`SUCCEEDED, FAILED`), `error_code`, `input_tokens`, `output_tokens`, `thinking_tokens`, `latency_ms`, `estimated_cost_usd` CHECK ≥ 0 (NULL when no price is configured). Indexes `(provider, created_at)` (daily budget) and `(document_id)`. `agent_run_id` arrives with the agent tables (Phase 7). |
+| `llm_calls` | AI usage accounting, no prompt or output content: `created_at`, `provider`, `model`, `purpose`, `document_id` FK `SET NULL`, `prompt_version`, `status` CHECK (`SUCCEEDED, FAILED`), `error_code`, `input_tokens`, `output_tokens`, `thinking_tokens`, `latency_ms`, `estimated_cost_usd` CHECK ≥ 0 (NULL when no price is configured). Indexes `(provider, created_at)` (daily budget) and `(document_id)`. `agent_run_id` (Phase 7) attributes calls to an investigation. |
 
 ### Phase 5 — comparison, rules, review
 
 Implemented by migration `0005_matching_rules_review` (✅ Phase 5), which also seeds the 19
 default rules (ids are UUIDv5 of `docintel:rule:<CODE>`, so every installation has the same
 ids) and opens a review task for every document already in `REVIEW_REQUIRED`. Contract-version
-comparison is computed on request from the stored page text and not stored; contract/policy
-and resume/job comparisons arrive with the agent (Phase 7).
+comparison is computed on request from the stored page text and not stored. Contract/policy
+and resume/job comparisons need extraction ground truth for those types and are not built yet.
 
 | Table | Purpose / notable columns |
 |---|---|
@@ -247,13 +247,17 @@ and resume/job comparisons arrive with the agent (Phase 7).
 pgvector 0.8 **iterative index scans** (`SET hnsw.iterative_scan = relaxed_order`)
 are enabled for filtered queries so access/metadata filters don't under-fill top-k.
 
-### Phase 7 — agent
+### Phase 7 — agent (migration 0007, as built)
 
 | Table | Purpose / notable columns |
 |---|---|
-| `agent_runs` | `run_type`, `status` (`QUEUED, RUNNING, COMPLETED, FAILED, AWAITING_APPROVAL`), `query`, `input jsonb`, `requested_by`, `graph_version`, `plan jsonb`, `result jsonb` (findings, recommendation, confidence, citations — **no chain-of-thought**), `trace jsonb` (node, duration), `error`, token/cost totals, timings. |
-| `agent_tool_calls` | `run_id`, `step_index`, `node_name`, `tool_name`, `arguments jsonb` (validated), `result_summary jsonb` (truncated), `status` (`SUCCEEDED, FAILED, DENIED`), `error`, `latency_ms`. |
-| `api_tokens` | Per-user tokens for MCP/automation: `token_hash` (SHA-256), `prefix`, `scopes text[]`, `expires_at`, `last_used_at`, `revoked_at`. |
+| `agent_runs` | One investigation: `run_type` (`INVESTIGATION`), `status` CHECK (`QUEUED, RUNNING, COMPLETED, FAILED`; `finished_at` set exactly when finished), `query` (≤ 2000 chars, the requester's own text), `document_ids uuid[]`, `options jsonb` (`allow_safe_actions`), `requested_by_id` FK `RESTRICT`, `graph_version`, `plan jsonb`, `result jsonb` (summary, documents, findings with evidence labels, evidence catalogue, sources, confidence, recommendation, action, notices, model — **no reasoning**), `trace jsonb` (node, duration, tool calls), `error`, `tool_calls`, `llm_calls`, `input_tokens`, `output_tokens`, `estimated_cost_usd`, `created_at` / `started_at` / `finished_at`. Indexes `(requested_by_id, created_at)`, `(status)`. |
+| `agent_tool_calls` | Every controlled tool call: `run_id` FK `CASCADE` (NULL for MCP calls; CHECK `via = 'MCP' OR run_id IS NOT NULL`), `actor_id` FK `RESTRICT`, `via` (`AGENT, MCP`), `node_name`, `tool_name`, `arguments jsonb` (validated arguments only), `result_summary jsonb` (bounded, content-free), `status` (`SUCCEEDED, FAILED, DENIED, INVALID`), `error`, `latency_ms`. Indexes `(run_id, step_index)`, `(actor_id, created_at)`. |
+| `api_tokens` | Personal MCP tokens: `user_id` FK `CASCADE`, `name`, `prefix` (display), `token_hash` UNIQUE (SHA-256; the token itself is never stored), `scopes text[]`, `created_at`, `expires_at` (CHECK after creation), `last_used_at`, `revoked_at`. |
+| `review_requests` | A request for human review of a document version (user or investigation): `document_id` / `document_version_id` FK `CASCADE`, `requested_by_id` FK `RESTRICT`, `agent_run_id` FK `SET NULL`, `priority` (`HIGH, NORMAL, LOW` used), `reason` (1–1000 chars). Requests are review items like rule findings: they keep the version's task open through re-evaluations until a person resolves it. |
+| `review_tasks` (0007) | `task_type` adds `REQUESTED_REVIEW` (a task whose only items are requests). |
+| `llm_calls` (0007) | `agent_run_id` FK `SET NULL` + index: model calls of a run are attributed to it. |
+| `processing_jobs` (0007) | `agent_run_id` FK `CASCADE`, unique; `job_type` adds `AGENT_ANALYSIS`. |
 
 ### Phase 8 — workflows & HITL
 

@@ -205,6 +205,29 @@ Changing the embedding provider or model leaves existing vectors from the old mo
 | `RAG_GENERATION_ENABLED` | `true` | `false` = no generated answers: `/knowledge/query` returns the passages only (`RETRIEVAL_ONLY`) |
 | `RAG_MAX_OUTPUT_TOKENS` | `1024` | Output limit for the answer call |
 
+### Investigation agent
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AGENT_LLM_ENABLED` | `true` | Plan and analyse with the configured LLM when one is configured and the sensitivity gate allows it; `false` = deterministic planning and analysis (tools, rules, confidence and recommendation work the same) |
+| `AGENT_MAX_TOOL_CALLS` | `30` | Tool calls per investigation; past it tools return nothing and the result says which steps were skipped |
+| `AGENT_MAX_LLM_CALLS` | `4` | Model calls per investigation (plan + up to two analyses) |
+| `AGENT_MAX_DOCUMENTS` | `3` | Documents investigated as subjects (related orders, deliveries and duplicates are added up to twice this) |
+| `AGENT_TIMEOUT_SECONDS` | `180` | Wall-clock limit of a run; a run over it fails with that reason |
+| `AGENT_TOOL_TIMEOUT_SECONDS` | `30` | Limit per tool call |
+| `AGENT_TOOL_MAX_OUTPUT_BYTES` | `65536` | Largest tool result accepted |
+| `AGENT_MAX_OUTPUT_TOKENS` | `1536` | Output limit for the analysis call |
+| `AGENT_MAX_ACTIVE_RUNS_PER_USER` | `3` | Queued or running investigations per user; more get 429 |
+
+### MCP and API tokens
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `API_TOKEN_MAX_DAYS` | `90` | Longest lifetime of a personal API token |
+| `MCP_API_TOKEN` | — | **Secret.** The token the stdio MCP server (`docintel mcp`) acts with — create it on the API tokens page; never commit it |
+| `MCP_PUBLIC_URL` | `http://<host>:<port>` | URL MCP clients use for the streamable HTTP server (protected-resource metadata) |
+| `MCP_ALLOWED_HOSTS` | `127.0.0.1:*,localhost:*` | `Host` headers the HTTP server accepts (DNS-rebinding protection); add your hostname when serving beyond localhost |
+
 ### Containers
 
 | Variable | Default | Description |

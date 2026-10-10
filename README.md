@@ -4,11 +4,13 @@ Multimodal AI for document understanding, verification, RAG, agentic reasoning a
 human-in-the-loop workflow automation — built as a compact, enterprise-grade platform rather
 than an OCR demo or LLM wrapper.
 
-> **Status: Phase 5 complete — ingestion, OCR, layout, tables, classification, structured
+> **Status: Phase 7 complete — ingestion, OCR, layout, tables, classification, structured
 > extraction with evidence, document comparison, business rules, duplicate detection, the
-> review queue and contract version comparison.** RAG, the agent and workflows are designed
-> (see [`docs/`](docs/README.md)) and are implemented in Phases 6–11. Nothing below claims a
-> capability that has not been built and tested.
+> review queue, contract version comparison, the knowledge base with cited RAG, document
+> search, and the investigation agent (LangGraph, controlled tools, MCP server).** Human
+> approval workflows, reports and the full UI are designed (see [`docs/`](docs/README.md)) and
+> are implemented in Phases 8–11. Nothing below claims a capability that has not been built
+> and tested.
 
 ## What the platform will do
 
@@ -33,7 +35,7 @@ LLM self-assessment; the agent can only *propose* high-impact actions; PostgreSQ
 single stateful service (no Redis, no external vector DB); every AI provider sits behind an
 interface; sensitive documents are never sent to free-tier external AI.
 
-## What works today (Phases 0–6, verified by tests)
+## What works today (Phases 0–7, verified by tests)
 
 | Area | Implemented |
 |---|---|
@@ -60,11 +62,14 @@ interface; sensitive documents are never sent to free-tier external AI.
 | Knowledge base (Phase 6) | Policies, procedures, contract guidelines, FAQs, compliance and public references as Markdown, text, PDF or images, with front-matter or form metadata; organization-wide or one department; section-aware chunks with a title/breadcrumb prefix; versions by `document_key` — the newer one becomes ACTIVE, the older is cited only for dates when it was in force; archive restores the previous version; eleven synthetic seed documents (`make seed-knowledge`) |
 | Hybrid RAG with citations (Phase 6) | pgvector HNSW (cosine) + weighted PostgreSQL full text fused with Reciprocal Rank Fusion; access, version window and category filters inside both scans; an evidence gate that answers "insufficient evidence" without a model call; answers composed only from claims whose citations name provided sources and whose numbers and words occur in them; sources above the external sensitivity limit never sent to the model; every query audited with a fingerprint of the question |
 | Embeddings (Phase 6) | Gemini (behind the sensitivity gate), local fastembed (optional) or an offline lexical hashing model; vectors tagged with their model, full-text fallback when none, `make reembed` after switching |
+| Investigation agent (Phase 7) | LangGraph graph with explicit state: understand the request → identify documents (named, or found from the question with exact document numbers) → inspect extraction and evidence → run the rules (a dry run) → compare documents on request → retrieve the policies that apply → findings with evidence labels → confidence from the weakest inputs → one allowlisted recommendation → request a human review or propose the action for approval. Runs in the worker with tool, model and time budgets; fully deterministic without a model; with Gemini or Ollama the model only plans (typed) and writes findings that must cite existing evidence and cannot clear a failed rule; guardrails overrule its proposals |
+| Controlled tools (Phase 7) | search_documents, get_document, get_extracted_fields, get_document_evidence, search_knowledge_base, compare_documents, run_business_rules, create_review_task — typed inputs and outputs, a permission each, run as the requesting user through the REST services' access checks, every call logged; no shell, file, network or SQL tool |
+| MCP server (Phase 7) | `docintel mcp` (stdio or streamable HTTP) serves the same tools to MCP clients with personal API tokens (hashed, scoped, expiring, revocable, re-checked on every call); calls audited |
 | Document search (Phase 6) | Natural-language search over business documents: types, vendor (vendor master or printed name), payment terms ("longer than 60 days", also read from text when not extracted), totals and dates become SQL filters on the current extraction; the rest is hybrid text search with snippets; the interpretation is shown |
 | LLM accounting | Every call recorded in `llm_calls` (tokens, latency, status, purpose, never content), daily request budget, cost estimates from operator-configured prices, `make llm-usage` |
 | Synthetic data | Seeded generator for linked purchase orders, delivery notes and invoices (12 scenarios, incl. price/quantity/tax/vendor defects, duplicates, multi-page and scanned documents) with JSON ground truth; `make process` ingests a dataset through the API |
-| CLI | `docintel seed` (users and vendor master), `create-user`, `check-ai` (real end-to-end verification of the Gemini key or Ollama models), `check-ocr`, `llm-usage`, `worker`, `worker-health`, `generate-documents`, `ingest`, `knowledge-ingest`, `reembed`, `match` (re-run matching for every processed document), `evaluate` |
-| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, type/status filters, vendor column and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; review queue (filters, claim, priority, due dates), each document's checks, comparisons, duplicates and review decision, comparison view whose evidence links open the source field on its page, business rules (read-only, or editable with validation for administrators), versions with upload and clause comparison; knowledge page (ask with cited answers, library, upload, document passages, archive); document search with the query's interpretation; system status page |
+| CLI | `docintel seed` (users and vendor master), `create-user`, `check-ai` (real end-to-end verification of the Gemini key or Ollama models), `check-ocr`, `llm-usage`, `worker`, `worker-health`, `generate-documents`, `ingest`, `knowledge-ingest`, `reembed`, `match` (re-run matching for every processed document), `mcp`, `evaluate` |
+| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, type/status filters, vendor column and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; review queue (filters, claim, priority, due dates), each document's checks, comparisons, duplicates and review decision, comparison view whose evidence links open the source field on its page, business rules (read-only, or editable with validation for administrators), versions with upload and clause comparison; knowledge page (ask with cited answers, library, upload, document passages, archive); document search with the query's interpretation; AI analysis (start an investigation or Investigate from a document; findings with evidence, policy sources, confidence factors, recommendation and the action taken or proposed, steps and tool calls); API tokens; system status page |
 | Delivery | Non-root multi-stage images, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, quick evaluation incl. retrieval, dependency audits, secret scan, container smoke test, synthetic dataset and knowledge base loaded through the stack) |
 
 Test suites: 733 backend tests (unit, integration against real PostgreSQL, security) and 58
@@ -100,7 +105,8 @@ Details: [local setup](docs/development/local-setup.md) · [configuration](docs/
 
 All numbers below come from `make evaluate`, run on a clean checkout: OCR, classification,
 tables and extraction at commit `a22f1b8`, discrepancies and versions at `fa1fcce` (re-run
-after two matching fixes the other suites do not use), retrieval and search at `42fedf9`.
+after two matching fixes the other suites do not use), retrieval and search at `42fedf9`,
+the agent at `AGENT_COMMIT` (deterministic mode; development and held-out datasets).
 Retrieval was measured with the offline **lexical** hashing embeddings, and its gate thresholds
 and full-text order were chosen on `kb-queries`; the holdout set is small (14 questions). They are measured on **synthetic data only**. Synthetic layouts are regular and the classifier's training and
 test generators are related, so these numbers overstate real-world accuracy. Each report
@@ -138,7 +144,12 @@ lists its datasets, seeds, engine versions and caveats.
 | Generated answers: citation precision/recall, unsupported claims | Not yet measured (needs an LLM) | |
 | Document search, structured questions (vendor, payment terms, totals, dates, types): precision / recall | 100% / 100% (26 questions, native synthetic PDFs, questions generated from ground truth) | [search](evaluation/reports/search.md) |
 | Document search, free text: recall@10 / precision@10 | 100% / 52.5% (6 line-item queries) | [search](evaluation/reports/search.md) |
-| Agent task success / tool-selection accuracy | Not yet measured | |
+| Agent task success: invoice named / found from the question / policy question | 100% / 100% / 100% (development, 70 runs) · 100% / 100% held-out (seed 11, 60 runs, run only after development) — deterministic mode | [agent](evaluation/reports/agent.md) |
+| Agent: unsafe recommendations (payment of a defective invoice) / planted defect reported / false failures on clean invoices | 0 / 100% / 0 on both datasets | [agent](evaluation/reports/agent.md) |
+| Agent tool selection precision / recall; findings whose evidence exists | 99.3% / 100% (held-out 99.2% / 100%); 236 of 236 (206 of 206) | [agent](evaluation/reports/agent.md) |
+| Agent: governing policy among the sources (defective invoices) | 85.7% — vendor mismatches miss the vendor section with the lexical embeddings | [agent](evaluation/reports/agent.md) |
+| Agent guardrails vs a scripted adversarial model (16 defective invoices per dataset) | 0 payment recommendations accepted, 0 adversarial statements or summaries kept | [agent](evaluation/reports/agent.md) |
+| Agent with an LLM (Gemini or Ollama planning and analysis) | Not yet measured (no key or local model in the build environment) | |
 | Latency / throughput / cost per document | Not yet measured | |
 
 Preprocessing choices were made by ablation, which is also in the OCR report. Without
@@ -158,6 +169,13 @@ read with low confidence, which is what a warning means. A warning still puts th
 the review queue. The synthetic generator plants one defect per bundle in a fixed
 set of layouts, so these numbers say the rules and their wiring are right, not how often real
 suppliers' documents trip them.
+The agent suite investigates every synthetic invoice twice through the job queue — named, and
+found from a question with its number and vendor — plus held-out policy questions, and runs a
+scripted adversary that always proposes payment against every defective invoice. Its
+development dataset drove three fixes (identification by document number, the keyword planner
+and a guardrail); the held-out dataset was generated with another seed and run only afterwards.
+These numbers measure the graph, tools, rules and guardrails in deterministic mode; an LLM's
+planning and analysis are not measured yet.
 See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 
 ## Roadmap
@@ -170,8 +188,8 @@ See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 | 4 | Structured extraction: schemas, evidence verification, normalization, vendor master, consistency checks, confidence routing, corrections, LLM accounting, Ollama provider, vision for low-confidence pages | **Complete** |
 | 5 | Comparison & rule engine, duplicates, review queue, contract version comparison | **Complete** |
 | 6 | Knowledge base & hybrid RAG with citations, document search | **Complete** |
-| 7 | LangGraph agent, controlled tools, MCP server | Next |
-| 8 | Workflows, human approval, reports, audit API | Planned |
+| 7 | LangGraph agent, controlled tools, MCP server | **Complete** |
+| 8 | Workflows, human approval, reports, audit API | Next |
 | 9 | Full enterprise UI | Planned |
 | 10 | Evaluation harness & reproducible demo | Planned |
 | 11 | Productionization & deployment | Planned |
@@ -179,7 +197,7 @@ See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 ## Repository layout
 
 ```
-backend/     Python package `docintel` (API, worker, CLI; MCP server in Phase 7), tests
+backend/     Python package `docintel` (API, worker, agent, MCP server, CLI), tests
 synthetic_data/  generated datasets (git-ignored output of `make generate-documents`)
 frontend/    React SPA + nginx image
 docs/        architecture, decisions, development guides

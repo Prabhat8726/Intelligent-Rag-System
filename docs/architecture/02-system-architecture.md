@@ -8,7 +8,8 @@
 * Three process types built from **one** container image:
   * `api` — FastAPI (HTTP, auth, validation, reads, enqueue).
   * `worker` — background pipeline: OCR, extraction, embeddings, agent runs, reports.
-  * `mcp` — Model Context Protocol server exposing controlled tools (Phase 7).
+  * `mcp` — Model Context Protocol server exposing the controlled tools (`docintel mcp`,
+    stdio or streamable HTTP; run on demand, not a compose service — Phase 7).
 * PostgreSQL 17 + pgvector 0.8 is the system of record, vector store, full-text
   index, job queue and audit store.
 * React SPA served by nginx, which also reverse-proxies `/api` (same origin → no

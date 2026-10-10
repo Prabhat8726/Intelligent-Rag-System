@@ -1,138 +1,199 @@
-# 08 — Agent Architecture: State Graph, Tools, MCP (Modules 11, 14–17)
+# 08 — Agent Architecture: State Graph, Tools, MCP (Modules 14–17)
+
+This document describes the investigation agent as built in Phase 7 (decisions:
+ADR-049 … ADR-055). Approving and executing high-impact actions (the HITL state
+machine, Module 17) arrives with workflows in Phase 8; §6 shows where it plugs in.
 
 ## 1. Design stance
 
-* **LangGraph** for explicit, inspectable state and conditional routing.
-  LangGraph is used without LangChain model wrappers: nodes call our own
-  `LLMProvider`, so the provider abstraction and usage accounting stay intact.
-* **Plan-and-execute with bounds**, not an open-ended ReAct loop: the LLM produces
-  a *typed plan* (which tools, which arguments); a deterministic executor runs it
-  under permission checks; the loop is capped (`AGENT_MAX_STEPS`,
-  `AGENT_MAX_LLM_CALLS`, wall-clock timeout).
-* The agent acts **as the requesting user** — it can never see or do more than
-  that user could through the REST API.
-* The agent can only **propose** high-impact actions. Execution happens after
-  human approval through an allowlisted executor (C7 in requirements).
-* Output is a structured result. Hidden reasoning (model "thoughts") is never
-  requested for display, stored, or returned.
+* **LangGraph with explicit state** — a `StateGraph` over a typed state dict; nodes
+  call our own `LLMProvider` (no LangChain model wrappers), so usage accounting,
+  the daily budget and the sensitivity gate apply unchanged.
+* **The model never chooses tools.** It may fill a typed plan (an intent from a
+  closed list, search text, document numbers, policy questions) and write findings;
+  the graph decides which tools run. A request cannot talk the agent into calling
+  something else, and there is nothing else to call (no shell, file, network, SQL
+  or code tool exists).
+* **Facts come from tools, as the requesting user.** Every tool call reloads the
+  user, checks the tool's permission and runs through the same services and
+  access-policy predicates as the REST API.
+* **Deterministic first.** Without a model (none configured, `AGENT_LLM_ENABLED=false`,
+  or content above the external AI limit) the graph still plans, gathers facts,
+  writes findings, assesses confidence and recommends — measured in
+  `evaluation/reports/agent.md`.
+* **Propose, don't act** — the only action an investigation may execute is the
+  low-risk one (request a human review); everything else is proposed for approval.
+* **No hidden reasoning** is requested, stored or shown: the result is findings with
+  evidence labels, a summary, a confidence with its factors and a recommendation.
 
-## 2. State
+## 2. State (`agent/state.py`)
 
 ```python
-class InvestigationState(TypedDict):
-    run_id: UUID
-    actor: ActorContext                      # user id, role, departments (for tool authz)
-    query: str                               # untrusted user text
-    plan: Plan | None                        # intent, document refs, tool requests
-    documents: dict[UUID, DocumentSummary]
-    extractions: dict[UUID, ExtractionView]
-    comparisons: list[ComparisonView]
-    rule_results: list[RuleResultView]
-    knowledge: list[RetrievedSource]         # [S1..Sn] with ids
-    findings: list[Finding]                  # category ∈ OBSERVED_FACT | RULE_RESULT |
-                                             #   RETRIEVED_KNOWLEDGE | AI_INFERENCE | UNCERTAINTY
-                                             # each with evidence refs (field ids, rule ids, source ids)
-    confidence: ConfidenceAssessment | None  # computed, not LLM-claimed
-    recommendation: Recommendation | None    # allowlisted action type + rationale
-    proposed_actions: list[ProposedAction]
-    step_count: int
-    errors: list[str]
+class InvestigationState(TypedDict, total=False):
+    run_id, user_id, query: str
+    requested_documents: list[str]       # ids the user named (all visible to them)
+    allow_safe_actions: bool
+    plan: Plan                           # intent, document_query, identifiers,
+                                         # knowledge_questions, focus_fields, source
+    documents: dict[str, DocumentInfo]   # get_document outputs
+    document_roles: dict[str, str]       # "subject" | "related" (order, deliveries, duplicate)
+    identified_by: str                   # "request" | "search" | "none"
+    extractions, evidence, rules: dict   # tool outputs per document
+    comparisons: list                    # compare_documents outputs (+ members)
+    knowledge: list                      # passages, labelled K1..Kn
+    knowledge_queries, pending_questions: list[str]
+    analysis: dict                       # findings, evidence catalogue, summary, proposal
+    confidence, recommendation: dict
+    action_route: str                    # approval_gate: execute | propose | none
+    action: dict | None                  # EXECUTED | PROPOSED | SKIPPED | FAILED
+    rounds: int
+    notices, tool_calls, trace: Annotated[list, operator.add]   # accumulated
 ```
 
-## 3. Graph
+Values are JSON-compatible, so the final state is stored as is (`agent_runs.result`,
+`plan`, `trace`); `agent_tool_calls` holds every call.
+
+## 3. Graph (`agent/graph.py`)
 
 ```mermaid
 stateDiagram-v2
   [*] --> understand_request
   understand_request --> identify_documents
   identify_documents --> inspect_extraction: documents found
-  identify_documents --> analyze: none found (UNCERTAINTY)
-  inspect_extraction --> compare_documents: counterpart exists (e.g. PO for invoice)
-  inspect_extraction --> run_rules: single document
-  compare_documents --> run_rules
+  identify_documents --> retrieve_knowledge: none (policy question or nothing identified)
+  inspect_extraction --> run_rules
+  run_rules --> compare_documents: intent COMPARE and two or more subjects
   run_rules --> retrieve_knowledge
+  compare_documents --> retrieve_knowledge
   retrieve_knowledge --> analyze
-  analyze --> understand_request: plan requests more info AND steps < max
+  analyze --> retrieve_knowledge: model asks a follow-up question (one round)
   analyze --> determine_confidence
   determine_confidence --> recommend
   recommend --> approval_gate
-  approval_gate --> propose_for_approval: risk ≥ threshold OR confidence < HIGH
-  approval_gate --> execute_safe_action: low-risk action
-  approval_gate --> audit_record: no action
-  propose_for_approval --> audit_record
-  execute_safe_action --> audit_record
-  audit_record --> [*]
+  approval_gate --> execute_safe_action: HOLD_FOR_REVIEW and safe actions allowed
+  approval_gate --> propose_for_approval: action needs approval
+  approval_gate --> finalize: nothing to do
+  execute_safe_action --> finalize
+  propose_for_approval --> finalize
+  finalize --> [*]
 ```
 
-| Node | Kind | Notes |
+| Node | Kind | What it does |
 |---|---|---|
-| `understand_request` | LLM (fast model) | Query → `Plan` (intent enum, referenced documents/vendors/numbers, requested outputs). Query text is treated as data. |
-| `identify_documents` | tools | `search_documents`, `get_document`; access-scoped |
-| `inspect_extraction` | tools | `get_extracted_fields`, `get_document_evidence` |
-| `compare_documents` | tool | Deterministic comparison engine |
-| `run_rules` | tool | Deterministic rule engine |
-| `retrieve_knowledge` | tool | `search_knowledge_base` with queries derived from plan + failed rules |
-| `analyze` | LLM (main model) | Inputs are read-only facts; output = findings with categories and evidence refs. A validator rejects findings that contradict `OBSERVED_FACT`/`RULE_RESULT` or cite unknown evidence. |
-| `determine_confidence` | deterministic | From extraction confidence, evidence status, rule outcomes, retrieval scores, citation validity |
-| `recommend` | LLM-proposed, rule-constrained | Must pick from the allowlist; guardrails (e.g. any CRITICAL failure ⇒ cannot recommend `APPROVE_FOR_PAYMENT`) |
-| `approval_gate` | deterministic | Risk policy table |
-| `propose_for_approval` | write | `workflow_actions` (`AWAITING_APPROVAL`) + `review_tasks`; run → `AWAITING_APPROVAL` |
-| `execute_safe_action` | write | Only LOW-risk actions (create review task, generate report) |
-| `audit_record` | write | Audit entry with run summary |
+| `understand_request` | model (FAST tier) or keyword rules | Plan from the request only (wrapped in per-request markers). Keyword planner: intent patterns; questions that name no document and point at none go to the knowledge base; a search phrase from document numbers, the first document type, a month and a vendor name ("INV-7 invoice in May 2026 from Kestrel"). |
+| `identify_documents` | tools | `get_document` for named documents; otherwise `search_documents`, keeping only exact matches when the request names a document number (own number first, else the order number a document quotes). Several matches without a number are investigated together, with a notice. |
+| `inspect_extraction` | tools | `get_extracted_fields`; `get_document_evidence` for the total, focus fields and the weakest required fields (≤ 3 per document). |
+| `run_rules` | tools | `run_business_rules` (a dry run of matching and every enabled rule on current data — nothing stored); counterparts (order, delivery notes, duplicates) added as related documents. |
+| `compare_documents` | tool | Only for a comparison request on two or more invoices, orders or delivery notes not already compared by matching; the result is stored (MANUAL). |
+| `retrieve_knowledge` | tool | `search_knowledge_base` for the plan's questions and the failed/unconfirmed rules (most severe first, ≤ 3 queries, ≤ 8 passages); passages kept only when the evidence gate passes. |
+| `analyze` | rules, then model | Evidence catalogue (D1, D1.F3, D1.R2, D1.C1, M1, K1…); deterministic findings; optional model findings, summary and proposal, validated (§4). |
+| `determine_confidence` | rules | Score 1.0 minus the worst penalty of each kind: identification, extraction review level, unverified key evidence, rules that could not decide or confirm, uncertain comparison items, stale stored outcomes, missing policy, rejected model statements. HIGH ≥ 0.8, MEDIUM ≥ 0.55. |
+| `recommend` | rules (+ model proposal) | Allowlisted action; the model's proposal stands only if the guardrails allow it (§5). |
+| `approval_gate` | rules | Risk table decides: execute, propose or nothing. |
+| `execute_safe_action` | tool | `create_review_task` on the target document with the summary and the failed rules. |
+| `propose_for_approval` | record | The action is recorded as PROPOSED with the role that must approve it; nothing is executed (Phase 8 turns it into a workflow action). |
+| `finalize` | — | Budget notices. |
 
-## 4. Tools (Module 15)
+Bounds: `AGENT_MAX_TOOL_CALLS` (30; past it, tools return nothing and the run says
+so), `AGENT_MAX_LLM_CALLS` (4), one follow-up retrieval round,
+`AGENT_TIMEOUT_SECONDS` (180) for the whole run, `AGENT_TOOL_TIMEOUT_SECONDS` (30)
+and `AGENT_TOOL_MAX_OUTPUT_BYTES` per call, `AGENT_MAX_DOCUMENTS` (3) subjects,
+`AGENT_MAX_ACTIVE_RUNS_PER_USER` (3, else 429).
 
-Every tool is a `Tool[In, Out]` with: Pydantic input/output models
-(`extra="forbid"`), required permission, side-effect class, timeout, output size
-cap, and audit logging (`agent_tool_calls`). No shell, filesystem, network, SQL
-or code-execution tools exist.
+**Execution**: `POST /api/v1/analysis` creates the run (`QUEUED`) and an
+`AGENT_ANALYSIS` job in the same transaction; the worker runs the graph once (no
+automatic retry: a run may already have requested a review and its model calls
+cost money), stores plan, result, trace and usage (tool calls, model calls,
+tokens, estimated cost from `llm_calls.agent_run_id`) and audits
+`analysis.completed` / `analysis.failed` with `actor_type=AGENT` on behalf of the
+requester. The request is audited by fingerprint only.
 
-| Tool | Side effect | Permission | Input (validated) | Output |
-|---|---|---|---|---|
-| `search_documents` | READ | `documents:read` | query ≤ 500 chars, filters, `limit ≤ 20` | id, type, vendor, date, status |
-| `get_document` | READ | `documents:read` | `document_id` | metadata + classification + confidence |
-| `get_extracted_fields` | READ | `documents:read` | `document_id`, optional field paths | normalized fields + confidence |
-| `get_document_evidence` | READ | `documents:read` | `document_id`, `field_path` | page, source_text, bbox, evidence status |
-| `search_knowledge_base` | READ | `knowledge:read` | query, category, `top_k ≤ 10` | cited sources |
-| `compare_documents` | RECORD | `comparisons:create` | ≥2 document ids + type | comparison results |
-| `run_business_rules` | RECORD | `comparisons:create` | document ids or comparison id | rule results |
-| `create_review_task` | LOW-RISK WRITE | `reviews:work` | document id, reason ≤ 1000 chars, priority | task id |
-| `generate_report` | LOW-RISK WRITE | `reports:create` | subject type/id, report type | report id |
-| `get_workflow_status` | READ | `workflows:read` | workflow id | status, pending actions |
+## 4. Findings and their validation (`agent/analysis.py`)
 
-Authorization failures return a `DENIED` tool result (logged) — the model sees
-"not found or not permitted", never details about inaccessible resources.
+| Category | Written by | Rule |
+|---|---|---|
+| `OBSERVED_FACT` | rules | Document facts from `get_document` / fields |
+| `RULE_RESULT` | rules | Each FAIL/WARN outcome with its comparison items; "all N rules passed"; requested comparisons |
+| `UNCERTAINTY` | rules | Rules that could not decide, missing or weak required fields, nothing identified |
+| `RETRIEVED_KNOWLEDGE` | rules (reference) or model | Model claims must cite a K label and pass the RAG grounding check (numbers, ≥ 60% of words); ungrounded ones are kept but flagged |
+| `AI_INFERENCE` | model | Must cite known labels; every number must occur in the cited evidence |
 
-## 5. HITL state machine (Module 17)
+A model statement is removed when it cites nothing that exists, states a number not
+in its evidence, clears a failed rule it cites ("passes", "within tolerance"),
+clears an issue while any rule fails ("the discrepancy is within tolerance"), or
+makes a blanket clearance ("every check passes", "approved for payment") while a rule
+fails or warns. The same checks apply to the model's summary and rationale (replaced
+by the deterministic ones when they fail). Facts are given to the model in
+per-request markers, declared untrusted; documents above `AI_EXTERNAL_MAX_SENSITIVITY`
+mean no analysis call at all, and passages above it are not sent (nor citable).
+
+## 5. Recommendation, guardrails and risk (`agent/policy.py`)
+
+| Action | Risk | Executes? | Guardrail (when a proposal is refused) |
+|---|---|---|---|
+| `APPROVE_FOR_PAYMENT` | HIGH | proposed; MANAGER approves | only an invoice, rules evaluated, no failure, warning, comparison difference or duplicate, confidence HIGH |
+| `REJECT_DUPLICATE` | HIGH | proposed; MANAGER approves | a duplicate is established |
+| `REQUEST_VENDOR_CLARIFICATION` | MEDIUM | proposed; REVIEWER approves | a discrepancy with an order or delivery exists |
+| `HOLD_FOR_REVIEW` | LOW | yes (review request) if allowed | there is a document to review |
+| `NO_ACTION` | NONE | — | not allowed with a failed rule, duplicate or difference |
+
+Without a valid proposal the rules decide: duplicate → reject; failed rule,
+difference, unconfirmed value or LOW confidence → hold; clean invoice with HIGH
+confidence → approve (proposed); otherwise no action.
+
+## 6. Tools (Module 15, `agent/tools/`)
+
+Every tool is a `Tool[In, Out]`: Pydantic input (`extra="forbid"`, bounded strings,
+no control characters) and output models, a permission, a side-effect class
+(READ / RECORD / WRITE), a timeout and an output cap. The registry reloads the user
+(inactive → DENIED), intersects role permissions with API-token scopes, validates
+(INVALID; messages never echo values), runs the handler in its own session and
+writes an `agent_tool_calls` row for every outcome. Inaccessible resources are
+"Not found or not permitted."
+
+| Tool | Side effect | Permission | Wraps |
+|---|---|---|---|
+| `search_documents` | READ | `documents:read` | DocumentSearchService (hits carry number and order reference) |
+| `get_document` | READ | `documents:read` | metadata, effective sensitivity, extraction quality, open review task |
+| `get_extracted_fields` | READ | `documents:read` | current extraction; corrections win |
+| `get_document_evidence` | READ | `documents:read` | page, quote, box, evidence status, method |
+| `search_knowledge_base` | READ | `knowledge:read` | hybrid retrieval in force on a date (no generation) |
+| `compare_documents` | RECORD | `comparisons:create` | ComparisonService.create (MANUAL) |
+| `run_business_rules` | READ | `documents:read` | MatchingService.dry_run; comparisons and duplicates involving documents the caller cannot see are hidden |
+| `create_review_task` | WRITE | `reviews:work` | ReviewRequestService: the request joins the document's open task (type REQUESTED_REVIEW when alone) and survives re-evaluation until a person resolves it |
+| `generate_report`, `get_workflow_status` | — | — | Phase 8 (reports and workflows do not exist yet) |
+
+## 7. MCP (Module 16, `agent/mcp_server.py`)
+
+**Value**: an analyst uses the verified tools from an MCP client (IDE, desktop
+assistant) without copying documents into it, with the web UI's permissions,
+scoping and audit trail.
+
+* Thin adapter over the same registry: tool list and JSON schemas (input and output)
+  come from the tool definitions; results are structured content; errors are tool
+  errors (`DENIED: …`, `INVALID: …`).
+* `docintel mcp --transport stdio` (identity: `MCP_API_TOKEN`, logs to stderr) or
+  `--transport http --host --port` (streamable HTTP, stateless, JSON responses,
+  `Authorization: Bearer <token>`, DNS-rebinding protection via `MCP_ALLOWED_HOSTS`).
+* Tokens: `POST /api/v1/auth/tokens` (shown once, SHA-256 stored, scopes ⊆ the tool
+  permissions and the owner's role, ≤ `API_TOKEN_MAX_DAYS`, revocable). Every call
+  re-checks token, owner and role; a revoked token stops working inside an open
+  session. Calls are logged (`via=MCP`) and audited (`mcp.tool_called`); failed
+  authentication is audited (`mcp.auth_failed`, token prefix only).
+* Not exposed: investigations, approvals, administration.
+
+## 8. HITL (Module 17) — Phase 8
+
+Phase 7 records high-impact recommendations as `PROPOSED` with the approving role.
+Phase 8 adds `workflow_actions` with the state machine below; proposals from runs
+become actions in `AWAITING_APPROVAL`, approved by a person other than the proposer.
 
 ```mermaid
 stateDiagram-v2
   [*] --> PROPOSED
   PROPOSED --> AWAITING_APPROVAL: needs approval
-  PROPOSED --> APPROVED: auto-approvable (LOW risk policy)
   AWAITING_APPROVAL --> APPROVED: approver (≠ proposer, has required_role)
   AWAITING_APPROVAL --> REJECTED: approver + mandatory reason
   APPROVED --> EXECUTED: executor succeeded
-  APPROVED --> FAILED: executor error (retryable by approver)
-  REJECTED --> [*]
-  EXECUTED --> [*]
+  APPROVED --> FAILED: executor error
 ```
-
-Each transition writes `workflow_action_transitions` + `audit_logs` in the same
-transaction. Executors are idempotent (`idempotency_key`).
-
-## 6. MCP (Module 16)
-
-**Value it adds:** lets an analyst use the platform's verified tools from an MCP
-client (IDE, desktop assistant) without copying sensitive documents into that
-client, while keeping RBAC, scoping and audit identical to the web UI.
-
-* Implemented with the official `mcp` Python SDK as a thin adapter over the same
-  tool registry (no duplicated logic).
-* Exposed tools: `search_documents`, `get_document`, `compare_documents`,
-  `search_policy` (= `search_knowledge_base`), `run_validation`
-  (= `run_business_rules`), `create_review_task`, `generate_report`.
-* Transports: stdio (local) and streamable HTTP behind auth.
-* Auth: per-user API tokens (hashed, scoped, expiring, revocable); every call is
-  audited with `actor_type=USER, details.via=mcp`.
-* No approval/execution tools over MCP.

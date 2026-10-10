@@ -106,6 +106,32 @@ still works. For local vectors set `EMBEDDING_PROVIDER=fastembed` (after
 `hashing` (offline, lexical). After changing the provider run `make reembed`. Answers need an
 LLM; without one the Knowledge page shows the retrieved passages (`Passages only`).
 
+## AI analysis (investigation agent)
+
+On the **AI analysis** page (or **Investigate** on a document) ask e.g. "Can we pay this
+invoice?", "Why does invoice INV-2026-0042 from Kestrel not match its order?" or "Who must
+approve payment terms longer than 60 days?". The worker runs the investigation: it finds the
+documents, reads their fields and evidence, runs the rules, retrieves the policies that apply
+and recommends one action — a review request may be created for you (untick it to prevent
+that); payment and duplicate rejection are only proposed. Without an LLM the investigation is
+fully deterministic; with `GEMINI_API_KEY` (or Ollama) the model also plans and writes checked
+findings, for INTERNAL and PUBLIC documents only. Use synthetic documents only with the free
+Gemini tier.
+
+## MCP clients
+
+1. Create a personal token on the **API tokens** page (choose the scopes; it is shown once).
+2. stdio (a desktop assistant or IDE on this machine): put the token in `.env` as
+   `MCP_API_TOKEN=...` (never commit it) and configure the client to run
+   `make mcp` — or `uv run --env-file ../.env docintel mcp` from `backend/`.
+3. Streamable HTTP: `make mcp-http`, then point the client at `http://127.0.0.1:8001/mcp`
+   with the header `Authorization: Bearer <token>`. To serve beyond localhost set
+   `MCP_ALLOWED_HOSTS` and `MCP_PUBLIC_URL` and put TLS in front of it.
+
+The client gets the same tools as the agent (document search, fields, evidence, rules,
+comparisons, policy search, review requests), limited by the token's scopes and your role;
+every call is logged and audited, and revoking the token takes effect on the next call.
+
 ## Everyday commands
 
 | Command | What it does |
@@ -117,7 +143,8 @@ LLM; without one the Knowledge page shows the retrieved passages (`Passages only
 | `make match` | Re-run comparisons, rules and review tasks for every processed document (after upgrading to Phase 5, or after changing rules) |
 | `make worker` | Process queued jobs on the host until the queue is empty |
 | `make check-ocr` | Verify Tesseract, the configured languages and TSV output |
-| `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search; ~40 min) → `evaluation/reports/`. Retrieval and search create and drop a scratch database on the `TEST_DATABASE_URL` server |
+| `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search, agent; ~40 min) → `evaluation/reports/`. Retrieval, search and agent create and drop a scratch database on the `TEST_DATABASE_URL` server |
+| `make mcp` / `make mcp-http` | MCP server over stdio (needs `MCP_API_TOKEN`) / streamable HTTP on port 8001 |
 | `make seed-knowledge` | Load `knowledge_base/` through the API |
 | `make reembed` | Add vectors of the configured embedding model to passages that have none (after switching `EMBEDDING_PROVIDER`, or after a provider outage) |
 | `make llm-usage` | LLM calls, tokens and estimated cost per day for the last 7 days (from `llm_calls`) |

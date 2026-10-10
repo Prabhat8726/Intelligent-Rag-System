@@ -112,8 +112,9 @@ Structured output — claims only:
 4. **Answer from claims** — the text shown is the surviving claims with their
    citations, never free model prose.
 5. **No tool execution from retrieved text** — RAG output is data for the agent.
-6. **Deterministic facts win** — retrieved policy can explain a rule result (Phase 7)
-   but cannot overturn it.
+6. **Deterministic facts win** — retrieved policy can explain a rule result but cannot
+   overturn it: the agent retrieves the policy for each failed rule, and model statements
+   that clear a failed rule are removed (docs/architecture/08 §4).
 
 Statuses: `ANSWERED`, `PARTIALLY_SUPPORTED`, `INSUFFICIENT_EVIDENCE`,
 `RETRIEVAL_ONLY`. Every query is audited with a fingerprint of the question (never its

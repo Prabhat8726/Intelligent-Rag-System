@@ -60,15 +60,18 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 | Contract versions (clause segmentation; added / removed / modified P/R; steps exactly right) | Phase 5 | [`evaluation/reports/versions.md`](../../evaluation/reports/versions.md) | 20 synthetic contract families × 3 versions (seed 61), native and re-rendered as scans |
 | Knowledge retrieval (hit@1/3/5, section recall@5, precision@5, MRR, nDCG@5; evidence-gate refusals and false refusals; access control; version filtering; latency; ablations dense / full text / hybrid, full-text order, contextual prefix off, fixed-size chunks) — the seed knowledge base ingested by the production upload service and worker in a scratch database, questions answered by `KnowledgeRetriever` | Phase 6 | [`evaluation/reports/retrieval.md`](../../evaluation/reports/retrieval.md) | `kb-queries` (tuning) and `kb-queries-holdout`; offline lexical hashing embeddings |
 | Business document search (precision / recall / exact result sets per question family: vendor, payment terms, totals, dates, types, free text) — synthetic documents processed by the worker, questions generated from ground truth, answered by `DocumentSearchService` | Phase 6 | [`evaluation/reports/search.md`](../../evaluation/reports/search.md) | synthetic-core, 6 scenarios × 2 bundles (seed 2), native PDFs |
+| Agent investigations (task success per way of asking, unsafe recommendations, planted defect reported, false failures on clean invoices, identification from the question, tool selection P/R, findings whose evidence exists, governing policy among the sources, policy-question sections, guardrails against a scripted adversarial model, tool calls and latency per run) — synthetic bundles and the seed knowledge base processed by the worker in a scratch database, every invoice investigated through the job queue named, found from the question and (if defective) with the adversary | Phase 7 | [`evaluation/reports/agent.md`](../../evaluation/reports/agent.md) | synthetic-scenarios, 10 invoice scenarios × 2 bundles: development (seed 7, used while building) and held-out (seed 11); 10 answerable `kb-queries-holdout` questions; deterministic mode |
 
 Not yet measured: the **LLM extraction path** (no API key or local model in the build
 environment; its merge, evidence and gating logic is covered by tests), provenance metrics
 (page accuracy, bbox IoU), field extraction for contracts, receipts, resumes, bank statements
-and policies (no generator ground truth yet), contract/policy comparison (Phase 7), **semantic embeddings**
+and policies (no generator ground truth yet), contract/policy comparison, **semantic embeddings**
 (Gemini, fastembed: no key or model download in the build environment — retrieval was measured
 with the lexical hashing model), **generated RAG answers** (citation precision/recall,
 unsupported-claim rate: need an LLM; the citation and grounding checks are covered by tests),
-agent and system latency. The retrieval and search suites need a PostgreSQL server
+**model-assisted agent runs** (planning and analysis with Gemini or a local model: the
+validators and guardrails are measured against a scripted adversary instead) and system
+latency. The retrieval, search and agent suites need a PostgreSQL server
 (`TEST_DATABASE_URL`); they create and drop a scratch database. Comparison and rules are deterministic: besides the suite, every planted
 discrepancy on native documents is a unit test (`tests/unit/test_rules.py`), so CI catches a
 regression without running the evaluation. All current
