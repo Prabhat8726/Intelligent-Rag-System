@@ -1,8 +1,8 @@
 # 08 — Agent Architecture: State Graph, Tools, MCP (Modules 14–17)
 
 This document describes the investigation agent as built in Phase 7 (decisions:
-ADR-049 … ADR-055). Approving and executing high-impact actions (the HITL state
-machine, Module 17) arrives with workflows in Phase 8; §6 shows where it plugs in.
+ADR-049 … ADR-055) and the workflows with human approval built on it in Phase 8 (§8,
+ADR-056 … ADR-062).
 
 ## 1. Design stance
 
@@ -91,7 +91,7 @@ stateDiagram-v2
 | `recommend` | rules (+ model proposal) | Allowlisted action; the model's proposal stands only if the guardrails allow it (§5). |
 | `approval_gate` | rules | Risk table decides: execute, propose or nothing. |
 | `execute_safe_action` | tool | `create_review_task` on the target document with the summary and the failed rules. |
-| `propose_for_approval` | record | The action is recorded as PROPOSED with the role that must approve it; nothing is executed (Phase 8 turns it into a workflow action). |
+| `propose_for_approval` | record | The action is recorded as PROPOSED with the role that must approve it; nothing is executed. A standalone investigation stops here; inside a workflow the proposal becomes a workflow action that a person decides (§8). |
 | `finalize` | — | Budget notices. |
 
 Bounds: `AGENT_MAX_TOOL_CALLS` (30; past it, tools return nothing and the run says
@@ -161,7 +161,8 @@ writes an `agent_tool_calls` row for every outcome. Inaccessible resources are
 | `compare_documents` | RECORD | `comparisons:create` | ComparisonService.create (MANUAL) |
 | `run_business_rules` | READ | `documents:read` | MatchingService.dry_run; comparisons and duplicates involving documents the caller cannot see are hidden |
 | `create_review_task` | WRITE | `reviews:work` | ReviewRequestService: the request joins the document's open task (type REQUESTED_REVIEW when alone) and survives re-evaluation until a person resolves it |
-| `generate_report`, `get_workflow_status` | — | — | Phase 8 (reports and workflows do not exist yet) |
+| `generate_report` | RECORD | `reports:create` | ReportService.generate: a reproducible report of a document, comparison or investigation the caller can see (Phase 8) |
+| `get_workflow_status` | READ | `workflows:read` | one workflow, or a document's latest workflows: steps, the pending action, who may decide it, the outcome (Phase 8) |
 
 ## 7. MCP (Module 16, `agent/mcp_server.py`)
 
@@ -182,18 +183,62 @@ scoping and audit trail.
   authentication is audited (`mcp.auth_failed`, token prefix only).
 * Not exposed: investigations, approvals, administration.
 
-## 8. HITL (Module 17) — Phase 8
+## 8. Workflows and HITL (Modules 17, 18) — as built in Phase 8
 
-Phase 7 records high-impact recommendations as `PROPOSED` with the approving role.
-Phase 8 adds `workflow_actions` with the state machine below; proposals from runs
-become actions in `AWAITING_APPROVAL`, approved by a person other than the proposer.
+A workflow (`workflows/definitions.py`) is a fixed list of steps in code, versioned with
+`definition_version`, run by the worker as a `WORKFLOW` job (one attempt; each step in its own
+transaction, so a failure leaves the finished steps visible):
+
+| Workflow | Steps | Investigation question |
+|---|---|---|
+| `INVOICE_PROCESSING` | check_document → investigate → propose_action → approval → execute_action → report | "Can we pay this invoice?" |
+| `CONTRACT_REVIEW` | check_document → compare_versions → investigate → propose_action → approval → execute_action → report | "Does this contract follow our contract guidelines?" |
+
+* **investigate** runs the Phase 7 graph on the workflow's document as the person who started it,
+  with safe actions off; the run is linked to the workflow and its result shown with the proposal.
+* **propose_action** (`workflows/policy.py`) turns the investigation's recommendation, which has
+  already passed the guardrails, into one action. Invoices: the recommendation (NO_ACTION →
+  HOLD_FOR_REVIEW: a payment workflow always ends in a decision). Contracts: every contract rule
+  passed with HIGH confidence → APPROVE_CONTRACT (with the changed clauses since the previous
+  version in the rationale); deviations → REQUEST_LEGAL_REVIEW. An approval is never proposed
+  while the document has an open review task — it is held for the reviewer instead.
+* Approving does **not** pause and resume the graph: the workflow stops in
+  `AWAITING_APPROVAL`, and the API request that decides carries out the action, finishes the
+  workflow and generates its report in the same transaction (ADR-056).
+* Workflows start manually (`POST /workflows`) or, for the types in `WORKFLOW_AUTO_START`, when
+  a document version finishes processing (as the uploader, if they may start workflows).
 
 ```mermaid
 stateDiagram-v2
   [*] --> PROPOSED
-  PROPOSED --> AWAITING_APPROVAL: needs approval
-  AWAITING_APPROVAL --> APPROVED: approver (≠ proposer, has required_role)
-  AWAITING_APPROVAL --> REJECTED: approver + mandatory reason
+  PROPOSED --> AWAITING_APPROVAL: needs approval (risk table)
+  PROPOSED --> APPROVED: LOW risk, no approval needed
+  AWAITING_APPROVAL --> APPROVED: a checker with the required role
+  AWAITING_APPROVAL --> REJECTED: a checker + mandatory reason
   APPROVED --> EXECUTED: executor succeeded
-  APPROVED --> FAILED: executor error
+  APPROVED --> FAILED: executor refused (data changed) or errored
 ```
+
+| Action | Risk | Decided by | Executor (platform records only — no external system is connected) |
+|---|---|---|---|
+| `APPROVE_FOR_PAYMENT` | HIGH | MANAGER | re-checks: current version, an invoice, no failed/warning/error rule result, no open review task → payment reference |
+| `REJECT_DUPLICATE` | HIGH | MANAGER | resolves the open review task as REJECTED with the approver's note |
+| `REQUEST_VENDOR_CLARIFICATION` | MEDIUM | REVIEWER | drafts the vendor letter from the recorded discrepancies (not sent) and keeps the invoice in the review queue |
+| `APPROVE_CONTRACT` | HIGH | MANAGER | re-checks like a payment → approved for signature |
+| `HOLD_FOR_REVIEW` | LOW | — (runs at once) | review request on the document |
+| `REQUEST_LEGAL_REVIEW` | LOW | — (runs at once) | HIGH-priority review request with the deviations |
+
+* **Transitions** are written by one function with the history row and an audit event in the
+  same transaction; the history table is append-only (an `UPDATE` trigger refuses changes).
+* **Maker-checker**: the starter, the document's owner and the version's uploader are stored as
+  `maker_ids` on the action; the service refuses (and audits) their decisions and those of a
+  too-junior role, and a CHECK constraint refuses a maker's decision written any other way. A
+  higher role may decide a lower-level action (MANAGER and ADMIN for REVIEWER-level ones).
+* **Rejection** needs a reason and hands the document back to the review queue with it.
+* **Stale proposals**: approving after a new version was uploaded is refused (409); the action
+  can still be rejected, and a new workflow runs on the new version.
+* **Reports** (`reports/`): a snapshot of the data (documents, extracted values with evidence,
+  rule results, comparison, investigation findings and sources, review history, workflows and
+  their decisions) is stored with the Markdown rendered from it and its SHA-256; `as_of` is the
+  newest timestamp in the data, so regenerating from unchanged data gives the same hash, and
+  `POST /reports/{id}/verify` re-renders the snapshot and compares.

@@ -275,3 +275,38 @@ Short ADRs: context → decision → consequences. New decisions are appended.
 * **Context**: Module 16: MCP only where it adds value. The value is using the verified tools from an assistant without exporting documents; the risk is a second, weaker door into the platform.
 * **Decision**: a thin adapter (official SDK, low-level server) over the agent's tool registry: same schemas, permissions, access predicates, logging. Identity is a personal API token (SHA-256 stored, shown once, scoped to tool permissions and the owner's role, expiring, revocable), re-validated on every call, so revocation, deactivation and demotion apply inside open sessions. stdio (one local user) and streamable HTTP (bearer middleware, DNS-rebinding protection). No investigation, approval or administration tools.
 * **Consequences**: + nothing an MCP client does bypasses what the web UI enforces; calls are audited per call. − one database round trip per call for authentication; tokens are bearer secrets the user must keep (shown once, revocable).
+
+### ADR-056 — Workflows are step lists in code, run as jobs; a decision finishes them in the API
+* **Context**: Modules 17–18 need multi-step workflows with a human decision that may come days later; ADR-004 already ruled out pausing a LangGraph graph across that wait, and step code changes between deploys.
+* **Decision**: a workflow is a fixed, versioned list of steps (`definition_version`), run by the worker as a `WORKFLOW` job with one attempt; each step commits on its own, so a failure leaves the finished steps visible and marks the workflow FAILED (audited). The investigation step reuses the Phase 7 graph with safe actions off. The workflow stops in `AWAITING_APPROVAL`; the API request that approves or rejects carries out the action, finishes the workflow and generates its report in one transaction. One active workflow of a type per document (partial unique index).
+* **Consequences**: + nothing waits inside a process; a decision is atomic with its execution and report; replaying a definition is deterministic. − a slow executor would hold the decision request (today's executors only write platform records); a new step sequence needs a new definition version.
+
+### ADR-057 — Maker-checker in the service and in the database; history is append-only
+* **Context**: "humans approve" is only a control if the person who asked for an outcome cannot also grant it, by any path.
+* **Decision**: each action stores `maker_ids` (the workflow's starter, the document's owner and the version's uploader). The service refuses, and audits, a decision by a maker or by a role below the action's `required_role` (a higher role may decide); a CHECK constraint refuses a maker's `decided_by_id` however it is written, another requires a person for any action that needs approval and a reason for any rejection. Transitions are written by one function together with an audit event; an `UPDATE` trigger makes the history append-only.
+* **Consequences**: + the evaluation's probes (service and direct table writes) were refused every time; the trail is complete by construction. − a department with one manager cannot approve the manager's own uploads — an administrator or another manager must (intended).
+
+### ADR-058 — Executors re-check the current data and change only platform records
+* **Context**: an approval can arrive after the document, its rules or its review state changed; and no external system (ERP, mail, e-signature) is connected.
+* **Decision**: an allowlisted executor per action type runs inside a savepoint at approval time. Approvals (payment, contract) re-check that the version is still current, that no stored rule result fails, warns or errored and that no review task is open; otherwise the action becomes FAILED with the reason, and the workflow FAILED. Executors record a decision (payment reference, contract approval), resolve or open review work, or draft the vendor letter — they never send or pay; results say so.
+* **Consequences**: + an approval cannot pay an invoice that has since become defective (tested); integrating a real ERP later replaces an executor, not the workflow. − users see "approved for payment" without money moving; the note in every result states it.
+
+### ADR-059 — Reports are snapshots rendered deterministically and hashed
+* **Context**: Module 30 asks for reproducible reports; regenerating a report later must either give the same document or show that the data changed.
+* **Decision**: a report stores the JSON snapshot it was rendered from (documents, extracted values with evidence, rule results, comparison, investigation findings and sources, review history, workflows and decisions), the Markdown, its SHA-256, the template version and `as_of` (the newest timestamp in the data, not the generation time). Rendering iterates only lists and sorted keys (JSONB does not keep key order) and escapes Markdown in document text. `POST /reports/{id}/verify` re-renders the snapshot; a report is visible only to readers of all its documents.
+* **Consequences**: + the same data gives the same hash (100% in the evaluation); downloads are audited with the hash. − reports are Markdown and JSON only; PDF rendering is not built.
+
+### ADR-060 — Audit scope for managers, and guards on user administration
+* **Context**: managers need their department's trail without seeing other departments' activity; administrators must not lock the platform out of administration.
+* **Decision**: `GET /audit-logs` returns everything to administrators and, to managers, events whose actor is in their department or which concern their department's documents (entity or `details.document_id`); IP address and user agent are shown to administrators only. Keyset paging by id. User administration: no change of one's own role, no self-deactivation, the last active administrator stays, non-admin roles need a department, deactivation revokes API tokens, password policy errors are 422; every change is audited.
+* **Consequences**: + tested for cross-department leakage and lock-out. − system events without a document (e.g. a knowledge upload) are visible to administrators only.
+
+### ADR-061 — Contract guideline rules read clause text; the generator records the truth
+* **Context**: contract review needs the company's Contract Management Guidelines as rules (required clauses, notice of at most 90 days, Ohio law) and a way to measure them.
+* **Decision**: three rule types over the stored clauses (`required_clauses`, `clause_notice_period`, `governing_law`), configurable like every rule, seeded by migration 0008. Parties are read from the contract's preamble by the role each is defined as. The synthetic contract generator records, per version, the required clauses it left out, the notice period and the governing law it wrote, and half of its contracts use the company's own law, so both review outcomes occur in the evaluation.
+* **Consequences**: + rule outcomes are scored against the generator's record (100% on seed 73). − clause matching is by title keyword: a clause titled differently (e.g. "Exit") is reported missing.
+
+### ADR-062 — Automatic start is opt-in per workflow type
+* **Context**: starting the invoice workflow on every processed invoice saves a click but creates proposals nobody asked for.
+* **Decision**: `WORKFLOW_AUTO_START` (default empty) lists the workflow types to start when a document version finishes processing, once per version, as the uploader and only if they may start workflows; otherwise nothing starts.
+* **Consequences**: + no surprise workflows by default; when on, the uploader is a maker, so someone else must approve. − an uploader without `workflows:start` (e.g. a reviewer) gets no automatic workflow.

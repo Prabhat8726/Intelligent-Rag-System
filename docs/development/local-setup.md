@@ -118,6 +118,21 @@ fully deterministic; with `GEMINI_API_KEY` (or Ollama) the model also plans and 
 findings, for INTERNAL and PUBLIC documents only. Use synthetic documents only with the free
 Gemini tier.
 
+## Workflows, approvals and reports
+
+On an invoice or contract (document page → **Workflows and reports**) start **Invoice
+processing** or **Contract review**. The worker checks the document, investigates it (and, for
+a contract, compares it with the previous version) and proposes one action: holds and legal
+reviews are carried out at once (they go to the review queue); payment, duplicate rejection
+and contract approval wait on the **Workflows** page for a manager, a vendor clarification for
+a reviewer. Whoever started the workflow, owns the document or uploaded the version cannot
+decide it — try it: start a workflow as `analyst@docintel.local`, then approve it as
+`manager@docintel.local`. Each finished workflow produces a report (**Reports**; download as
+Markdown or JSON, **Verify** re-renders it and compares the SHA-256). Administrators see the
+**Audit log** and manage **Users**; managers see their department's audit trail. To start
+workflows automatically after processing, set `WORKFLOW_AUTO_START=INVOICE_PROCESSING` (or
+`CONTRACT_REVIEW`, comma-separated).
+
 ## MCP clients
 
 1. Create a personal token on the **API tokens** page (choose the scopes; it is shown once).
@@ -129,7 +144,7 @@ Gemini tier.
    `MCP_ALLOWED_HOSTS` and `MCP_PUBLIC_URL` and put TLS in front of it.
 
 The client gets the same tools as the agent (document search, fields, evidence, rules,
-comparisons, policy search, review requests), limited by the token's scopes and your role;
+comparisons, policy search, review requests, reports, workflow status), limited by the token's scopes and your role;
 every call is logged and audited, and revoking the token takes effect on the next call.
 
 ## Everyday commands
@@ -143,7 +158,7 @@ every call is logged and audited, and revoking the token takes effect on the nex
 | `make match` | Re-run comparisons, rules and review tasks for every processed document (after upgrading to Phase 5, or after changing rules) |
 | `make worker` | Process queued jobs on the host until the queue is empty |
 | `make check-ocr` | Verify Tesseract, the configured languages and TSV output |
-| `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search, agent; ~40 min) → `evaluation/reports/`. Retrieval, search and agent create and drop a scratch database on the `TEST_DATABASE_URL` server |
+| `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search, agent, workflow; ~45 min) → `evaluation/reports/`. Retrieval, search, agent and workflow create and drop a scratch database on the `TEST_DATABASE_URL` server |
 | `make mcp` / `make mcp-http` | MCP server over stdio (needs `MCP_API_TOKEN`) / streamable HTTP on port 8001 |
 | `make seed-knowledge` | Load `knowledge_base/` through the API |
 | `make reembed` | Add vectors of the configured embedding model to passages that have none (after switching `EMBEDDING_PROVIDER`, or after a provider outage) |

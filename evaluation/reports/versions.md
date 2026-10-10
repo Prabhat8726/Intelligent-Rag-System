@@ -1,6 +1,6 @@
 # Contract version comparison (clause changes)
 
-Generated 2026-10-09T07:46:46+00:00 from commit `fa1fcce71bb1` by `docintel evaluate --suite versions`. Do not edit by hand.
+Generated 2026-10-10T08:14:02+00:00 from commit `5bf285550b3e` by `docintel evaluate --suite versions`. Do not edit by hand.
 
 ## Summary
 

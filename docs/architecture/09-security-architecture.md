@@ -50,6 +50,18 @@ and model output as untrusted input** at every boundary.
 * Rule changes (`rules:manage`, ADMIN) are validated against the rule type's parameter model,
   versioned and audited with before/after parameters; review decisions are audited with the
   findings' codes, never extracted values or note text.
+* Workflows and reports (Phase 8): a workflow is as visible as its document; deciding needs
+  `workflows:approve`, the action's required role (or a higher one) and not being a maker
+  (starter, document owner, version uploader) — refused decisions are audited and a database
+  CHECK refuses a maker's decision written by any other path (ADR-057). Approvals re-check the
+  current data before anything is recorded (ADR-058). A report is visible only to readers of
+  all of its documents; downloads are audited with the content hash.
+* Audit trail (Phase 8): administrators read every event; managers events by people of their
+  department or about its documents; IP address and user agent are shown to administrators only.
+* User administration (Phase 8, `users:manage`, ADMIN): no change of one's own role, no
+  self-deactivation, the last active administrator stays; deactivation revokes the user's API
+  tokens; unknown fields are rejected (no mass assignment); every change is audited without
+  passwords.
 
 ### Input & file handling (Phase 2)
 * Streaming size limit; extension allowlist ∩ magic-byte sniffing ∩ declared MIME.
@@ -160,6 +172,9 @@ and model output as untrusted input** at every boundary.
 | Path traversal | Malicious filenames never influence storage paths (2) |
 | Cross-user / cross-department access | Documents, evidence, search, RAG, agent tools (2, 6, 7) |
 | Privilege escalation | VIEWER cannot upload/approve; proposer cannot approve own action (5, 8). Phase 5: viewers cannot work the review queue or change rules; another user's claimed task needs a manager (**5**, `tests/integration/test_matching_api.py`) |
+| Maker-checker and approval roles | The starter, owner or uploader cannot approve or reject (service 403, audited; a direct table write fails the CHECK); a reviewer cannot decide a manager-level action; analysts and viewers cannot decide at all; the transition history cannot be updated; a stale proposal (newer version) cannot be approved (**8**, `tests/integration/test_workflows.py`, evaluation `workflow.md`: 0 bypasses in 120 attempts) |
+| Workflow and admin abuse | Another department's workflow is a 404 to read or decide; malformed decisions are 422; nobody but an administrator manages users, no self-promotion or lock-out, unknown fields rejected; audit trail scoped to the department (**8**, `tests/security/test_workflow_security.py`, `tests/integration/test_admin_api.py`) |
+| Hijacked model in a workflow | A scripted model that proposes payment of a defective invoice gets a hold for review, never an approval request; an approval of an invoice that became defective fails at execution (**8**, `tests/security/test_workflow_security.py`, `tests/integration/test_workflows.py`) |
 | Cross-department matching | Documents are never compared or flagged as duplicates across departments; comparisons, findings and review tasks of other departments return 404 / are not listed (**5**, `tests/security/test_matching_security.py`) |
 | Prompt injection | Document text cannot close the data block; injected values never reach AUTO, whether they disagree with the layout reading or only the model reports them (**4**, `tests/security/test_prompt_injection.py`); payloads must not change rule results, recommendations or tool calls (5, **7**, 10) |
 | Field corrections | Only `documents:review`; inaccessible documents 404; audit details carry no values (**4**, `tests/integration/test_extraction_api.py`) |

@@ -219,6 +219,15 @@ Changing the embedding provider or model leaves existing vectors from the old mo
 | `AGENT_MAX_OUTPUT_TOKENS` | `1536` | Output limit for the analysis call |
 | `AGENT_MAX_ACTIVE_RUNS_PER_USER` | `3` | Queued or running investigations per user; more get 429 |
 
+### Workflows
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `WORKFLOW_AUTO_START` | empty | Comma-separated workflow types (`INVOICE_PROCESSING`, `CONTRACT_REVIEW`) started automatically when a document version of the matching type finishes processing — once per version, as the uploader, and only if they may start workflows. Empty = workflows start only from the UI or `POST /api/v1/workflows` |
+
+Who may decide a proposal is not configurable: it follows the risk table in code
+(`workflows/policy.py`; docs/architecture/08 §8) and maker-checker.
+
 ### MCP and API tokens
 
 | Variable | Default | Meaning |

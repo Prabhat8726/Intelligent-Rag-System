@@ -36,7 +36,10 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 | POST | `/api/v1/auth/login` | none | `{email, password}` → `{access_token, token_type, expires_in, user}`. Lockout after N failures; uniform error for unknown user / wrong password / locked / inactive | ✅ |
 | GET | `/api/v1/auth/me` | authenticated | Current user, role, department, effective permissions | ✅ |
 | POST | `/api/v1/auth/refresh` · `/logout` | cookie | Refresh-token rotation + revocation | 🔜 9 |
-| GET/POST/PATCH | `/api/v1/users` | `users:manage` | Admin user management | 🔜 8 |
+| GET / POST | `/api/v1/users` (filters `q` email or name, `role`, `department_id`, `active`; paged) · create `{email, full_name, role, department_id?, password}` → 201, 409 duplicate email, 422 password policy or a non-admin without a department | `users:manage` | User administration (audited) | ✅ 8 |
+| GET / PATCH | `/api/v1/users/{id}` `{full_name?, role?, department_id?, is_active?}` — no change of your own role, no deactivating yourself, the last active administrator stays; deactivation revokes the user's API tokens | `users:manage` | | ✅ 8 |
+| POST | `/api/v1/users/{id}/password` `{password}` → 204 (policy-checked; unlocks the account) | `users:manage` | | ✅ 8 |
+| GET / POST | `/api/v1/departments` (list: any signed-in user) · create `{name}` → 201, 409 duplicate | authenticated / `users:manage` | | ✅ 8 |
 
 ### Documents (Modules 1–8, 27–29)
 | Method | Path | Permission | Status |
@@ -117,25 +120,29 @@ Query and question text with control characters is rejected (422).
 | POST | `/api/v1/analysis` `{query (3–1000), document_ids? (≤ 5, visible to the caller), allow_safe_actions? (default true)}` → 202 + `Location`; 404 for a document the caller cannot see; 429 + `Retry-After` beyond `AGENT_MAX_ACTIVE_RUNS_PER_USER` queued or running runs | `analysis:run` | ✅ 7 |
 | GET | `/api/v1/analysis` (`status`, `limit`, `offset`; own runs, administrators all) · `/analysis/{id}` → status, plan, `result` (summary, documents, findings with evidence labels, evidence catalogue, sources, comparisons, confidence with factors, recommendation, action, notices, model), trace, `tool_call_log`, usage (tool calls, model calls, tokens, estimated cost) | `analysis:read` | ✅ 7 |
 | POST | `/api/v1/review-tasks/requests` `{document_id, reason (5–1000), priority: HIGH/NORMAL/LOW}` → 201 (200 when the same request is already on file) | `reviews:work` + scope | ✅ 7 |
-| POST | `/api/v1/auth/tokens` `{name, scopes ⊆ documents:read, knowledge:read, comparisons:create, reviews:work (and the caller's own), expires_in_days ≤ API_TOKEN_MAX_DAYS}` → 201 with the token (shown once) | authenticated | ✅ 7 |
+| POST | `/api/v1/auth/tokens` `{name, scopes ⊆ documents:read, knowledge:read, comparisons:create, reviews:work, reports:create (8), workflows:read (8) (and the caller's own), expires_in_days ≤ API_TOKEN_MAX_DAYS}` → 201 with the token (shown once) | authenticated | ✅ 7 |
 | GET / DELETE | `/api/v1/auth/tokens` · `/auth/tokens/{id}` (own tokens; revoke → 204) | authenticated | ✅ 7 |
 
 MCP (not REST): `docintel mcp --transport stdio|http` serves the controlled tools to
 MCP clients with an API token (docs/architecture/08 §7).
 
-### Workflows & HITL
+### Workflows & HITL (Modules 17, 18, 30)
 | Method | Path | Permission | Status |
 |---|---|---|---|
-| POST | `/api/v1/workflows` `{workflow_type, document_id}` | `workflows:start` | 🔜 8 |
-| GET | `/api/v1/workflows` · `/workflows/{id}` | `workflows:read` | 🔜 8 |
-| POST | `/api/v1/workflows/{id}/approve` `{reason}` | `workflows:approve` + required_role + maker-checker | 🔜 8 |
-| POST | `/api/v1/workflows/{id}/reject` `{reason}` (reason mandatory) | `workflows:approve` | 🔜 8 |
-| POST/GET | `/api/v1/reports` · `/reports/{id}` · `/reports/{id}/download` | `reports:create` / `reports:read` | 🔜 8 |
+| POST | `/api/v1/workflows` `{workflow_type: INVOICE_PROCESSING \| CONTRACT_REVIEW, document_id}` → 202 + `Location`; 404 for a document the caller cannot see, 422 for the wrong document type, 409 while the document is processing or the same workflow is already active | `workflows:start` + scope | ✅ 8 |
+| GET | `/api/v1/workflows` (`status`, `workflow_type`, `document_id`, `awaiting_me`, `limit`, `offset`; workflows on documents the caller can see) · `/workflows/summary` → `{awaiting_my_decision}` | `workflows:read` | ✅ 8 |
+| GET | `/api/v1/workflows/{id}` → steps with outputs, the investigation's result, the action (type, risk, required role, rationale, payload, `can_decide`, `blockers`, decision, execution result) with its full transition history, report ids | `workflows:read` + scope | ✅ 8 |
+| POST | `/api/v1/workflows/{id}/approve` `{reason?}` → the action is carried out at once (executor re-checks the current data; `FAILED` with the reason otherwise) and the report is generated; 403 for a maker or a too-junior role (refusal audited), 409 when not awaiting approval or the document has a newer version | `workflows:approve` + required role + maker-checker | ✅ 8 |
+| POST | `/api/v1/workflows/{id}/reject` `{reason}` (required) → the document goes back to the review queue with the reason | `workflows:approve` + required role + maker-checker | ✅ 8 |
+| POST | `/api/v1/workflows/{id}/cancel` `{reason?}` (queued or running; its starter, a manager or an administrator) | authenticated + scope | ✅ 8 |
+| POST | `/api/v1/reports` `{report_type, subject_id}` (document: `INVOICE_VERIFICATION`, `CONTRACT_REVIEW`, `COMPLIANCE_REVIEW`; comparison: `DOCUMENT_COMPARISON`; investigation: `AI_ANALYSIS`) → 201 + `Location` | `reports:create` + scope | ✅ 8 |
+| GET | `/api/v1/reports` (`report_type`, `document_id`, `workflow_id`; only reports whose documents the caller can all see) · `/reports/{id}` (content, SHA-256, as-of) | `reports:read` | ✅ 8 |
+| GET | `/api/v1/reports/{id}/download?format=md\|json` (Markdown or the snapshot; audited) · POST `/reports/{id}/verify` → `{report_id, matches, content_sha256}` (re-render the snapshot and compare) | `reports:read` | ✅ 8 |
 
 ### Audit, dashboard, evaluation
 | Method | Path | Permission | Status |
 |---|---|---|---|
-| GET | `/api/v1/audit-logs` (filters: actor, action, entity, date) | `audit:read` (ADMIN all; MANAGER own department) | 🔜 8 |
+| GET | `/api/v1/audit-logs` (filters `actor_id`, `action` exact or a prefix ending in `.`, `entity_type`, `entity_id`, `outcome`, `since`, `until`; newest first, keyset paging with `before_id`; IP and user agent for administrators only) | `audit:read` (ADMIN all; MANAGER events by people of their department or about its documents) | ✅ 8 |
 | GET | `/api/v1/dashboard/summary` | `dashboard:read` | 🔜 9 |
 | GET | `/api/v1/evaluations` · `/evaluations/{id}` | `evaluations:read` | 🔜 10 |
 
@@ -170,8 +177,9 @@ Defined in code (`docintel/auth/permissions.py`), covered by tests.
 | `users:manage` | ✓ | | | | |
 
 `workflows:approve` is necessary but not sufficient: each action also carries a
-`required_role` (e.g. `HIGH` risk → `MANAGER`), and the proposer can never
-approve their own action.
+`required_role` (`HIGH` risk → `MANAGER`, `MEDIUM` → `REVIEWER`; a higher role may decide),
+and no maker — the person who started the workflow, the document's owner or the uploader of
+the version — can decide it (enforced by the service and by a database constraint).
 
 ## 4. Example error
 

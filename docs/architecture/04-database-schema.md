@@ -55,7 +55,8 @@ erDiagram
   agent_runs ||--o{ workflow_actions : "proposes"
   workflow_actions ||--o{ workflow_action_transitions : "history"
   documents ||--o{ review_tasks : "needs review"
-  workflows ||--o{ review_tasks : "creates"
+  workflows ||--o{ reports : "produces"
+  documents ||--o{ workflows : "subject"
   vendors ||--o{ documents : "normalized vendor"
   reports }o--|| users : "generated_by"
   evaluations }o--o| users : "triggered_by"
@@ -138,7 +139,8 @@ erDiagram
     text risk_level
     text required_role
     uuid proposed_by_user_id FK
-    uuid decided_by FK
+    uuid_array maker_ids "CHECK decided_by not a maker"
+    uuid decided_by_id FK
     text decision_reason
     text idempotency_key UK
   }
@@ -233,7 +235,7 @@ and resume/job comparisons need extraction ground truth for those types and are 
 | `comparison_results` | One row per check: `position`, `item_key` (e.g. `line:BRG-6204:unit_price`), `category` CHECK (`HEADER, LINE_ITEM`), `check_name`, `line_key`, `status` CHECK (`MATCH, MISMATCH, MISSING, UNCERTAIN`), `left_value`, `right_value`, `difference jsonb` (absolute / relative), `tolerance jsonb`, `evidence jsonb` (per side: document, field id, page, quote, box, confidence, corrected), `explanation` (deterministic template). |
 | `business_rules` | `code` UNIQUE (e.g. `INV_PO_UNIT_PRICE`), `rule_type` (evaluator key), `name`, `description`, `applies_to text[]`, `params jsonb` (validated by the evaluator's Pydantic model, `extra=forbid`), `severity` CHECK (`LOW, MEDIUM, HIGH, CRITICAL`), `is_enabled`, `version` CHECK ≥ 1 (+1 per change), `updated_by_id`, `updated_at`. |
 | `rule_results` | Latest evaluation per document: `document_id` / `document_version_id` FK `CASCADE`, `comparison_id` FK `SET NULL` (when the finding rests on comparison items), `rule_id` FK `CASCADE`, `rule_code`, `rule_version`, `outcome` CHECK (`PASS, FAIL, WARN, ERROR, NOT_APPLICABLE`), `severity`, `message`, `evidence jsonb`, `items jsonb` (comparison item keys), `evaluated_at`. |
-| `review_tasks` | Human review queue: `document_id` / `document_version_id` FK `CASCADE`, `task_type` CHECK (`DUPLICATE_REVIEW, DISCREPANCY_REVIEW, EXTRACTION_REVIEW, CLASSIFICATION_REVIEW`), `status` CHECK (`OPEN, IN_PROGRESS, RESOLVED, CANCELLED`), `priority` CHECK (`URGENT, HIGH, NORMAL, LOW`), `reasons jsonb` (key, category, code, severity, message), `reason_keys text[]` (what a human resolution acknowledges), `due_at`, `assigned_to_id`, `claimed_at`, `resolution` CHECK (`APPROVED, CORRECTED, REJECTED, CLEARED`), `resolution_note`, `resolved_by_id`, `resolved_at`. CHECKs: `resolved_at` set exactly when closed, `resolution` set exactly when resolved. Partial unique index: **one open task per document**; index `(status, priority, created_at)`. The `workflow_id` link arrives with workflows (Phase 8). |
+| `review_tasks` | Human review queue: `document_id` / `document_version_id` FK `CASCADE`, `task_type` CHECK (`DUPLICATE_REVIEW, DISCREPANCY_REVIEW, EXTRACTION_REVIEW, CLASSIFICATION_REVIEW`), `status` CHECK (`OPEN, IN_PROGRESS, RESOLVED, CANCELLED`), `priority` CHECK (`URGENT, HIGH, NORMAL, LOW`), `reasons jsonb` (key, category, code, severity, message), `reason_keys text[]` (what a human resolution acknowledges), `due_at`, `assigned_to_id`, `claimed_at`, `resolution` CHECK (`APPROVED, CORRECTED, REJECTED, CLEARED`), `resolution_note`, `resolved_by_id`, `resolved_at`. CHECKs: `resolved_at` set exactly when closed, `resolution` set exactly when resolved. Partial unique index: **one open task per document**; index `(status, priority, created_at)`. Workflows hand work to reviewers through review requests (Phase 8), so tasks carry no workflow link. |
 
 ### Phase 6 — knowledge & search
 
@@ -259,15 +261,17 @@ are enabled for filtered queries so access/metadata filters don't under-fill top
 | `llm_calls` (0007) | `agent_run_id` FK `SET NULL` + index: model calls of a run are attributed to it. |
 | `processing_jobs` (0007) | `agent_run_id` FK `CASCADE`, unique; `job_type` adds `AGENT_ANALYSIS`. |
 
-### Phase 8 — workflows & HITL
+### Phase 8 — workflows & HITL (migration 0008, as built)
 
 | Table | Purpose / notable columns |
 |---|---|
-| `workflows` | Instance of a code-defined workflow: `workflow_type` (`INVOICE_PROCESSING, CONTRACT_REVIEW`), `definition_version`, `subject_document_id`, `status` (`RUNNING, AWAITING_APPROVAL, COMPLETED, REJECTED, FAILED, CANCELLED`), `current_step`, `context jsonb`, `initiated_by`. |
-| `workflow_tasks` | Steps of a workflow instance: `step_name`, `sequence`, `status` (`PENDING, RUNNING, COMPLETED, FAILED, SKIPPED`), `output jsonb`, `error`, timings. |
-| `workflow_actions` | HITL unit: `action_type` (allowlist), `payload jsonb`, `risk_level`, `status` (`PROPOSED, AWAITING_APPROVAL, APPROVED, REJECTED, EXECUTED, FAILED`), `proposed_by_type` (`AGENT, RULE, USER`), `proposed_by_user_id`, `rationale`, `confidence`, `required_role`, `decided_by`, `decided_at`, `decision_reason`, `executed_at`, `execution_result jsonb`, `error`, `idempotency_key` UNIQUE. CHECK: `decided_by <> proposed_by_user_id` (maker-checker). |
-| `workflow_action_transitions` | `action_id`, `from_status`, `to_status`, `actor_id`, `reason`, `created_at` — full state history. |
-| `reports` | `report_type`, `subject_type`, `subject_id`, `format`, `storage_key`, `content_sha256`, `generated_by`. |
+| `workflows` | Instance of a code-defined workflow: `workflow_type` (`INVOICE_PROCESSING, CONTRACT_REVIEW`), `definition_version` (≥ 1; definitions live in code), `status` (`QUEUED, RUNNING, AWAITING_APPROVAL, COMPLETED, REJECTED, FAILED, CANCELLED`; CHECK `finished_at` set exactly when finished), `trigger` (`MANUAL, AUTO`), `document_id` / `document_version_id` FK `CASCADE` (the version it ran on), `initiated_by_id` FK `RESTRICT`, `agent_run_id` FK `SET NULL` (its investigation), `current_step`, `outcome` (e.g. `APPROVED_FOR_PAYMENT`, `SENT_TO_LEGAL_REVIEW`), `error`, `created_at` / `started_at` / `finished_at` / `updated_at`. Partial unique index: **one active workflow of a type per document** (`QUEUED, RUNNING, AWAITING_APPROVAL`). |
+| `workflow_tasks` | The steps of a workflow (`check_document`, `compare_versions`, `investigate`, `propose_action`, `approval`, `execute_action`, `report`): `sequence` (unique per workflow), `step_name`, `status` (`PENDING, RUNNING, COMPLETED, FAILED, SKIPPED`), `output jsonb`, `error`, timings. |
+| `workflow_actions` | The HITL unit: `action_type` (allowlist: `APPROVE_FOR_PAYMENT, REJECT_DUPLICATE, REQUEST_VENDOR_CLARIFICATION, HOLD_FOR_REVIEW, APPROVE_CONTRACT, REQUEST_LEGAL_REVIEW`), `status` (`PROPOSED, AWAITING_APPROVAL, APPROVED, REJECTED, EXECUTED, FAILED`), `risk_level`, `requires_approval`, `required_role`, `proposed_by_type` (`RULES, AGENT, USER`), `proposed_by_user_id` (the person the workflow runs for), `agent_run_id`, `rationale` (≤ 2000), `confidence_level` / `confidence_score` (0–1), `payload jsonb`, `maker_ids uuid[]` (starter, document owner, version uploader), `decided_by_id`, `decided_at`, `decision_reason` (≤ 1000), `executed_at`, `execution_result jsonb`, `error`, `idempotency_key` UNIQUE, `document_id` / `document_version_id` (what was proposed for). CHECKs: **maker-checker** `decided_by_id IS NULL OR NOT (decided_by_id = ANY (maker_ids))`; an action needing approval is decided by a person; a rejection has a reason; `decided_at` / `executed_at` set with their states. |
+| `workflow_action_transitions` | Append-only history (an `UPDATE` trigger refuses changes): `id` identity, `action_id` FK `CASCADE`, `from_status`, `to_status`, `actor_type`, `actor_id`, `reason`, `created_at`. Written in the same transaction as the status change, together with an audit event. |
+| `reports` | Reproducible reports: `report_type` (`INVOICE_VERIFICATION, CONTRACT_REVIEW, DOCUMENT_COMPARISON, COMPLIANCE_REVIEW, AI_ANALYSIS`), `subject_type` (`DOCUMENT, COMPARISON, AGENT_RUN`) + `subject_id`, `title`, `document_ids uuid[]` (≥ 1; GIN index — a report is visible only to readers of all its documents), `workflow_id` FK `SET NULL`, `template_version`, `snapshot jsonb` (the data the report was rendered from), `content` (Markdown), `content_sha256` (CHECK hex), `as_of` (newest data timestamp in the snapshot), `generated_by_id`, `created_at`. |
+| `processing_jobs` (0008) | `workflow_id` FK `CASCADE` + index; `job_type` adds `WORKFLOW`. |
+| `business_rules` (0008) | Seeds the contract rules `CONTRACT_REQUIRED_CLAUSES`, `CONTRACT_TERMINATION_NOTICE`, `CONTRACT_GOVERNING_LAW` (an existing rule with the same code is left alone). |
 
 ### Phase 10 — evaluation
 
@@ -279,7 +283,8 @@ are enabled for filtered queries so access/metadata filters don't under-fill top
 
 * `documents.current_version_id` → `document_versions.id` closes a cycle with `document_versions.document_id`. The FK is added after both tables exist (`ON DELETE SET NULL`), and the ORM inserts the document, then the version, then sets `current_version_id` with a follow-up `UPDATE` in the same transaction (SQLAlchemy `post_update`), so no deferrable constraint is needed.
 * Soft-deleted documents (`deleted_at` set) are excluded by the access-policy query helper, so every read path—including RAG and agent tools—ignores them.
-* `workflow_action_transitions` rows are written by the same service method that changes `workflow_actions.status`, inside the same transaction; invalid transitions are rejected before the write.
+* `workflow_action_transitions` rows are written by the same function that changes `workflow_actions.status` (`workflows.actions.transition`), inside the same transaction and with an audit event; invalid transitions are rejected before the write, and the table refuses updates.
+* Maker-checker is enforced twice: the service refuses (and audits) a decision by a maker or by a too-junior role, and the `ck_workflow_actions_maker_checker` constraint refuses a maker's decision written by any other path.
 * Vector columns store L2-normalized vectors; cosine distance (`<=>`) is used consistently.
 * Extraction history: a new extraction clears `is_current` on the previous one in the same transaction; the partial unique index makes two current extractions impossible. Human corrections are copied forward onto a re-extraction of the same version and schema (ADR-032).
 * Matching state is derived and rebuilt: automatic comparisons and rule results of a document are replaced on every run; review tasks are the only matching state with human input and are never deleted (closed as `RESOLVED`, `CLEARED` or `CANCELLED`). `documents.status` is `REVIEW_REQUIRED` exactly while an open review task exists (ADR-035).

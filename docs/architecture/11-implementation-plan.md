@@ -15,8 +15,8 @@ architecture decisions are validated by running code immediately.
 | **4 — Structured extraction** ✅ | Schemas, extraction, repair, evidence, normalization, confidence, LLM usage tracking, Ollama provider | `document_extractions`, `extracted_fields`, `llm_calls`, `/extraction`, `/evidence` | Field metrics measured; malformed JSON handled; every field has provenance or is flagged |
 | **5 — Comparison & rules** ✅ | Comparison engine, rule engine, duplicates, versions diff, review queue | `/comparisons`, `/rules`, `/review-tasks`, `/documents/{id}/findings`, `/versions`, contract version diff | Discrepancy P/R/F1 on scenarios; rules configurable; CI regression suite |
 | **6 — Knowledge & RAG** ✅ | KB ingestion, chunking, embeddings, hybrid retrieval, citations, semantic search, fastembed local provider | `/knowledge/*`, `/search`, `make seed-knowledge`, `docintel reembed` | Retrieval metrics measured with ablations; access filters proven by tests |
-| 7 — Agent | LangGraph graph, tool registry, planner, guardrails, MCP server, API tokens | `/analysis`, `mcp` entrypoint | Agent scenario success/tool-selection measured; injection tests pass |
-| 8 — Workflow automation | Workflows, HITL state machine, executors, reports, audit API, user management | `/workflows/*`, `/reports`, `/audit-logs`, `/users` | Maker-checker enforced; transitions audited; reports reproducible |
+| **7 — Agent** ✅ | LangGraph graph, tool registry, planner, guardrails, MCP server, API tokens | `/analysis`, `mcp` entrypoint | Agent scenario success/tool-selection measured; injection tests pass |
+| **8 — Workflow automation** ✅ | Workflows, HITL state machine, executors, reports, audit API, user management | `/workflows/*`, `/reports`, `/audit-logs`, `/users` | Maker-checker enforced; transitions audited; reports reproducible |
 | 9 — Frontend | Dashboard, inbox, viewer with evidence highlights, comparison, AI analysis, approvals, audit, search; refresh tokens | Full SPA | E2E (Playwright) for the demo path |
 | 10 — Evaluation | Datasets, all suites, reports, regression gates, demo script | `make evaluate`, `make demo` | README metrics generated from reports |
 | 11 — Productionization | Prometheus metrics, rate limiting, hardening, deployment configs (staging/prod), performance tests, runbooks, import-linter | `/metrics`, deploy docs | Deployment claimed only after it is actually performed |
@@ -262,7 +262,7 @@ Agent workflow (Module 14)
 
 Agent tools (Module 15)
 - ✅ search_documents, get_document, get_extracted_fields, get_document_evidence, search_knowledge_base, compare_documents, run_business_rules (dry run), create_review_task (review requests that survive re-evaluation until resolved): typed inputs and outputs, permissions narrowed by token scopes, validation, safe errors, timeouts, output caps and a log row per call (`integration/test_agent_tools.py`)
-- ⏳ generate_report and get_workflow_status — need reports and workflows (Phase 8)
+- ✅ generate_report and get_workflow_status — delivered in Phase 8 (§8)
 
 MCP (Module 16)
 - ✅ `docintel mcp` over stdio and streamable HTTP, the same registry and schemas; personal API tokens (hashed, scoped, expiring, revocable, re-checked per call); DNS-rebinding protection; calls logged and audited (`integration/test_mcp.py`)
@@ -286,3 +286,38 @@ Delivery
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 7 (by design): approving and executing proposed actions (HITL state machine, workflow actions — Phase 8), reports, contract ↔ policy and resume ↔ job comparisons as agent tools (need extraction ground truth for those types).
+
+
+## 8. Phase 8 acceptance criteria
+
+Status as of 2026-10-10, same legend as §1. Metrics live in `evaluation/reports/workflow.md`.
+
+Workflows (Module 18)
+- ✅ Invoice processing (check → investigate → propose → approval → execute → report) and contract review (adds the comparison with the previous version), code-defined and versioned, run by the worker as `WORKFLOW` jobs; one active workflow of a type per document; start validation (processed, right type, visible), cancel while queued or running (`integration/test_workflows.py::test_starting_needs_a_processed_document_of_the_right_type`)
+- ✅ Clean invoice → payment proposed for a manager → approved by someone else → executed with a payment reference, report generated, every step audited (`::test_a_clean_invoice_is_approved_for_payment_by_someone_else`); duplicate → rejection proposed, the approver can say no and the document returns to the review queue (`::test_a_duplicate_is_proposed_for_rejection_and_the_approver_can_say_no`); discrepancy → held for review at once (`::test_a_discrepancy_goes_to_review_without_waiting_for_approval`); a model proposal to ask the vendor waits for a reviewer and drafts the letter (`::test_a_model_proposal_to_ask_the_vendor_waits_for_a_reviewer`)
+- ✅ Contract review against the Contract Management Guidelines (required clauses, notice ≤ 90 days, Ohio law, expiry) and the previous version; approval held while a review task is open; a proposal made stale by a new version cannot be approved (`::test_contract_review_against_the_guidelines_and_previous_versions`)
+- ✅ Automatic start per type (`WORKFLOW_AUTO_START`), once per version, as the uploader (`::test_workflows_start_when_a_document_is_processed`)
+
+Human approval (Module 17)
+- ✅ Action states PROPOSED → AWAITING_APPROVAL → APPROVED / REJECTED → EXECUTED / FAILED; transitions validated, written with the user, time, reason and an audit event; history append-only (`unit/test_workflows.py::test_the_transition_table`, `integration/test_workflows.py::test_maker_checker_holds_for_managers_and_in_the_database`)
+- ✅ Maker-checker: starter, owner and uploader cannot decide (service 403, audited; database CHECK); role per risk; rejection needs a reason (`::test_maker_checker_holds_for_managers_and_in_the_database`, `security/test_workflow_security.py`)
+- ✅ Executors re-check the current data: an approval of an invoice that became defective fails with the reason (`::test_an_approval_fails_when_the_invoice_no_longer_qualifies`); a hijacked model cannot get a defective invoice paid (`security/test_workflow_security.py::test_a_hijacked_model_cannot_get_a_defective_invoice_paid`)
+
+Reports (Module 30), audit and users
+- ✅ Invoice verification, contract review, compliance review, document comparison and AI analysis reports: snapshot + Markdown + SHA-256, as-of from the data, regenerating unchanged data gives the same hash, verify re-renders, JSON and Markdown downloads audited, visible only to readers of all its documents (`integration/test_reports.py`, `unit/test_workflows.py::test_rendering_is_deterministic_and_escapes_document_text`)
+- ✅ `GET /audit-logs` with filters and keyset paging, scoped to the department for managers (`integration/test_admin_api.py::test_the_audit_trail_is_scoped_to_the_department`); user and department administration with lock-out guards and token revocation (`::test_administrators_manage_users`, `::test_administrators_cannot_lock_themselves_or_everyone_out`, `security/test_workflow_security.py::test_nobody_escalates_through_the_admin_api`)
+- ✅ Agent tools generate_report and get_workflow_status (`integration/test_reports.py::test_report_and_workflow_tools`); like every registry tool they are served to MCP clients, with the token scopes `reports:create` and `workflows:read` added
+
+Evaluation (deterministic mode, synthetic data)
+- ✅ Invoice processing, development (seed 7) and held-out (seed 11), 22 workflows each: final proposal as expected 100%, 0 unsafe proposals, every action executed; contract review, 12 families × 3 versions (seed 73): 36 of 36 proposals as expected, contract rule outcomes 144 of 144, version comparison step exactly right on 24 of 24 steps, 4 approvals first held for an open review task
+- ✅ Maker-checker: 120 of 120 attempts refused (service and direct table write), 0 bypasses, every refusal audited; 276 of 276 action state changes audited; every workflow report re-renders to its hash and regenerating gives the same SHA-256
+- ✅ The phase changed the data: the contract generator records its guideline ground truth, and half of its contracts now use the company's law with some notice periods above 90 days, so both outcomes are covered (versions suite unchanged: 40 of 40 steps)
+- ⏳ Model-assisted proposals (Gemini or a local model) — no model in the build environment
+
+Frontend
+- ✅ Workflows (awaiting my decision / all, detail with steps, investigation, proposed action, why you cannot decide, decision with reason, history), reports (list, content, verify, downloads, generate from a document, comparison or investigation), audit log (filters, paging), users (create, edit, deactivate, reset password), the document page's workflows and reports, a badge with the decisions waiting (`workflows/workflows.test.tsx`)
+
+Delivery
+- ⏳ Filled in after verification (tests, Docker stack, smoke, browser check, gitleaks, actionlint)
+
+Not in Phase 8 (by design): connections to external systems (ERP payment, e-mail, e-signature — executors record decisions only), PDF reports, workflow definitions edited at run time, escalation and reminders for decisions waiting too long.

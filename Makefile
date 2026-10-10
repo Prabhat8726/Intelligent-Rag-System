@@ -115,7 +115,7 @@ llm-usage: require-env ## LLM requests, tokens and estimated cost per day (last 
 match: migrate ## Re-run comparisons, rules and review tasks for every processed document
 	$(BACKEND) docintel match
 
-evaluate: db-up ## Run all evaluation suites (OCR ... agent) -> evaluation/reports (several minutes)
+evaluate: db-up ## Run all evaluation suites (OCR ... workflow) -> evaluation/reports (several minutes)
 	$(BACKEND) docintel evaluate --output ../evaluation/reports
 
 mcp: migrate ## MCP server over stdio for a local MCP client (needs MCP_API_TOKEN)

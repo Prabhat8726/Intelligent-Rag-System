@@ -137,40 +137,42 @@ sequenceDiagram
   A->>DB: audit (question fingerprint, sources, cited, sent to model)
 ```
 
-## Flow D — Agent investigation & human approval
+## Flow D — Workflow: investigation & human approval (as built in Phase 8)
 
 ```mermaid
 sequenceDiagram
   autonumber
-  actor U as ANALYST
+  actor U as ANALYST (maker)
   participant A as API
-  participant WK as Worker (LangGraph)
+  participant WK as Worker
+  participant G as Investigation graph (LangGraph)
   participant T as Tool registry
   participant DB as PostgreSQL
-  actor R as MANAGER (approver)
+  actor R as MANAGER (checker)
 
-  U->>A: POST /api/v1/analysis {query, document_ids}
-  A->>DB: agent_runs(QUEUED) + job
-  A-->>U: 202 {analysis_id}
-  WK->>WK: understand_request (LLM → typed plan)
-  loop bounded steps (max N)
-    WK->>T: tool(args) as the requesting user
-    T->>T: validate args · check permission · scope to user's documents
-    T->>DB: read / record (tool call logged in agent_tool_calls)
+  U->>A: POST /api/v1/workflows {workflow_type, document_id}
+  A->>DB: workflows(QUEUED) + steps + WORKFLOW job, audit
+  A-->>U: 202 Location
+  WK->>DB: check_document (processed, current version) · compare_versions (contracts)
+  WK->>G: investigate as U (safe actions off)
+  loop bounded tool calls
+    G->>T: tool(args) as U — validated, permission + scope checked, logged
   end
-  WK->>WK: analyze (LLM, facts are read-only inputs) → findings w/ categories + citations
-  WK->>WK: determine_confidence (deterministic) → recommendation (allowlisted action)
-  alt action needs approval
-    WK->>DB: workflow_actions(AWAITING_APPROVAL), review_task, run status AWAITING_APPROVAL
-  else low-risk action
-    WK->>DB: execute low-risk action (e.g. create review task / report)
+  G-->>WK: findings with evidence, confidence, allowlisted recommendation
+  WK->>DB: propose_action: workflow_actions(PROPOSED) + maker_ids, transition + audit
+  alt LOW risk (hold, legal review)
+    WK->>DB: APPROVED → executor (review request) → EXECUTED, report, workflow COMPLETED
+  else needs approval (payment, duplicate rejection, contract approval, vendor clarification)
+    WK->>DB: AWAITING_APPROVAL, workflow AWAITING_APPROVAL
+    R->>A: POST /api/v1/workflows/{id}/approve {reason?}
+    A->>A: permission · required role · maker-checker (refusals audited) · version still current
+    A->>DB: APPROVED → executor re-checks the data → EXECUTED / FAILED, transitions + audit, report, workflow finished (one transaction)
   end
-  WK->>DB: audit_logs
-  U->>A: GET /api/v1/analysis/{id} → result
-  R->>A: POST /api/v1/workflows/{id}/approve {reason}
-  A->>A: maker-checker + role check + state transition check
-  A->>DB: APPROVED → executor runs allowlisted action → EXECUTED / FAILED, transitions + audit
 ```
+
+The same investigation also runs on its own (`POST /api/v1/analysis`, Phase 7): there a
+high-impact recommendation is only recorded as proposed; only a workflow turns it into an action
+a person decides.
 
 ## Flow E — Final demonstration path (prompt §50)
 

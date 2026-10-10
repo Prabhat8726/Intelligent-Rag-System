@@ -12,6 +12,7 @@ versions and git SHA.
 | `synthetic-core` | `docintel.synthetic` generator (fixed seed) | JSON sidecar per document: type, every field, line items, page of each field, injected defects | 2/5 |
 | `synthetic-noisy` | Same documents rendered → image degradations: blur, rotation ±3°, JPEG artefacts, salt-and-pepper, low DPI | Same as above + exact page text for CER/WER | 3 |
 | `synthetic-scenarios` | PO/invoice/delivery/contract/policy *bundles* with controlled discrepancies (price, quantity, tax, vendor, missing PO, duplicate, expired contract, injection payloads) | Expected discrepancy codes, expected recommendation, expected tool set | 5/7 |
+| `synthetic-contracts` | Contract families of three versions with recorded edits (`docintel.synthetic.contracts`) | Clauses added / removed / modified per step; per version the required clauses left out, the termination notice period and the governing law (Phase 8) | 5/8 |
 | `kb-queries` | 54 hand-written questions over the seed knowledge base (`knowledge_base/`), 6 unanswerable; used to choose the evidence-gate thresholds and the full-text order (the `dev` split) | Relevant (document_key, section heading) pairs; empty = unanswerable | 6 |
 | `kb-queries-holdout` | 14 questions written after those choices, 4 unanswerable; never used for tuning (the `test` split) | Same | 6 |
 | Public (optional) | e.g. SROIE / CORD receipts, FUNSD forms | Dataset labels | 10, after licence review; reported separately |
@@ -34,6 +35,7 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 | RAG retrieval | Recall@k, Precision@k, MRR, nDCG@k (k = 1, 3, 5, 10) | Ablations: dense / FTS / hybrid; chunk size; contextual prefix |
 | RAG answers | citation precision/recall, unsupported-claim rate, refusal accuracy on unanswerable | LLM-judge results labelled as such, spot-checked by a human |
 | Agent | task success (expected recommendation), tool-selection precision/recall vs expected tools, evidence grounding rate, injection resistance rate, steps, LLM calls | |
+| Workflows | final proposal vs expected action (per expected approval / stop), unsafe proposals, maker-checker bypasses (service and database), audited refusals and state changes, report re-render and regeneration hashes, contract rule outcomes and version changes vs the generator's record, latency to proposal and of a decision | |
 | System | p50/p95 latency per pipeline stage, documents/minute per worker, failure rate, LLM tokens & estimated cost per document | From `processing_jobs.stage_timings` + `llm_calls` |
 
 ## 3. Execution
@@ -61,6 +63,7 @@ Synthetic data overstates real-world accuracy; reports say so explicitly (C20).
 | Knowledge retrieval (hit@1/3/5, section recall@5, precision@5, MRR, nDCG@5; evidence-gate refusals and false refusals; access control; version filtering; latency; ablations dense / full text / hybrid, full-text order, contextual prefix off, fixed-size chunks) — the seed knowledge base ingested by the production upload service and worker in a scratch database, questions answered by `KnowledgeRetriever` | Phase 6 | [`evaluation/reports/retrieval.md`](../../evaluation/reports/retrieval.md) | `kb-queries` (tuning) and `kb-queries-holdout`; offline lexical hashing embeddings |
 | Business document search (precision / recall / exact result sets per question family: vendor, payment terms, totals, dates, types, free text) — synthetic documents processed by the worker, questions generated from ground truth, answered by `DocumentSearchService` | Phase 6 | [`evaluation/reports/search.md`](../../evaluation/reports/search.md) | synthetic-core, 6 scenarios × 2 bundles (seed 2), native PDFs |
 | Agent investigations (task success per way of asking, unsafe recommendations, planted defect reported, false failures on clean invoices, identification from the question, tool selection P/R, findings whose evidence exists, governing policy among the sources, policy-question sections, guardrails against a scripted adversarial model, tool calls and latency per run) — synthetic bundles and the seed knowledge base processed by the worker in a scratch database, every invoice investigated through the job queue named, found from the question and (if defective) with the adversary | Phase 7 | [`evaluation/reports/agent.md`](../../evaluation/reports/agent.md) | synthetic-scenarios, 10 invoice scenarios × 2 bundles: development (seed 7, used while building) and held-out (seed 11); 10 answerable `kb-queries-holdout` questions; deterministic mode |
+| Workflow automation (proposal vs expected action, unsafe proposals, open-review holds, maker-checker probes through the service and the table, audited refusals and transitions, report re-render and regeneration, contract rule outcomes and version changes, latency) — every invoice and contract version processed by the worker in a scratch database, each workflow started by one manager and decided by another through the job queue and the service | Phase 8 | [`evaluation/reports/workflow.md`](../../evaluation/reports/workflow.md) | the agent suite's invoice datasets (seeds 7 and 11); `synthetic-contracts`, 12 families × 3 versions (seed 73); deterministic mode |
 
 Not yet measured: the **LLM extraction path** (no API key or local model in the build
 environment; its merge, evidence and gating logic is covered by tests), provenance metrics
@@ -69,9 +72,9 @@ and policies (no generator ground truth yet), contract/policy comparison, **sema
 (Gemini, fastembed: no key or model download in the build environment — retrieval was measured
 with the lexical hashing model), **generated RAG answers** (citation precision/recall,
 unsupported-claim rate: need an LLM; the citation and grounding checks are covered by tests),
-**model-assisted agent runs** (planning and analysis with Gemini or a local model: the
-validators and guardrails are measured against a scripted adversary instead) and system
-latency. The retrieval, search and agent suites need a PostgreSQL server
+**model-assisted agent runs and workflow proposals** (planning and analysis with Gemini or a
+local model: the validators and guardrails are measured against a scripted adversary instead)
+and system latency. The retrieval, search, agent and workflow suites need a PostgreSQL server
 (`TEST_DATABASE_URL`); they create and drop a scratch database. Comparison and rules are deterministic: besides the suite, every planted
 discrepancy on native documents is a unit test (`tests/unit/test_rules.py`), so CI catches a
 regression without running the evaluation. All current
