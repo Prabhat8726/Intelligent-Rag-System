@@ -13,6 +13,7 @@ from docintel.agent.analysis import (
     ModelAnalysis,
     ModelFinding,
     build_catalogue,
+    knowledge_references,
     validate_analysis,
 )
 from docintel.agent.planner import ModelPlan, rule_plan, search_phrase, validate_plan
@@ -327,6 +328,19 @@ def test_withheld_passages_cannot_be_cited() -> None:
         recommended_action=ActionType.NO_ACTION,
     )
     assert validate_analysis(output, catalogue(), set()).findings == []
+
+
+def test_policy_references_read_as_sentences() -> None:
+    faq = {**PASSAGE, "chunk_id": "c2", "title": "AP FAQ", "section_path": "Q6. Can I convert it?"}
+    investigation = state(FAILING, knowledge=[PASSAGE, faq])
+    statements = [
+        finding.statement
+        for finding in knowledge_references(investigation, build_catalogue(investigation), set())
+    ]
+    assert statements == [
+        "Relevant guidance: Procurement Policy - 4. Price variance.",
+        "Relevant guidance: AP FAQ - Q6. Can I convert it?",
+    ]
 
 
 def test_catalogue_items_are_typed() -> None:

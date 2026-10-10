@@ -396,10 +396,13 @@ def knowledge_references(
         if label in cited or key in seen_titles or not passage.get("relevant", True):
             continue
         seen_titles.add(key)
+        heading = f"{passage['title']} - {passage['section_path']}"
+        # FAQ sections are questions: no full stop after their question mark.
+        end = "" if heading.endswith((".", "?", "!")) else "."
         findings.append(
             Finding(
                 category=FindingCategory.RETRIEVED_KNOWLEDGE,
-                statement=f"Relevant guidance: {passage['title']} - {passage['section_path']}.",
+                statement=f"Relevant guidance: {heading}{end}",
                 evidence=[label],
             )
         )
