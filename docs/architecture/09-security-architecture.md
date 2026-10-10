@@ -8,7 +8,7 @@ and model output as untrusted input** at every boundary.
 
 | Threat | Example | Primary controls |
 |---|---|---|
-| Spoofing | Credential stuffing, stolen token | argon2id, lockout, short-lived JWT with iss/aud, refresh rotation (Ph 9), API-token hashing |
+| Spoofing | Credential stuffing, stolen token or cookie | argon2id, lockout, short-lived JWT with iss/aud, in-memory access token, rotating httpOnly refresh cookie with reuse detection (Ph 9), API-token hashing |
 | Tampering | Edit audit history, alter approved action | Append-only audit trigger, HITL transition validation, idempotent executors |
 | Repudiation | "I never approved that" | Audit with actor, role snapshot, request id, IP, reason; maker-checker |
 | Information disclosure | Cross-department document read; RAG leaking restricted policy; data sent to free-tier LLM | Department-scoped policy applied in SQL for REST, tools, search, RAG; 404 on inaccessible ids; sensitivity routing gate; no document content in logs |
@@ -26,8 +26,18 @@ and model output as untrusted input** at every boundary.
 * Login errors are uniform (unknown user, bad password, locked, inactive → same 401 body).
 * A dummy hash is verified for unknown emails to equalize timing (anti-enumeration).
 * Lockout: `AUTH_MAX_FAILED_LOGINS` failures → locked for `AUTH_LOCKOUT_MINUTES` (stored in DB → works across replicas).
-* JWT: HS256, ≥ 32-byte secret validated at startup (weak/default secrets refused outside `local`/`test`), claims `sub, role, iat, nbf, exp, iss, aud, jti`, 30-minute default TTL; the user is re-loaded from DB on every request so deactivation and role changes apply immediately.
-* Phase 9: refresh tokens (httpOnly, `SameSite=Strict`, rotated, hashed server-side, revocable).
+* JWT: HS256, ≥ 32-byte secret validated at startup (weak/default secrets refused outside `local`/`test`), claims `sub, role, iat, nbf, exp, iss, aud, jti`, 15-minute default TTL (30 before Phase 9); the user is re-loaded from DB on every request so deactivation and role changes apply immediately.
+* Browser sessions (Phase 9, ADR-063): the SPA holds the access token in memory only. The
+  web login sets an httpOnly, `SameSite=Strict` refresh cookie scoped to `/api/v1/auth`
+  (Secure outside `local`/`test`, or `AUTH_COOKIE_SECURE`); only its SHA-256 is stored.
+  Every refresh rotates it; presenting a replaced cookie revokes the whole sign-in and is
+  audited (`auth.refresh_reused`), except a lost response: the replaced cookie presented again
+  within `AUTH_REFRESH_REUSE_GRACE_SECONDS` while its successor is unused (the successor is
+  revoked as superseded; presenting that one later is reuse). Idle (`AUTH_REFRESH_IDLE_HOURS`) and absolute
+  (`AUTH_SESSION_MAX_HOURS`) limits; logout, deactivation and password resets revoke sessions.
+  Cookie-authenticated endpoints require the `X-Docintel-Session: 1` header, which a cross-site
+  page cannot send without a CORS preflight (CSRF defence in depth). A login lockout does not
+  end existing sessions, so failed guesses cannot sign the owner out.
 
 ### Authorization
 * RBAC permission map in code (reviewed, tested) — see API spec §3.
@@ -172,6 +182,8 @@ and model output as untrusted input** at every boundary.
 | Path traversal | Malicious filenames never influence storage paths (2) |
 | Cross-user / cross-department access | Documents, evidence, search, RAG, agent tools (2, 6, 7) |
 | Privilege escalation | VIEWER cannot upload/approve; proposer cannot approve own action (5, 8). Phase 5: viewers cannot work the review queue or change rules; another user's claimed task needs a manager (**5**, `tests/integration/test_matching_api.py`) |
+| Browser sessions | The cookie is httpOnly, SameSite=Strict, path-scoped and never in a body; a replayed cookie ends the session and is audited (a lost response within the grace window does not; its orphan replayed later does); logout, deactivation, password reset and idle expiry end sessions; missing CSRF header → 403; API clients get no cookie (**9**, `tests/integration/test_sessions.py`, `src/app.test.tsx`) |
+| Dashboard scope | Another department sees none of a department's figures or activity; investigations are counted per requester; no network details in activity (**9**, `tests/integration/test_dashboard.py`) |
 | Maker-checker and approval roles | The starter, owner or uploader cannot approve or reject (service 403, audited; a direct table write fails the CHECK); a reviewer cannot decide a manager-level action; analysts and viewers cannot decide at all; the transition history cannot be updated; a stale proposal (newer version) cannot be approved (**8**, `tests/integration/test_workflows.py`, evaluation `workflow.md`: 0 bypasses in 120 attempts) |
 | Workflow and admin abuse | Another department's workflow is a 404 to read or decide; malformed decisions are 422; nobody but an administrator manages users, no self-promotion or lock-out, unknown fields rejected; audit trail scoped to the department (**8**, `tests/security/test_workflow_security.py`, `tests/integration/test_admin_api.py`) |
 | Hijacked model in a workflow | A scripted model that proposes payment of a defective invoice gets a hold for review, never an approval request; an approval of an invoice that became defective fails at execution (**8**, `tests/security/test_workflow_security.py`, `tests/integration/test_workflows.py`) |

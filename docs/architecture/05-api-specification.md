@@ -33,9 +33,10 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 ### Auth & users
 | Method | Path | Permission | Description | Status |
 |---|---|---|---|---|
-| POST | `/api/v1/auth/login` | none | `{email, password}` → `{access_token, token_type, expires_in, user}`. Lockout after N failures; uniform error for unknown user / wrong password / locked / inactive | ✅ |
+| POST | `/api/v1/auth/login` | none | `{email, password}` → `{access_token, token_type, expires_in, user}`. Lockout after N failures; uniform error for unknown user / wrong password / locked / inactive. With `X-Docintel-Session: 1` (the web app) it also sets the httpOnly refresh cookie (ADR-063) | ✅ (cookie ✅ 9) |
 | GET | `/api/v1/auth/me` | authenticated | Current user, role, department, effective permissions | ✅ |
-| POST | `/api/v1/auth/refresh` · `/logout` | cookie | Refresh-token rotation + revocation | 🔜 9 |
+| POST | `/api/v1/auth/refresh` | refresh cookie + `X-Docintel-Session: 1` | A new access token and a new cookie (rotation; a replayed cookie ends the whole session and is audited); 401 clears the cookie, 403 without the header | ✅ 9 |
+| POST | `/api/v1/auth/logout` | refresh cookie + `X-Docintel-Session: 1` | Revokes the session (idempotent) and clears the cookie → 204 | ✅ 9 |
 | GET / POST | `/api/v1/users` (filters `q` email or name, `role`, `department_id`, `active`; paged) · create `{email, full_name, role, department_id?, password}` → 201, 409 duplicate email, 422 password policy or a non-admin without a department | `users:manage` | User administration (audited) | ✅ 8 |
 | GET / PATCH | `/api/v1/users/{id}` `{full_name?, role?, department_id?, is_active?}` — no change of your own role, no deactivating yourself, the last active administrator stays; deactivation revokes the user's API tokens | `users:manage` | | ✅ 8 |
 | POST | `/api/v1/users/{id}/password` `{password}` → 204 (policy-checked; unlocks the account) | `users:manage` | | ✅ 8 |
@@ -45,7 +46,7 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 | Method | Path | Permission | Status |
 |---|---|---|---|
 | POST | `/api/v1/documents` (multipart: `file`, `sensitivity`, `department_id` admins only) → 201 | `documents:upload` | ✅ 2 |
-| GET | `/api/v1/documents` (filters: `status`, `document_type`, `vendor_id`, `mine`, `q` filename, `created_from`/`created_to`; items carry the matched `vendor`) | `documents:read` + scope | ✅ 2 (vendor ✅ 4) |
+| GET | `/api/v1/documents` (filters: `status`, `document_type`, `vendor_id`, `mine`, `q` filename, `created_from`/`created_to`; items carry the matched `vendor` and the current `extraction`'s overall confidence and review level) | `documents:read` + scope | ✅ 2 (vendor ✅ 4, extraction ✅ 9) |
 | GET | `/api/v1/documents/{id}` (detail: inspection, latest job; from Phase 3 also pages, current classification + history, review reasons, sensitivity assessment) | `documents:read` + scope | ✅ 2/3 |
 | DELETE | `/api/v1/documents/{id}` (soft delete, cancels queued jobs) → 204 | `documents:delete` + scope | ✅ 2 |
 | GET | `/api/v1/documents/{id}/file` (attachment, `nosniff`, sandbox CSP) | `documents:read` + scope | ✅ 2 |
@@ -143,7 +144,7 @@ MCP clients with an API token (docs/architecture/08 §7).
 | Method | Path | Permission | Status |
 |---|---|---|---|
 | GET | `/api/v1/audit-logs` (filters `actor_id`, `action` exact or a prefix ending in `.`, `entity_type`, `entity_id`, `outcome`, `since`, `until`; newest first, keyset paging with `before_id`; IP and user agent for administrators only) | `audit:read` (ADMIN all; MANAGER events by people of their department or about its documents) | ✅ 8 |
-| GET | `/api/v1/dashboard/summary` | `dashboard:read` | 🔜 9 |
+| GET | `/api/v1/dashboard/summary?days=1..90` → documents (total, by status and type, uploaded), processing (mean / p95 seconds, failures), review queue (open, overdue, by priority and type), standing rule failures (documents per rule), investigations (`scope` all or mine), workflows (awaiting approval, outcomes), a daily confidence series, recent activity (ADR-064) | `dashboard:read` + scope | ✅ 9 |
 | GET | `/api/v1/evaluations` · `/evaluations/{id}` | `evaluations:read` | 🔜 10 |
 
 ## 3. Role → permission matrix

@@ -137,9 +137,12 @@ mean no analysis call at all, and passages above it are not sent (nor citable).
 | `HOLD_FOR_REVIEW` | LOW | yes (review request) if allowed | there is a document to review |
 | `NO_ACTION` | NONE | — | not allowed with a failed rule, duplicate or difference |
 
-Without a valid proposal the rules decide: duplicate → reject; failed rule,
-difference, unconfirmed value or LOW confidence → hold; clean invoice with HIGH
-confidence → approve (proposed); otherwise no action.
+Without a valid proposal the rules decide: duplicate → reject; a confirmed price or
+tax-rate difference against the order and nothing else failing or unconfirmed (and
+confidence not LOW) → ask the vendor, as the invoice processing procedure 3.2/3.3 says
+(proposed for a reviewer; ADR-065); any other failed rule, difference, unconfirmed value
+or LOW confidence → hold; clean invoice with HIGH confidence → approve (proposed);
+otherwise no action.
 
 ## 6. Tools (Module 15, `agent/tools/`)
 

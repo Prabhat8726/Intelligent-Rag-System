@@ -1,5 +1,5 @@
-"""Browser sessions (ADR-063): the refresh cookie, rotation, reuse detection, logout and
-revocation on deactivation and password reset."""
+"""Browser sessions (ADR-063): the refresh cookie, rotation, reuse detection (and the lost
+response allowance), logout and revocation on deactivation and password reset."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from docintel.auth.sessions import COOKIE_NAME, CSRF_HEADER
+from docintel.auth.sessions import COOKIE_NAME, CSRF_HEADER, hash_refresh_token
 from docintel.db.models import AuditLog, Department, RefreshToken, Role, User
 from tests.conftest import TEST_PASSWORD, auth_headers, make_user
 
@@ -122,8 +122,9 @@ async def test_a_replayed_cookie_ends_the_whole_session(
     user = await make_user(db_session, role=Role.ANALYST, department=department)
     _, stolen = await sign_in(client, user)
     since = await last_audit_id(db_session)
-    legitimate = (await refresh(client, stolen)).cookies[COOKIE_NAME]
-    # The copy is presented after the legitimate rotation: theft. Everything is revoked.
+    rotated = (await refresh(client, stolen)).cookies[COOKIE_NAME]
+    legitimate = (await refresh(client, rotated)).cookies[COOKIE_NAME]
+    # The copy is presented after the legitimate rotations: theft. Everything is revoked.
     replay = await refresh(client, stolen)
     assert replay.status_code == 401
     assert replay.json()["detail"] == "Your session has ended. Sign in again."
@@ -138,6 +139,67 @@ async def test_a_replayed_cookie_ends_the_whole_session(
         )
     )
     assert reasons == {"reuse_detected"}
+
+
+async def test_a_lost_refresh_response_is_not_theft(
+    client: httpx.AsyncClient, db_session: AsyncSession, department: Department
+) -> None:
+    """A reload aborts a refresh after the server rotated the cookie: the browser presents the
+    replaced cookie again. Within the grace window, with the successor unused, that works."""
+    user = await make_user(db_session, role=Role.ANALYST, department=department)
+    _, cookie = await sign_in(client, user)
+    since = await last_audit_id(db_session)
+    lost = (await refresh(client, cookie)).cookies[COOKIE_NAME]  # never reaches the browser
+    retried = await refresh(client, cookie)
+    assert retried.status_code == 200, retried.text
+    again = await refresh(client, cookie)  # lost twice: still the same window
+    assert again.status_code == 200, again.text
+    current = again.cookies[COOKIE_NAME]
+    assert (await refresh(client, current)).status_code == 200
+    assert await events(db_session, "auth.refresh_reused", since) == []
+    reasons = sorted(
+        str(reason)
+        for reason in await db_session.scalars(
+            select(RefreshToken.revoke_reason).where(RefreshToken.user_id == user.id)
+        )
+    )
+    # Sign-in, retried and current tokens were replaced in turn; the two lost ones superseded.
+    assert reasons == ["None", "None", "None", "superseded", "superseded"]
+
+    # A superseded cookie presented later means two holders after all: reuse.
+    replay = await refresh(client, lost)
+    assert replay.status_code == 401
+    assert len(await events(db_session, "auth.refresh_reused", since)) == 1
+    tokens = list(
+        await db_session.scalars(select(RefreshToken).where(RefreshToken.user_id == user.id))
+    )
+    assert all(token.revoked_at is not None for token in tokens)
+
+
+async def test_the_grace_window_ends_and_a_used_successor_closes_it(
+    client: httpx.AsyncClient, db_session: AsyncSession, department: Department
+) -> None:
+    user = await make_user(db_session, role=Role.ANALYST, department=department)
+    # Too late: the replacement is older than AUTH_REFRESH_REUSE_GRACE_SECONDS.
+    _, late = await sign_in(client, user)
+    since = await last_audit_id(db_session)
+    assert (await refresh(client, late)).status_code == 200
+    await db_session.execute(
+        update(RefreshToken)
+        .where(RefreshToken.token_hash == hash_refresh_token(late))
+        .values(replaced_at=datetime.now(UTC) - timedelta(seconds=11))
+    )
+    await db_session.flush()
+    assert (await refresh(client, late)).status_code == 401
+    assert len(await events(db_session, "auth.refresh_reused", since)) == 1
+
+    # In time, but the successor has been used: the response was not lost.
+    _, early = await sign_in(client, user)
+    since = await last_audit_id(db_session)
+    successor = (await refresh(client, early)).cookies[COOKIE_NAME]
+    assert (await refresh(client, successor)).status_code == 200
+    assert (await refresh(client, early)).status_code == 401
+    assert len(await events(db_session, "auth.refresh_reused", since)) == 1
 
 
 async def test_logout_revokes_the_session_without_an_alarm(

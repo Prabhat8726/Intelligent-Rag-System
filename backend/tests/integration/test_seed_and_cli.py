@@ -160,6 +160,24 @@ def test_generate_documents_needs_no_server_configuration(
     assert "generated" in capsys.readouterr().out
 
 
+def test_generate_documents_for_one_scenario(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = tmp_path / "demo"
+    argv = ["generate-documents", "--output", str(output), "--seed", "9"]
+    assert cli.main([*argv, "--scenario", "UNIT_PRICE_MISMATCH"]) == cli.EXIT_OK
+    manifest = json.loads((output / "manifest.json").read_text())
+    assert {entry["scenario"] for entry in manifest["documents"]} == {"UNIT_PRICE_MISMATCH"}
+    assert sorted(entry["document_type"] for entry in manifest["documents"]) == [
+        "DELIVERY_NOTE",
+        "INVOICE",
+        "PURCHASE_ORDER",
+    ]
+    capsys.readouterr()
+    assert cli.main([*argv, "--scenario", "NOT_A_SCENARIO"]) == cli.EXIT_USAGE
+    assert "UNIT_PRICE_MISMATCH" in capsys.readouterr().out
+
+
 def test_ingest_without_password_fails_cleanly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

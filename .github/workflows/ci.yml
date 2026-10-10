@@ -119,10 +119,10 @@ jobs:
         run: docker run --rm -v "$GITHUB_WORKSPACE:/repo" zricethezav/gitleaks:v8.30.1 git /repo --redact --no-banner
 
   containers:
-    name: Containers - build, compose up, smoke test, dataset ingest
+    name: Containers - build, compose up, smoke test, dataset ingest, end-to-end demo
     needs: [backend, frontend]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -160,6 +160,32 @@ jobs:
       # end ACTIVE (or SUPERSEDED by its newer version).
       - name: Load the knowledge base through the stack
         run: make seed-knowledge API_URL=http://localhost:8080
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # The master demo path in Chromium: upload, mismatch, policy, recommendation, a reviewer's
+      # approval, the audit log and the dashboard (frontend/e2e/demo.spec.ts).
+      - name: End-to-end demo path (Playwright)
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          cd ..
+          make e2e E2E_BASE_URL=http://localhost:8080
+
+      - name: Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/e2e-report
+            frontend/e2e-results
+          retention-days: 7
 
       - name: Container logs
         if: failure()

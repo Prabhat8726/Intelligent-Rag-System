@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     # Browser sessions (ADR-063): an httpOnly refresh cookie, rotated on every use.
     auth_refresh_idle_hours: int = Field(default=12, ge=1, le=24 * 30)
     auth_session_max_hours: int = Field(default=168, ge=1, le=24 * 90)
+    # A replaced token presented again this soon, while its successor is still unused, is a
+    # lost refresh response (a reload aborted it), not theft. 0 disables the allowance.
+    auth_refresh_reuse_grace_seconds: int = Field(default=10, ge=0, le=60)
     # None = Secure in staging and production; local stacks run on plain http.
     auth_cookie_secure: bool | None = None
 

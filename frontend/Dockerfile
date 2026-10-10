@@ -11,6 +11,8 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.30-alpine AS runtime
 
 ENV API_UPSTREAM=http://api:8000
+# The entrypoint exports NGINX_LOCAL_RESOLVERS (the template's resolver) from /etc/resolv.conf.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf

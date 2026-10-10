@@ -8,11 +8,12 @@ COMPOSE ?= docker compose
 BACKEND := cd backend && uv run --env-file ../.env
 # API used by `make process`: the host API (make dev) by default; use http://localhost:8080 for make up.
 API_URL ?= http://localhost:8000
+E2E_BASE_URL ?= http://127.0.0.1:8080
 DATASET ?= ../synthetic_data/generated
 # Extra flags for `make process`, e.g. INGEST_FLAGS=--require-completed (CI).
 INGEST_FLAGS ?=
 
-.PHONY: help env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
+.PHONY: help e2e env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
         reset-db logs seed-docker generate-documents process seed-knowledge reembed worker test \
         test-backend test-frontend lint format check-ai check-ocr llm-usage evaluate match smoke \
         mcp mcp-http clean
@@ -123,6 +124,9 @@ mcp: migrate ## MCP server over stdio for a local MCP client (needs MCP_API_TOKE
 
 mcp-http: migrate ## MCP server over streamable HTTP on 127.0.0.1:8001 (bearer API tokens)
 	$(BACKEND) docintel mcp --transport http --host 127.0.0.1 --port 8001
+
+e2e: require-env ## Browser test of the demo path against the running stack (make up && make seed-docker first)
+	cd frontend && set -a && . ../.env && set +a && E2E_BASE_URL=$(E2E_BASE_URL) npx playwright test
 
 smoke: ## Smoke-test the running Docker stack through nginx
 	./scripts/smoke_test.sh

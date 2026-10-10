@@ -5,6 +5,11 @@
 * Presenting a replaced token means someone else holds a copy (theft or a replayed cookie): the
   whole family is revoked and audited, and the legitimate user signs in again. A token revoked
   by logout, deactivation or a password reset is simply refused.
+* One exception: a refresh whose response never arrived (a reload aborts it) leaves the browser
+  holding the replaced token. Presented again within AUTH_REFRESH_REUSE_GRACE_SECONDS of its
+  replacement, while nothing issued since has been used, the unused successors are revoked as
+  *superseded* and a new token is issued. Presenting a superseded token later means two
+  holders after all, and is treated as reuse.
 * Two limits: a token unused for AUTH_REFRESH_IDLE_HOURS expires (idle timeout); a family ends
   AUTH_SESSION_MAX_HOURS after the sign-in, whatever its activity (absolute timeout).
 * Only the token's SHA-256 is stored. Logout, deactivation and a password reset revoke tokens;
@@ -48,6 +53,7 @@ class RevokeReason:
     REUSE = "reuse_detected"
     DEACTIVATED = "user_deactivated"
     PASSWORD_RESET = "password_reset"  # noqa: S105 - a reason, not a secret
+    SUPERSEDED = "superseded"  # issued, never received: its predecessor was presented again
 
 
 def hash_refresh_token(token: str) -> str:
@@ -108,10 +114,12 @@ class SessionService:
         )
         if token is None:
             raise AuthenticationError(SESSION_ENDED)
-        if token.replaced_at is not None:
+        if token.replaced_at is not None and not await self._lost_response(token, now):
             await self._reuse(token, meta, now)
-        if token.revoked_at is not None:  # logged out, deactivated, password reset
-            raise AuthenticationError(SESSION_ENDED)
+        if token.revoked_at is not None:
+            if token.revoke_reason == RevokeReason.SUPERSEDED:
+                await self._reuse(token, meta, now)
+            raise AuthenticationError(SESSION_ENDED)  # logged out, deactivated, password reset
         if token.expires_at <= now:
             raise AuthenticationError(SESSION_ENDED)
         user = await self._session.get(User, token.user_id)
@@ -120,13 +128,46 @@ class SessionService:
             await self._revoke_family(token.family_id, RevokeReason.DEACTIVATED, now)
             await self._session.commit()
             raise AuthenticationError(SESSION_ENDED)
-        token.replaced_at = now
+        if token.replaced_at is None:  # kept on a lost response: the grace window does not move
+            token.replaced_at = now
         new_token, secret = self._new_token(
             user, family_id=token.family_id, session_expires_at=token.session_expires_at, now=now
         )
         access = create_access_token(user_id=user.id, role=user.role, settings=self._settings)
         await self._session.commit()
         return IssuedSession(user, access, secret, new_token.expires_at)
+
+    async def _lost_response(self, token: RefreshToken, now: datetime) -> bool:
+        """Whether a replaced token is a lost refresh response; if so, revoke what replaced it.
+
+        True only within the grace window of the replacement, for a live family whose tokens
+        issued since are all unused. Those rows are locked first, so a concurrent refresh of the
+        successor either finishes before (and this is reuse) or finds it superseded (reuse too).
+        """
+        grace = timedelta(seconds=self._settings.auth_refresh_reuse_grace_seconds)
+        replaced_at = token.replaced_at
+        if replaced_at is None or token.revoked_at is not None or now - replaced_at > grace:
+            return False
+        successors = list(
+            await self._session.scalars(
+                select(RefreshToken)
+                .where(
+                    RefreshToken.family_id == token.family_id,
+                    RefreshToken.created_at >= replaced_at,
+                    RefreshToken.id != token.id,
+                )
+                .with_for_update(of=RefreshToken)
+                .execution_options(populate_existing=True)
+            )
+        )
+        if any(successor.replaced_at is not None for successor in successors):
+            return False
+        for successor in successors:
+            if successor.revoked_at is None:
+                successor.revoked_at = now
+                successor.revoke_reason = RevokeReason.SUPERSEDED
+        logger.info("auth.refresh_response_lost", user_id=str(token.user_id))
+        return True
 
     async def _reuse(self, token: RefreshToken, meta: RequestMeta, now: datetime) -> NoReturn:
         """A replaced token was presented again: someone holds a copy. End the family."""

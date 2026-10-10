@@ -273,6 +273,12 @@ are enabled for filtered queries so access/metadata filters don't under-fill top
 | `processing_jobs` (0008) | `workflow_id` FK `CASCADE` + index; `job_type` adds `WORKFLOW`. |
 | `business_rules` (0008) | Seeds the contract rules `CONTRACT_REQUIRED_CLAUSES`, `CONTRACT_TERMINATION_NOTICE`, `CONTRACT_GOVERNING_LAW` (an existing rule with the same code is left alone). |
 
+### Phase 9 — browser sessions (migration 0009, as built)
+
+| Table | Purpose / notable columns |
+|---|---|
+| `refresh_tokens` | One row per refresh token of a web sign-in (ADR-063): `user_id` FK `CASCADE`, `family_id` (one per sign-in; revoked together), `token_hash` UNIQUE (SHA-256; the token is never stored), `created_at`, `expires_at` (idle limit), `session_expires_at` (absolute limit; CHECK `expires_at <= session_expires_at`), `replaced_at` (rotated: presenting it again is reuse), `revoked_at` + `revoke_reason` (`logout`, `reuse_detected`, `user_deactivated`, `password_reset`; CHECK a revocation has a reason). Indexes on `user_id`, `family_id`. |
+
 ### Phase 10 — evaluation
 
 | Table | Purpose / notable columns |

@@ -37,3 +37,7 @@ evaluation/reports/*
 .idea/
 .vscode/
 .DS_Store
+
+# Playwright end-to-end output
+frontend/e2e-report/
+frontend/e2e-results/

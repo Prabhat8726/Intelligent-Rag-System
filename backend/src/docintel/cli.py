@@ -488,8 +488,19 @@ def _generate_documents(args: argparse.Namespace) -> int:
     except ImportError:  # reportlab lives in the optional `synthetic` dependency group
         _fail("The synthetic generator needs reportlab: run `uv sync` (default groups).")
         return EXIT_USAGE
+    from docintel.synthetic.scenarios import Scenario
+
+    try:
+        selected = [Scenario(name) for name in args.scenario] if args.scenario else None
+    except ValueError:
+        names = ", ".join(scenario.value for scenario in Scenario)
+        _fail(f"unknown scenario; choose from: {names}")
+        return EXIT_USAGE
     manifest = generate_dataset(
-        Path(args.output), seed=args.seed, bundles_per_scenario=args.bundles_per_scenario
+        Path(args.output),
+        seed=args.seed,
+        bundles_per_scenario=args.bundles_per_scenario,
+        scenarios=selected,
     )
     scenarios = len(manifest["scenarios"])
     _ok(
@@ -718,6 +729,12 @@ def _build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--output", default="synthetic_data/generated")
     generate.add_argument("--seed", type=int, default=42)
     generate.add_argument("--bundles-per-scenario", type=int, default=1)
+    generate.add_argument(
+        "--scenario",
+        action="append",
+        metavar="NAME",
+        help="only this scenario (repeatable), e.g. UNIT_PRICE_MISMATCH for the demo",
+    )
     ingest = commands.add_parser("ingest", help="upload a directory via the REST API")
     ingest.add_argument("directory")
     ingest.add_argument("--api-url", default="http://localhost:8000")
