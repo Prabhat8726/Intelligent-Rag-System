@@ -61,6 +61,7 @@ class Report:
     config: dict[str, Any]
     metrics: dict[str, Any]
     environment: dict[str, str]
+    quick: bool = False  # small smoke-test datasets: not comparable with full runs
     notes: list[str] = field(default_factory=list)
     tables: list[tuple[str, list[str], list[list[str]]]] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
@@ -70,6 +71,7 @@ class Report:
         return {
             "suite": self.suite,
             "title": self.title,
+            "quick": self.quick,
             "created_at": self.created_at,
             "git_revision": self.git_revision,
             "environment": self.environment,
@@ -77,6 +79,10 @@ class Report:
             "config": self.config,
             "metrics": self.metrics,
             "notes": self.notes,
+            "tables": [
+                {"heading": heading, "header": header, "rows": rows}
+                for heading, header, rows in self.tables
+            ],
         }
 
     def to_markdown(self) -> str:
@@ -84,7 +90,13 @@ class Report:
             f"# {self.title}",
             "",
             f"Generated {self.created_at} from commit `{self.git_revision or 'unknown'}` "
-            f"by `docintel evaluate --suite {self.suite}`. Do not edit by hand.",
+            f"by `docintel evaluate --suite {self.suite}{' --quick' if self.quick else ''}`. "
+            "Do not edit by hand."
+            + (
+                " Quick datasets: a smoke test, not comparable with full runs."
+                if self.quick
+                else ""
+            ),
             "",
         ]
         for heading, header, rows in self.tables:

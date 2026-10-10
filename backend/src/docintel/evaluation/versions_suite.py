@@ -163,6 +163,7 @@ async def run_versions_suite(
         }
 
     report = Report(
+        quick=quick,
         suite="versions",
         title="Contract version comparison (clause changes)",
         dataset={

@@ -159,6 +159,7 @@ async def run_classification_suite(
         [truth, *[str(confusion[truth][label]) for label in LABELS]] for truth in LABELS
     ]
     report = Report(
+        quick=quick,
         suite="classification",
         title="Document classification",
         dataset={

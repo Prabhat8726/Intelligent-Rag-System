@@ -299,6 +299,7 @@ async def run_search_suite(output: Path, *, database_url: str, quick: bool = Fal
             ]
         )
     report = Report(
+        quick=quick,
         suite="search",
         title="Business document search evaluation",
         dataset={

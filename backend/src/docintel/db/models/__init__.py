@@ -22,6 +22,7 @@ from docintel.db.models.documents import (
     ProcessingJob,
     Sensitivity,
 )
+from docintel.db.models.evaluation import Evaluation, EvaluationSource
 from docintel.db.models.extraction import (
     DocumentExtraction,
     EvidenceStatusValue,
@@ -132,6 +133,8 @@ __all__ = [
     "DocumentTable",
     "DocumentType",
     "DocumentVersion",
+    "Evaluation",
+    "EvaluationSource",
     "EvidenceStatusValue",
     "ExtractedField",
     "ExtractionMethod",

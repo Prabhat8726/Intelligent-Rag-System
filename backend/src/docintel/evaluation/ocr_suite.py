@@ -184,6 +184,7 @@ async def run_ocr_suite(output: Path, *, quick: bool = False, languages: str = "
 
     header = ["Degradation", "Variant", "Pages", "CER", "WER", "Word F1", "OCR conf", "s/page"]
     report = Report(
+        quick=quick,
         suite="ocr",
         title="OCR evaluation (synthetic-noisy)",
         dataset={

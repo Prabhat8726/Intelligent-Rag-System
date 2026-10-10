@@ -9,14 +9,16 @@ BACKEND := cd backend && uv run --env-file ../.env
 # API used by `make process`: the host API (make dev) by default; use http://localhost:8080 for make up.
 API_URL ?= http://localhost:8000
 E2E_BASE_URL ?= http://127.0.0.1:8080
+# Stack used by `make demo` (the Docker stack; http://localhost:8000 for make dev).
+DEMO_URL ?= http://localhost:8080
 DATASET ?= ../synthetic_data/generated
 # Extra flags for `make process`, e.g. INGEST_FLAGS=--require-completed (CI).
 INGEST_FLAGS ?=
 
-.PHONY: help e2e env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
+.PHONY: help demo e2e env require-env setup db-up migrate seed dev dev-api dev-worker dev-web up down \
         reset-db logs seed-docker generate-documents process seed-knowledge reembed worker test \
-        test-backend test-frontend lint format check-ai check-ocr llm-usage evaluate match smoke \
-        mcp mcp-http clean
+        test-backend test-frontend lint format check-ai check-ocr llm-usage evaluate evaluate-quick \
+        evaluation-gates evaluation-readme match smoke mcp mcp-http clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -44,8 +46,9 @@ db-up: require-env ## Start PostgreSQL + pgvector in Docker and wait until healt
 migrate: db-up ## Apply database migrations
 	$(BACKEND) alembic upgrade head
 
-seed: migrate ## Create demo departments and one user per role (local/test only)
+seed: migrate ## Create demo departments and one user per role (local/test only), load evaluation results
 	$(BACKEND) docintel seed
+	$(BACKEND) docintel evaluation import ../evaluation/reports
 
 dev: migrate ## Run API (auto-reload), worker and Vite on the host -> http://localhost:5173
 	$(MAKE) -j3 dev-api dev-worker dev-web
@@ -65,8 +68,9 @@ dev-web:
 up: require-env ## Build and start the full stack in Docker -> http://localhost:8080
 	$(COMPOSE) up -d --build --wait db api worker web
 
-seed-docker: ## Seed demo users inside the running Docker stack
+seed-docker: ## Seed demo users inside the running Docker stack and load the evaluation results
 	$(COMPOSE) exec api docintel seed
+	tar -C evaluation/reports -cf - . | $(COMPOSE) exec -T api docintel evaluation import -
 
 generate-documents: ## Generate synthetic POs, invoices and delivery notes with ground truth
 	cd backend && uv run docintel generate-documents --output $(DATASET)
@@ -116,14 +120,27 @@ llm-usage: require-env ## LLM requests, tokens and estimated cost per day (last 
 match: migrate ## Re-run comparisons, rules and review tasks for every processed document
 	$(BACKEND) docintel match
 
-evaluate: db-up ## Run all evaluation suites (OCR ... workflow) -> evaluation/reports (several minutes)
-	$(BACKEND) docintel evaluate --output ../evaluation/reports
+evaluate: db-up ## Run all evaluation suites -> evaluation/reports, checked against the regression gates
+	$(BACKEND) docintel evaluate --output ../evaluation/reports --gates ../evaluation/gates.toml
+
+evaluate-quick: db-up ## All suites on small datasets (a few minutes) -> evaluation/quick, gates checked
+	$(BACKEND) docintel evaluate --quick --output ../evaluation/quick --gates ../evaluation/gates.toml
+
+evaluation-gates: ## Check the committed reports against the regression gates
+	$(BACKEND) docintel evaluation gates ../evaluation/reports
+
+evaluation-readme: ## Regenerate the README's evaluation table from evaluation/reports
+	$(BACKEND) docintel evaluation readme
 
 mcp: migrate ## MCP server over stdio for a local MCP client (needs MCP_API_TOKEN)
 	$(BACKEND) docintel mcp --transport stdio
 
 mcp-http: migrate ## MCP server over streamable HTTP on 127.0.0.1:8001 (bearer API tokens)
 	$(BACKEND) docintel mcp --transport http --host 127.0.0.1 --port 8001
+
+demo: require-env ## The final demonstration, 17 steps through the API of the running stack (make up && make seed-docker first)
+	$(BACKEND) docintel knowledge-ingest ../knowledge_base --api-url $(DEMO_URL) --email admin@docintel.local
+	$(BACKEND) docintel demo --api-url $(DEMO_URL)
 
 e2e: require-env ## Browser test of the demo path against the running stack (make up && make seed-docker first)
 	cd frontend && set -a && . ../.env && set +a && E2E_BASE_URL=$(E2E_BASE_URL) npx playwright test

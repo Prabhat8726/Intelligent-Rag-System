@@ -20,15 +20,20 @@ import asyncio
 import getpass
 import math
 import os
+import secrets
 import signal
 import sys
+import tarfile
+import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
+import httpx
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from docintel.ai.base import EmbeddingTask, LLMRequest, ModelTier
 from docintel.ai.errors import ProviderError
@@ -45,12 +50,25 @@ from docintel.core.logging import configure_logging, get_logger
 from docintel.db.models import (
     OPEN_TASK_STATUSES,
     Document,
+    EvaluationSource,
     LLMCall,
     LLMCallStatus,
     ReviewTask,
     Role,
+    User,
 )
 from docintel.db.session import create_engine, create_sessionmaker
+from docintel.evaluation.gates import check_report, load_gates
+from docintel.evaluation.gates import failures as gate_failures
+from docintel.evaluation.readme import render_block, update_readme
+from docintel.evaluation.store import (
+    InvalidReportError,
+    ReportFile,
+    read_report_directory,
+    read_report_tar,
+    record_reports,
+    report_file_from,
+)
 from docintel.matching.service import PROCESSED, rematch
 from docintel.processing.ocr import OCRUnavailableError, TesseractOCRProvider
 from docintel.processing.services import build_processing_services, load_corrections
@@ -561,6 +579,39 @@ async def _ingest(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _demo(args: argparse.Namespace) -> int:
+    """The final demonstration (master prompt §50) through the API of a running stack."""
+    from docintel.tools.demo import Demo, DemoError, DemoUsers, login
+
+    if args.password_stdin:
+        password = sys.stdin.readline().rstrip("\n")
+    elif os.environ.get("SEED_USER_PASSWORD"):
+        password = os.environ["SEED_USER_PASSWORD"]
+    else:
+        _fail("Provide the demo users' password with --password-stdin or SEED_USER_PASSWORD.")
+        return EXIT_USAGE
+    seed = args.seed if args.seed is not None else secrets.randbelow(1_000_000_000)
+    try:
+        async with httpx.AsyncClient(base_url=args.api_url, timeout=60.0) as client:
+            users = DemoUsers(
+                analyst=await login(client, "analyst@docintel.local", password),
+                reviewer=await login(client, "reviewer@docintel.local", password),
+                admin=await login(client, "admin@docintel.local", password),
+            )
+            demo = Demo(client, users, web_url=args.web_url or args.api_url, timeout=args.timeout)
+            with tempfile.TemporaryDirectory(prefix="docintel-demo-") as folder:
+                await demo.run(Path(folder), seed=seed)
+    except DemoError as exc:
+        _fail(str(exc))
+        return EXIT_FAILURE
+    except httpx.HTTPError as exc:
+        _fail(f"{args.api_url} is not reachable ({exc.__class__.__name__}); is the stack up?")
+        return EXIT_FAILURE
+    print()
+    _ok("the demonstration path completed: all 17 steps showed what they should")
+    return EXIT_OK
+
+
 async def _knowledge_ingest(args: argparse.Namespace) -> int:
     """HTTP client: uploads a knowledge base directory and waits for processing."""
     from docintel.tools.ingest import IngestError
@@ -618,6 +669,7 @@ SUITES = (
     "search",
     "agent",
     "workflow",
+    "system",
 )
 
 
@@ -631,6 +683,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
         from docintel.evaluation.ocr_suite import run_ocr_suite
         from docintel.evaluation.retrieval_suite import run_retrieval_suite
         from docintel.evaluation.search_suite import run_search_suite
+        from docintel.evaluation.system_suite import run_system_suite
         from docintel.evaluation.tables_suite import run_tables_suite
         from docintel.evaluation.versions_suite import run_versions_suite
         from docintel.evaluation.workflow_suite import run_workflow_suite
@@ -638,6 +691,17 @@ async def _evaluate(args: argparse.Namespace) -> int:
         _fail(f"evaluation needs the synthetic dependency group (uv sync): {exc}")
         return EXIT_USAGE
     defaults = Settings.model_fields
+    try:
+        gates = load_gates(Path(args.gates)) if args.gates else None
+    except (OSError, ValueError) as exc:
+        _fail(f"gates file {args.gates}: {exc}")
+        return EXIT_USAGE
+    gate_results: dict[str, dict[str, Any] | None] = {}
+    recorder: _Recorder | None = None
+    if args.record:  # check the database and the person before a long run, not after it
+        recorder = await _Recorder.open(get_settings(), args.recorded_by)
+        if recorder is None:
+            return EXIT_USAGE
     output = Path(args.output)
     suites = list(SUITES) if args.suite == "all" else [args.suite]
     try:
@@ -654,7 +718,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
                 report = await run_discrepancy_suite(
                     output, quick=args.quick, languages=args.languages
                 )
-            elif suite in ("retrieval", "search", "agent", "workflow"):
+            elif suite in ("retrieval", "search", "agent", "workflow", "system"):
                 database_url = args.database_url or os.environ.get(
                     "TEST_DATABASE_URL", os.environ.get("DATABASE_URL")
                 )
@@ -669,6 +733,7 @@ async def _evaluate(args: argparse.Namespace) -> int:
                     "search": run_search_suite,
                     "agent": run_agent_suite,
                     "workflow": run_workflow_suite,
+                    "system": run_system_suite,
                 }[suite]
                 report = await run(output, database_url=database_url, quick=args.quick)
             elif suite == "versions":
@@ -684,9 +749,154 @@ async def _evaluate(args: argparse.Namespace) -> int:
                     languages=args.languages,
                 )
             _ok(f"{report.title}: {output / (suite + '.md')}")
+            if gates is not None:
+                gate_results[suite] = check_report(
+                    gates, suite=suite, quick=report.quick, metrics=report.metrics
+                )
+                _print_gates(suite, gate_results[suite])
+            if recorder is not None:
+                await recorder.record(
+                    [report_file_from(report)], EvaluationSource.RUN, gates=gate_results
+                )
     except OCRUnavailableError as exc:
         _fail(str(exc))
         return EXIT_FAILURE
+    finally:
+        if recorder is not None:
+            await recorder.close()
+    broken = gate_failures(gate_results)
+    if broken:
+        _fail(f"{len(broken)} regression gate(s) broken")
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
+def _print_gates(suite: str, result: dict[str, Any] | None) -> None:
+    if result is None:
+        print(f"[SKIP] {suite}: no regression gate applies")
+        return
+    broken = gate_failures({suite: result})
+    if not broken:
+        _ok(f"{suite}: {len(result['checks'])} gate(s) passed ({result['mode']} run)")
+    for line in broken:
+        _fail(f"gate {line}")
+
+
+def _evaluation_gates(args: argparse.Namespace) -> int:
+    try:
+        gates = load_gates(Path(args.gates))
+        reports = read_report_directory(Path(args.reports))
+    except (OSError, ValueError) as exc:
+        _fail(str(exc))
+        return EXIT_USAGE
+    results = {
+        report.payload.suite: check_report(
+            gates,
+            suite=report.payload.suite,
+            quick=report.payload.quick,
+            metrics=report.payload.metrics,
+        )
+        for report in reports
+    }
+    for suite, result in sorted(results.items()):
+        _print_gates(suite, result)
+    broken = gate_failures(results)
+    if broken:
+        _fail(f"{len(broken)} regression gate(s) broken")
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
+def _evaluation_readme(args: argparse.Namespace) -> int:
+    readme = Path(args.readme)
+    try:
+        reports = {
+            report.payload.suite: report.raw for report in read_report_directory(Path(args.reports))
+        }
+        current = readme.read_text(encoding="utf-8")
+        updated = update_readme(current, render_block(reports))
+    except (OSError, ValueError) as exc:  # InvalidReportError and ReadmeError are ValueErrors
+        _fail(str(exc))
+        return EXIT_FAILURE
+    if args.check:
+        if updated != current:
+            _fail(f"{readme}: the evaluation table is out of date (docintel evaluation readme)")
+            return EXIT_FAILURE
+        _ok(f"{readme}: the evaluation table matches the reports")
+        return EXIT_OK
+    if updated == current:
+        print(f"[SKIP] {readme}: already up to date")
+        return EXIT_OK
+    readme.write_text(updated, encoding="utf-8")
+    _ok(f"{readme}: evaluation table regenerated")
+    return EXIT_OK
+
+
+class _Recorder:
+    """Records reports in the configured database (`evaluations`), as an optional user."""
+
+    def __init__(self, engine: AsyncEngine, user: User | None) -> None:
+        self._engine = engine
+        self._user = user
+
+    @classmethod
+    async def open(cls, settings: Settings, email: str | None) -> _Recorder | None:
+        engine = create_engine(settings)
+        user = None
+        if email:
+            async with create_sessionmaker(engine)() as session:
+                user = await session.scalar(select(User).where(User.email == email.lower()))
+            if user is None:
+                await engine.dispose()
+                _fail(f"no user {email!r} to record the evaluation as")
+                return None
+        return cls(engine, user)
+
+    async def record(
+        self,
+        reports: list[ReportFile],
+        source: EvaluationSource,
+        gates: dict[str, dict[str, Any] | None] | None = None,
+    ) -> None:
+        async with create_sessionmaker(self._engine)() as session:
+            results = await record_reports(
+                session,
+                reports,
+                source=source,
+                recorded_by=self._user,
+                gates={suite: result for suite, result in (gates or {}).items() if result},
+            )
+            await session.commit()
+        for row, created in results:
+            if created:
+                _ok(f"recorded {row.suite} ({row.git_revision or 'unknown commit'})")
+            else:
+                print(f"[SKIP] {row.suite}: this report is already recorded")
+
+    async def close(self) -> None:
+        await self._engine.dispose()
+
+
+async def _evaluation_import(settings: Settings, args: argparse.Namespace) -> int:
+    try:
+        reports = (
+            read_report_tar(sys.stdin.buffer)
+            if args.path == "-"
+            else read_report_directory(Path(args.path))
+        )
+    except (OSError, tarfile.TarError, InvalidReportError) as exc:
+        _fail(str(exc))
+        return EXIT_FAILURE
+    if not reports:
+        _fail(f"no evaluation reports in {args.path}")
+        return EXIT_FAILURE
+    recorder = await _Recorder.open(settings, args.recorded_by)
+    if recorder is None:
+        return EXIT_USAGE
+    try:
+        await recorder.record(reports, EvaluationSource.IMPORT)
+    finally:
+        await recorder.close()
     return EXIT_OK
 
 
@@ -749,6 +959,14 @@ def _build_parser() -> argparse.ArgumentParser:
     knowledge.add_argument("--email", default="admin@docintel.local")
     knowledge.add_argument("--password-stdin", action="store_true")
     knowledge.add_argument("--timeout", type=float, default=300.0)
+    demo = commands.add_parser(
+        "demo", help="the final demonstration: 17 steps through the API of a running stack"
+    )
+    demo.add_argument("--api-url", default="http://localhost:8080")
+    demo.add_argument("--web-url", help="web app address for the links (default: --api-url)")
+    demo.add_argument("--seed", type=int, help="generator seed (default: random, a fresh case)")
+    demo.add_argument("--password-stdin", action="store_true")
+    demo.add_argument("--timeout", type=float, default=300.0, help="seconds per waiting step")
     evaluate = commands.add_parser("evaluate", help="run evaluation suites and write reports")
     evaluate.add_argument(
         "--suite",
@@ -759,9 +977,41 @@ def _build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--quick", action="store_true", help="small datasets (smoke test)")
     evaluate.add_argument("--languages", default="eng", help="Tesseract languages")
     evaluate.add_argument(
+        "--record",
+        action="store_true",
+        help="also record each report in the configured database (DATABASE_URL)",
+    )
+    evaluate.add_argument("--recorded-by", metavar="EMAIL", help="the user recording the run")
+    evaluate.add_argument(
+        "--gates",
+        metavar="FILE",
+        help="regression gates to check each report against (e.g. ../evaluation/gates.toml); "
+        "a broken gate makes the command fail",
+    )
+    evaluate.add_argument(
         "--database-url",
-        help="PostgreSQL server for the retrieval, search and agent suites "
+        help="PostgreSQL server for the retrieval, search, agent, workflow and system suites "
         "(default: TEST_DATABASE_URL)",
+    )
+    evaluation = commands.add_parser("evaluation", help="recorded evaluation reports")
+    evaluation_commands = evaluation.add_subparsers(dest="evaluation_command", required=True)
+    importer = evaluation_commands.add_parser(
+        "import", help="record report files in the database (idempotent)"
+    )
+    importer.add_argument(
+        "path", help="directory with <suite>.json and .md files, or - for a tar stream on stdin"
+    )
+    importer.add_argument("--recorded-by", metavar="EMAIL", help="the user importing them")
+    gates = evaluation_commands.add_parser("gates", help="check reports against regression gates")
+    gates.add_argument("reports", nargs="?", default="../evaluation/reports")
+    gates.add_argument("--gates", default="../evaluation/gates.toml")
+    readme = evaluation_commands.add_parser(
+        "readme", help="regenerate the README's evaluation table from the reports"
+    )
+    readme.add_argument("--reports", default="../evaluation/reports")
+    readme.add_argument("--readme", default="../README.md")
+    readme.add_argument(
+        "--check", action="store_true", help="only check that the table is current (CI)"
     )
     ingest.add_argument(
         "--require-completed",
@@ -780,12 +1030,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ingest":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_ingest(args))
+    if args.command == "demo":
+        configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
+        return asyncio.run(_demo(args))
     if args.command == "knowledge-ingest":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_knowledge_ingest(args))
     if args.command == "evaluate":
         configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
         return asyncio.run(_evaluate(args))
+    if args.command == "evaluation" and args.evaluation_command in ("gates", "readme"):
+        configure_logging(level="WARNING", log_format=LogFormat.CONSOLE)
+        if args.evaluation_command == "gates":
+            return _evaluation_gates(args)
+        return _evaluation_readme(args)
 
     settings = get_settings()
     configure_logging(level="WARNING", log_format=settings.effective_log_format)
@@ -804,6 +1062,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(_reembed(settings, force=args.force))
         case "check-ocr":
             return asyncio.run(_check_ocr(settings))
+        case "evaluation":
+            return asyncio.run(_evaluation_import(settings, args))
         case "worker":
             configure_logging(level=settings.log_level, log_format=settings.effective_log_format)
             return asyncio.run(_worker(settings, until_idle=args.until_idle))

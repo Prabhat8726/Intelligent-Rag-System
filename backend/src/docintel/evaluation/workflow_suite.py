@@ -935,6 +935,7 @@ async def run_workflow_suite(
         )
     )
     report = EvaluationReport(
+        quick=quick,
         suite="workflow",
         title="Workflow automation evaluation",
         dataset={

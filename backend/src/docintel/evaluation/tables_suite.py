@@ -213,6 +213,7 @@ async def run_tables_suite(output: Path, *, quick: bool = False, languages: str 
         for name, m in metrics["by_method"].items()
     ]
     report = Report(
+        quick=quick,
         suite="tables",
         title="Line-item table extraction",
         dataset={

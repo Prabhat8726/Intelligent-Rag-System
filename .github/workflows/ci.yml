@@ -74,8 +74,15 @@ jobs:
       - name: Unit, integration and security tests
         run: uv run pytest
 
-      - name: Evaluation suites smoke run (quick datasets)
-        run: uv run docintel evaluate --quick --output "$RUNNER_TEMP/evaluation"
+      - name: Evaluation suites on quick datasets, checked against the regression gates
+        run: >-
+          uv run docintel evaluate --quick --output "$RUNNER_TEMP/evaluation"
+          --gates ../evaluation/gates.toml
+
+      - name: Committed reports pass their gates and back the README table
+        run: |
+          uv run docintel evaluation gates ../evaluation/reports
+          uv run docintel evaluation readme --check
 
       - name: Dependency vulnerability audit
         run: |
@@ -160,6 +167,15 @@ jobs:
       # end ACTIVE (or SUPERSEDED by its newer version).
       - name: Load the knowledge base through the stack
         run: make seed-knowledge API_URL=http://localhost:8080
+
+      # Idempotent seeding, then the committed evaluation reports streamed into the API
+      # container (tar on stdin) and recorded in its database for the Evaluation page.
+      - name: Load the committed evaluation results into the stack
+        run: make seed-docker
+
+      # The master prompt's 17 steps through the API, each one checked (tools/demo.py).
+      - name: Final demonstration through the API (make demo)
+        run: make demo DEMO_URL=http://localhost:8080
 
       - uses: actions/setup-node@v7
         with:

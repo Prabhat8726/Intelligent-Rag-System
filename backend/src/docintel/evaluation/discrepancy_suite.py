@@ -305,6 +305,7 @@ async def run_discrepancy_suite(
 
     metrics = {name: score_corpus(documents) for name, documents in corpora.items()}
     report = Report(
+        quick=quick,
         suite="discrepancies",
         title="Discrepancy and duplicate detection",
         dataset={

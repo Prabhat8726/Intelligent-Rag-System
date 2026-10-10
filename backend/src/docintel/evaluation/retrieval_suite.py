@@ -805,6 +805,7 @@ async def run_retrieval_suite(output: Path, *, database_url: str, quick: bool = 
         "LLM: Not yet measured.",
     ]
     report = Report(
+        quick=quick,
         suite="retrieval",
         title="Knowledge retrieval evaluation (RAG)",
         dataset={

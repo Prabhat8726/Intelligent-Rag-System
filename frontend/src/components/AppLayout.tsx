@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/analysis", label: "AI analysis", permission: "analysis:read" },
   { to: "/knowledge", label: "Knowledge", permission: "knowledge:read" },
   { to: "/reports", label: "Reports", permission: "reports:read" },
+  { to: "/evaluation", label: "Evaluation", permission: "evaluations:read" },
   { to: "/rules", label: "Rules", permission: "rules:read" },
 ];
 const SETTINGS_ITEMS: NavItem[] = [

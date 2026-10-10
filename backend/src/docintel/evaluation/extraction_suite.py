@@ -12,7 +12,10 @@ Measured:
 * line items: rows paired by SKU, row precision / recall, normalized cell accuracy per column;
 * normalization: vendor resolution to the canonical vendor, dates in every printed format;
 * consistency checks: printed arithmetic errors flagged, false alarms on correct documents;
-* routing: share auto-accepted and the error rate inside that bucket.
+* routing: share auto-accepted and the error rate inside that bucket;
+* calibration (Phase 10): field and cell confidence against accuracy (reliability, ECE) and a
+  sweep of the auto-accept threshold, chosen on this dataset by a fixed rule and reported on a
+  held-out dataset generated with another seed (`evaluation.calibration`).
 The LLM extractor is not measured here (no model in the build environment): layout only.
 """
 
@@ -31,6 +34,15 @@ from rapidfuzz import fuzz
 
 from docintel.db.models import DocumentType, ReviewReason
 from docintel.documents.validation import FileKind
+from docintel.evaluation.calibration import (
+    DESIGN_FLOOR,
+    DocumentOutcome,
+    calibration_error,
+    choose_threshold,
+    overconfident_share,
+    reliability,
+    threshold_sweep,
+)
 from docintel.evaluation.common import DEFAULT_PARALLELISM, extract_file, run_bounded, scan_pdf
 from docintel.evaluation.report import Report, environment, num, pct
 from docintel.fields.confidence import ReviewLevel
@@ -52,6 +64,7 @@ from docintel.synthetic.render import format_money, format_quantity
 from docintel.synthetic.scenarios import Scenario
 
 DATASET_SEED = 31
+HELD_OUT_SEED = 131  # calibration only: never used to choose anything
 SKU_MATCH_RATIO = 75
 _KINDS = {"pdf": FileKind.PDF, "png": FileKind.PNG, "tiff": FileKind.TIFF}
 LINE_COLUMNS = ("line_number", "sku", "description", "quantity", "unit", "unit_price", "amount")
@@ -220,6 +233,7 @@ def score_document(
     predicted_rows = [rows[index] for index in sorted(rows)]
     unmatched = list(range(len(predicted_rows)))
     cells: dict[str, list[bool]] = defaultdict(list)
+    cell_confidence: list[tuple[float, bool]] = []
     matched = 0
     row_errors = False
     for line in truth["line_items"]:
@@ -257,6 +271,8 @@ def score_document(
                 )
             )
             cells[column].append(ok)
+            if cell is not None and cell.value is not None:
+                cell_confidence.append((cell.confidence, ok))
             row_errors = row_errors or not ok
     row_errors = row_errors or bool(unmatched)
 
@@ -274,6 +290,7 @@ def score_document(
             "matched": matched,
         },
         "cells": dict(cells),
+        "cell_confidence": cell_confidence,
         "required_ok": all(fields[name]["correct"] for name in required),
         "any_error": field_errors or row_errors,
         "level": outcome.scoring.level.value,
@@ -375,33 +392,125 @@ def aggregate(scores: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-async def run_extraction_suite(
-    output: Path, *, quick: bool = False, languages: str = "eng"
-) -> Report:
-    ocr = TesseractOCRProvider(languages=languages, timeout_seconds=180)
-    version = await ocr.verify()
-    options = ExtractionOptions()
-    service = FieldExtractionService(
-        policy=ExtractionPolicy(llm_mode="never"),
-        vendors=StaticVendorDirectory(demo_vendor_records()),
-    )
-    with tempfile.TemporaryDirectory(prefix="docintel-extraction-eval-") as tmp:
-        root = Path(tmp)
-        scenarios = (
-            [Scenario.CLEAN_MATCH, Scenario.TOTAL_ARITHMETIC_ERROR, Scenario.VENDOR_NAME_VARIANT]
-            if quick
-            else None
+Scored = list[tuple[str, dict[str, Any], dict[str, Any]]]  # (input, truth, score) per document
+
+
+def _confidence_pairs(values: list[tuple[float, bool]]) -> dict[str, Any]:
+    return {
+        "n": len(values),
+        "ece": calibration_error(values),
+        "overconfident_share": overconfident_share(values),
+        "bins": reliability(values),
+    }
+
+
+def calibration(results: Scored) -> dict[str, Any]:
+    """Field and cell confidence against accuracy, and the auto-accept threshold sweep, for all
+    inputs and for native and scanned inputs apart."""
+    groups = {
+        "all": results,
+        "native": [row for row in results if row[0] == "native"],
+        "scanned": [row for row in results if row[0] != "native"],
+    }
+    out: dict[str, Any] = {}
+    for name, rows in groups.items():
+        scores = [score for _, _, score in rows]
+        fields = [
+            (float(record["confidence"]), bool(record["truth"] and record["correct"]))
+            for score in scores
+            for record in score["fields"].values()
+            if record["predicted"]
+        ]
+        cells = [(float(c), bool(ok)) for score in scores for c, ok in score["cell_confidence"]]
+        out[name] = {
+            "documents": len(scores),
+            "fields": _confidence_pairs(fields),
+            "cells": _confidence_pairs(cells),
+            "sweep": threshold_sweep(
+                [
+                    DocumentOutcome(score["confidence"], score["inconsistent"], score["any_error"])
+                    for score in scores
+                ]
+            ),
+        }
+    return out
+
+
+def _errors(row: dict[str, Any]) -> str:
+    """Errors among auto-accepted documents with the 95% bound; a note when none are."""
+    if not row["auto"]:
+        return "none auto-accepted"
+    return f"{row['errors']} (≤ {pct(row['error_upper_95'])})"
+
+
+def _sweep_rows(
+    development: list[dict[str, Any]],
+    held_out: list[dict[str, Any]],
+    *,
+    current: float,
+    chosen: float | None,
+) -> list[list[str]]:
+    rows = []
+    for dev, test in zip(development, held_out, strict=True):
+        threshold = dev["threshold"]
+        marks = [
+            label
+            for label, value in (("current", current), ("chosen", chosen))
+            if value is not None and abs(threshold - value) < 1e-9
+        ]
+        rows.append(
+            [
+                f"{threshold:.2f}" + (f" ({', '.join(marks)})" if marks else ""),
+                f"{dev['auto']} of {dev['documents']} ({pct(dev['auto_share'])})",
+                _errors(dev),
+                f"{test['auto']} of {test['documents']} ({pct(test['auto_share'])})",
+                _errors(test),
+            ]
         )
+    return rows
+
+
+def _reliability_rows(fields: list[dict[str, Any]], cells: list[dict[str, Any]]) -> list[list[str]]:
+    by_low: dict[float, dict[str, Any]] = defaultdict(dict)
+    for kind, rows in (("fields", fields), ("cells", cells)):
+        for row in rows:
+            by_low[row["low"]][kind] = row
+    table = []
+    for low in sorted(by_low):
+        entry = by_low[low]
+        high = (entry.get("fields") or entry["cells"])["high"]
+        cells_out = []
+        for kind in ("fields", "cells"):
+            found = entry.get(kind)
+            cells_out += (
+                [str(found["n"]), num(found["mean_confidence"]), pct(found["accuracy"])]
+                if found
+                else ["0", "", ""]
+            )
+        table.append([f"{low:.1f}-{high:.1f}", *cells_out])
+    return table
+
+
+async def _extract_dataset(
+    root: Path,
+    *,
+    seed: int,
+    bundles: int,
+    scenarios: list[Scenario] | None,
+    ocr: TesseractOCRProvider,
+    service: FieldExtractionService,
+) -> tuple[dict[str, Any], Scored]:
+    """Generate a dataset and extract every document natively and re-rendered as a scan."""
+    options = ExtractionOptions()
+    with tempfile.TemporaryDirectory(prefix="docintel-extraction-eval-", dir=root) as tmp:
+        folder = Path(tmp)
         manifest = generate_dataset(
-            root / "dataset",
-            seed=DATASET_SEED,
-            bundles_per_scenario=1 if quick else 2,
-            scenarios=scenarios,
+            folder / "dataset", seed=seed, bundles_per_scenario=bundles, scenarios=scenarios
         )
         jobs: list[tuple[str, Path, FileKind, dict[str, Any]]] = []
         for entry in manifest["documents"]:
-            path = root / "dataset" / entry["file"]
-            truth = json.loads((root / "dataset" / entry["ground_truth"]).read_text())
+            path = folder / "dataset" / entry["file"]
+            truth = json.loads((folder / "dataset" / entry["ground_truth"]).read_text())
             kind = _KINDS[path.suffix.lstrip(".")]
             if entry["variant"] == "native":
                 jobs.append(("native", path, kind, truth))
@@ -426,6 +535,35 @@ async def run_extraction_suite(
             return method, truth, score_document(doc_type, truth, outcome)
 
         results = await run_bounded(jobs, evaluate, DEFAULT_PARALLELISM)
+    return manifest, results
+
+
+async def run_extraction_suite(
+    output: Path, *, quick: bool = False, languages: str = "eng"
+) -> Report:
+    ocr = TesseractOCRProvider(languages=languages, timeout_seconds=180)
+    version = await ocr.verify()
+    service = FieldExtractionService(
+        policy=ExtractionPolicy(llm_mode="never"),
+        vendors=StaticVendorDirectory(demo_vendor_records()),
+    )
+    scenarios = (
+        [Scenario.CLEAN_MATCH, Scenario.TOTAL_ARITHMETIC_ERROR, Scenario.VENDOR_NAME_VARIANT]
+        if quick
+        else None
+    )
+    with tempfile.TemporaryDirectory(prefix="docintel-extraction-eval-") as tmp:
+        manifest, results = await _extract_dataset(
+            Path(tmp),
+            seed=DATASET_SEED,
+            bundles=1 if quick else 2,
+            scenarios=scenarios,
+            ocr=ocr,
+            service=service,
+        )
+        held_out_manifest, held_out = await _extract_dataset(
+            Path(tmp), seed=HELD_OUT_SEED, bundles=1, scenarios=scenarios, ocr=ocr, service=service
+        )
 
     by_method: dict[str, list[dict[str, Any]]] = defaultdict(list)
     by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -451,7 +589,17 @@ async def run_extraction_suite(
                     score["fields"][field]["correct"]
                 )
 
-    metrics = {
+    development, held = calibration(results), calibration(held_out)
+    current = ExtractionPolicy().thresholds.high
+    chosen = choose_threshold(development["all"]["sweep"])
+    metrics: dict[str, Any] = {
+        "calibration": {
+            "development": development,
+            "held_out": held,
+            "design_floor": DESIGN_FLOOR,
+            "current_threshold": current,
+            "chosen_threshold": chosen,
+        },
         "by_method": {name: aggregate(scores) for name, scores in sorted(by_method.items())},
         "by_method_and_type": {name: aggregate(scores) for name, scores in sorted(by_type.items())},
         "consistency_checks": {
@@ -558,12 +706,15 @@ async def run_extraction_suite(
         for name, v in metrics["normalization_variants"].items()
     ]
     report = Report(
+        quick=quick,
         suite="extraction",
         title="Structured extraction (layout extractor, no LLM)",
         dataset={
             "name": "synthetic-core",
             "seed": DATASET_SEED,
             "documents": len(manifest["documents"]),
+            "held_out_seed": HELD_OUT_SEED,
+            "held_out_documents": len(held_out_manifest["documents"]),
             "bundles_per_scenario": manifest["bundles_per_scenario"],
             "scanned_rerender": "light scan profile at 150 DPI",
             "vendor_master": "demo vendors: canonical names and tax IDs, no name variants",
@@ -594,9 +745,92 @@ async def run_extraction_suite(
             "LLM extraction: Not yet measured (no GEMINI_API_KEY or local model in the build "
             "environment). Its merge, verification and gating logic is covered by tests.",
             "Document type taken from ground truth (classification is measured separately).",
+            "Calibration: every table except the calibration ones uses the development dataset "
+            f"(seed {DATASET_SEED}). The auto-accept threshold is chosen on it by a rule fixed in "
+            "advance - the lowest threshold above the design floor "
+            f"({DESIGN_FLOOR}: a value only a model read never auto-accepts) at which neither "
+            "it nor any higher threshold auto-accepts a document with an error - and reported "
+            f"unchanged on the held-out dataset (seed {HELD_OUT_SEED}). The bound is a one-sided "
+            "95% Clopper-Pearson upper bound on the error rate among auto-accepted documents.",
+            "ECE is the expected calibration error over ten equal-width bins; 'over-confident' "
+            "counts the values in bins whose accuracy is below their mean confidence.",
         ],
         tables=[
             ("Summary by input", summary_header, summary_rows),
+            (
+                "Calibration: confidence against accuracy",
+                [
+                    "Dataset / input",
+                    "Docs",
+                    "Fields",
+                    "Field ECE",
+                    "Fields over-confident",
+                    "Cells",
+                    "Cell ECE",
+                    "Cells over-confident",
+                ],
+                [
+                    [
+                        f"{split} / {name}",
+                        str(values["documents"]),
+                        str(values["fields"]["n"]),
+                        num(values["fields"]["ece"]),
+                        pct(values["fields"]["overconfident_share"]),
+                        str(values["cells"]["n"]),
+                        num(values["cells"]["ece"]),
+                        pct(values["cells"]["overconfident_share"]),
+                    ]
+                    for split, data in (("development", development), ("held-out", held))
+                    for name, values in data.items()
+                ],
+            ),
+            (
+                "Reliability (development, all inputs)",
+                [
+                    "Confidence",
+                    "Fields",
+                    "Mean confidence",
+                    "Accuracy",
+                    "Cells",
+                    "Mean confidence",
+                    "Accuracy",
+                ],
+                _reliability_rows(
+                    development["all"]["fields"]["bins"], development["all"]["cells"]["bins"]
+                ),
+            ),
+            (
+                "Auto-accept threshold: development (choice) and held-out, all inputs",
+                [
+                    "Threshold",
+                    "Development auto-accepted",
+                    "Development errors (95% bound)",
+                    "Held-out auto-accepted",
+                    "Held-out errors (95% bound)",
+                ],
+                _sweep_rows(
+                    development["all"]["sweep"],
+                    held["all"]["sweep"],
+                    current=current,
+                    chosen=chosen,
+                ),
+            ),
+            (
+                "Auto-accept threshold: scanned inputs only",
+                [
+                    "Threshold",
+                    "Development auto-accepted",
+                    "Development errors (95% bound)",
+                    "Held-out auto-accepted",
+                    "Held-out errors (95% bound)",
+                ],
+                _sweep_rows(
+                    development["scanned"]["sweep"],
+                    held["scanned"]["sweep"],
+                    current=current,
+                    chosen=chosen,
+                ),
+            ),
             ("Fields: normalized match / F1", field_header, field_rows),
             ("Line items", line_header, line_rows),
             ("Confidence routing", routing_header, routing_rows),

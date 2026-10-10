@@ -9,6 +9,15 @@ from typing import Any
 
 import pytest
 
+from docintel.evaluation.calibration import (
+    DocumentOutcome,
+    calibration_error,
+    choose_threshold,
+    error_upper_bound,
+    overconfident_share,
+    reliability,
+    threshold_sweep,
+)
 from docintel.evaluation.discrepancy_suite import EvaluatedDocument, match_corpus, score_corpus
 from docintel.evaluation.metrics import (
     Prediction,
@@ -21,6 +30,7 @@ from docintel.evaluation.metrics import (
     wer,
 )
 from docintel.evaluation.report import Report
+from docintel.evaluation.system_suite import PipelineRun, percentile, spread, summarize
 from docintel.evaluation.tables_suite import score_table
 from docintel.evaluation.versions_suite import score_segmentation, score_step
 from docintel.evaluation.workflow_suite import (
@@ -343,3 +353,78 @@ def test_workflow_version_changes_are_scored_by_title_and_type() -> None:
         "fn": 1,
         "exact": False,
     }
+
+
+def test_percentiles_are_nearest_rank_and_empty_is_unknown() -> None:
+    values = [float(v) for v in range(1, 101)]
+    assert percentile(values, 0.5) == 51.0  # nearest rank, no interpolation
+    assert percentile(values, 0.95) == 95.0
+    assert percentile([], 0.5) is None
+    assert spread([2.0, 1.0, 3.0]) == {"n": 3, "p50": 2.0, "p95": 3.0}
+
+
+def test_system_summary_rates_come_from_the_wall_time() -> None:
+    run = PipelineRun(
+        concurrency=4,
+        documents=10,
+        pages=25,
+        wall_seconds=30.0,
+        completed=9,
+        failed=1,
+        retried=2,
+        review_required=3,
+        job_seconds={"native": [0.2, 0.4], "scanned": [2.0], "all": [0.2, 0.4, 2.0]},
+        stage_ms={"extract": {"native": [50.0], "scanned": [1500.0], "all": [50.0, 1500.0]}},
+        upload_ms=[30.0, 40.0],
+        llm_calls=0,
+    )
+    summary = summarize(run)
+    assert summary["documents_per_minute"] == 18.0  # completed documents only
+    assert summary["pages_per_minute"] == 50.0
+    assert summary["failure_rate"] == 0.1
+    assert summary["processing_seconds"]["scanned"] == {"n": 1, "p50": 2.0, "p95": 2.0}
+    assert summary["stage_ms"]["extract"]["native"]["p50"] == 50.0
+
+
+def test_reliability_and_ece_measure_the_gap_between_confidence_and_accuracy() -> None:
+    # 0.9 confident and always right: under-confident by 0.1; 0.35 and right half the time.
+    pairs = [(0.9, True)] * 10 + [(0.35, True), (0.35, False)] * 5
+    bins = reliability(pairs)
+    assert [(b["low"], b["n"], b["accuracy"]) for b in bins] == [(0.3, 10, 0.5), (0.9, 10, 1.0)]
+    assert calibration_error(pairs) == 0.125  # (0.15 + 0.1) / 2
+    assert overconfident_share(pairs) == 0.0  # nobody is more confident than right
+    assert overconfident_share([(0.95, False), (0.95, True)]) == 1.0
+    assert reliability([(1.0, True)])[0]["high"] == 1.0  # the top bin includes 1.0
+    assert calibration_error([]) is None
+
+
+def test_zero_errors_is_not_a_zero_error_rate() -> None:
+    assert error_upper_bound(0, 0) is None
+    bound = error_upper_bound(0, 100)
+    assert bound is not None
+    assert 0.029 < bound < 0.031  # about 3/n
+    assert error_upper_bound(5, 5) == 1.0
+
+
+def test_the_threshold_rule_stays_above_the_floor_and_below_every_error() -> None:
+    documents = [
+        DocumentOutcome(0.97, failed_checks=False, any_error=False),
+        DocumentOutcome(0.86, failed_checks=False, any_error=False),
+        DocumentOutcome(0.83, failed_checks=False, any_error=True),
+        DocumentOutcome(0.99, failed_checks=True, any_error=True),  # a failed check: never auto
+        DocumentOutcome(0.6, failed_checks=False, any_error=False),
+    ]
+    sweep = threshold_sweep(documents, grid=(0.5, 0.82, 0.85, 0.9))
+    assert [(row["threshold"], row["auto"], row["errors"]) for row in sweep] == [
+        (0.5, 4, 1),
+        (0.82, 3, 1),
+        (0.85, 2, 0),
+        (0.9, 1, 0),
+    ]
+    assert choose_threshold(sweep) == 0.85
+    # Error-free all the way down: the design floor (0.8) still bounds the choice.
+    clean = threshold_sweep([DocumentOutcome(0.6, failed_checks=False, any_error=False)])
+    assert choose_threshold(clean) == 0.82
+    # An error even at the top: no threshold of the grid is safe.
+    worst = threshold_sweep([DocumentOutcome(1.0, failed_checks=False, any_error=True)])
+    assert choose_threshold(worst) is None

@@ -1102,3 +1102,64 @@ export interface DashboardSummary {
     workflow_id: string | null;
   }[];
 }
+
+// ------------------------------------------------------------------ evaluation (Phase 10)
+export interface EvaluationHeadline {
+  label: string;
+  value: string | null;
+}
+
+export interface EvaluationGateSummary {
+  passed: boolean;
+  mode: string;
+  checks: number;
+  failed: number;
+}
+
+export interface EvaluationSummary {
+  id: string;
+  suite: string;
+  title: string;
+  quick: boolean;
+  git_revision: string | null;
+  run_at: string;
+  recorded_at: string;
+  source: "RUN" | "IMPORT";
+  recorded_by: string | null;
+  gates: EvaluationGateSummary | null;
+  headlines: EvaluationHeadline[];
+}
+
+export interface EvaluationPage {
+  items: EvaluationSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface EvaluationGateCheck {
+  metric: string[];
+  value: number | null;
+  min: number | null;
+  max: number | null;
+  passed: boolean;
+  problem: string | null;
+  why: string;
+}
+
+export interface EvaluationReportTable {
+  heading: string;
+  header: string[];
+  rows: string[][];
+}
+
+export interface EvaluationDetail extends EvaluationSummary {
+  dataset: Record<string, unknown>;
+  config: Record<string, unknown>;
+  environment: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+  notes: string[];
+  tables: EvaluationReportTable[];
+  gate_checks: EvaluationGateCheck[];
+  report_markdown: string;
+}

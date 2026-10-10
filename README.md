@@ -112,99 +112,50 @@ Details: [local setup](docs/development/local-setup.md) · [configuration](docs/
 
 ## Evaluation
 
-All numbers below come from `make evaluate`, run on a clean checkout: OCR, classification,
-tables and extraction at commit `a22f1b8`, discrepancies at `fa1fcce` (re-run after two
-matching fixes the other suites do not use), retrieval and search at `42fedf9`, versions at
-`5bf2855` (re-run after the contract generator changed), the agent and the workflows at
-`169718e` (deterministic mode; development and held-out datasets).
-Retrieval was measured with the offline **lexical** hashing embeddings, and its gate thresholds
-and full-text order were chosen on `kb-queries`; the holdout set is small (14 questions). They are measured on **synthetic data only**. Synthetic layouts are regular and the classifier's training and
-test generators are related, so these numbers overstate real-world accuracy. Each report
-lists its datasets, seeds, engine versions and caveats.
+`make evaluate` runs eleven suites against generator ground truth and writes one report per
+suite to [`evaluation/reports/`](evaluation/reports) (JSON and Markdown, with the commit,
+datasets, seeds, engine versions and caveats). [Regression gates](evaluation/gates.toml) bound
+the safety invariants and accuracy floors; CI runs every suite on small datasets and fails on a
+broken gate. The table below is generated from the committed reports, so it cannot drift from
+them. Everything is measured on **synthetic data only**: layouts are regular, the classifier's
+training and test generators are related and the layout extractor's label vocabulary was
+written with the templates visible, so these numbers overstate real-world accuracy.
+Retrieval uses the offline **lexical** hashing embeddings; its gate thresholds and full-text
+order were chosen on `kb-queries`, and the holdout set is small.
 
-| Metric | Value | Report |
-|---|---|---|
-| OCR CER / WER, clean 300 DPI page | 1.2% / 1.5% (35 pages) | [ocr](evaluation/reports/ocr.md) |
-| OCR CER / WER, light scan, 150 DPI | 2.3% / 3.2% | [ocr](evaluation/reports/ocr.md) |
-| OCR CER / WER, heavy scan, 150 DPI | 10.4% / 14.9% | [ocr](evaluation/reports/ocr.md) |
-| OCR CER / WER, 3° skew / 90° rotation | 2.0% / 3.2% · 2.7% / 3.5% | [ocr](evaluation/reports/ocr.md) |
-| Classification accuracy / macro-F1, rendered native + scanned PDFs | 100% / 1.000 (n = 90) | [classification](evaluation/reports/classification.md) |
-| Classification accuracy, first 300 characters only | 99.7% (n = 900); 0.0% error in the auto-accepted bucket | [classification](evaluation/reports/classification.md) |
-| Classification LLM fallback | Not yet measured (needs a Gemini key) | |
-| Line-item tables, native PDFs: rows exact / cell accuracy | 100% / 100% (70 documents) | [tables](evaluation/reports/tables.md) |
-| Line-item tables, scanned at 150 DPI: row recall / cell accuracy | 0.894 / 83.8% (70 documents) | [tables](evaluation/reports/tables.md) |
-| Field extraction, native PDFs: exact / normalized match / F1 | 100% / 100% / 1.000 (70 documents) | [extraction](evaluation/reports/extraction.md) |
-| Field extraction, scanned at 150 DPI: exact / normalized match / F1 | 95.9% / 99.3% / 0.996 (70 documents) | [extraction](evaluation/reports/extraction.md) |
-| Extracted line items, scanned: row recall / cell accuracy | 0.738 / 78.1% (rows paired by SKU, values normalized) | [extraction](evaluation/reports/extraction.md) |
-| Auto-accepted documents / error rate inside that bucket, native | 97.1% / 0.0% (68 of 70; the other two are the invoices with a wrong printed total) | [extraction](evaluation/reports/extraction.md) |
-| Auto-accepted documents, scanned | 0% — every scanned document goes to review (47 analyst, 23 mandatory) | [extraction](evaluation/reports/extraction.md) |
-| Printed arithmetic errors flagged / correct documents flagged after a misread | 4 of 4 / 1.4% (2 of 140) | [extraction](evaluation/reports/extraction.md) |
-| Field extraction with the LLM (Gemini or Ollama) | Not yet measured (needs a key or a local model) | |
-| Discrepancy detection, dataset as generated (native PDFs + its 8 scans): precision / recall of confirmed failures | 100% / 100% (36 planted findings in 148 documents, 8 defect types); no defect-free document fails a rule, 1.7% get a warning (2 scans) | [discrepancies](evaluation/reports/discrepancies.md) |
-| Discrepancy detection, scanned at 150 DPI: precision / recall | FAIL 80.0% / 77.8%; FAIL or "could not be verified" 45.3% / 94.4% | [discrepancies](evaluation/reports/discrepancies.md) |
-| Defect-free documents raising a rule alarm, scanned | 4.3% FAIL, 16.4% FAIL or warning (98.3% are in review anyway for extraction uncertainty) | [discrepancies](evaluation/reports/discrepancies.md) |
-| Resent invoices (different layout and date format) found as duplicates | 4 of 4, no wrong pair, native and scanned | [discrepancies](evaluation/reports/discrepancies.md) |
-| Contract version changes (added / removed / modified clauses) | 40 of 40 version steps exactly right, native and scanned (20 contract families) | [versions](evaluation/reports/versions.md) |
-| Knowledge retrieval, hybrid: hit@1 / hit@5 / MRR / nDCG@5 | kb-queries (tuning set, 48 answerable): 87.5% / 100% / 0.938 / 0.920 · holdout (10): 90.0% / 100% / 0.950 / 0.961 — offline lexical hashing embeddings | [retrieval](evaluation/reports/retrieval.md) |
-| Retrieval ablations (kb-queries MRR) | full text only 0.918, dense only (hashing) 0.885, no title/breadcrumb prefix 0.812, fixed-size chunks 0.841 | [retrieval](evaluation/reports/retrieval.md) |
-| Evidence gate: unanswerable refused / answerable refused | kb-queries 5 of 6 / 1 of 48 (thresholds chosen here) · holdout 2 of 4 / 0 of 10 | [retrieval](evaluation/reports/retrieval.md) |
-| Other departments' passages returned / superseded passages cited (as of 2026-10-01) | 0 (68 questions as a Finance user) / 0 | [retrieval](evaluation/reports/retrieval.md) |
-| Retrieval latency p50 / p95 (local PostgreSQL, hashing embeddings, 85 passages) | 18 ms / 25 ms | [retrieval](evaluation/reports/retrieval.md) |
-| Retrieval with Gemini or fastembed embeddings | Not yet measured (no key or model download in the build environment) | |
-| Generated answers: citation precision/recall, unsupported claims | Not yet measured (needs an LLM) | |
-| Document search, structured questions (vendor, payment terms, totals, dates, types): precision / recall | 100% / 100% (26 questions, native synthetic PDFs, questions generated from ground truth) | [search](evaluation/reports/search.md) |
-| Document search, free text: recall@10 / precision@10 | 100% / 52.5% (6 line-item queries) | [search](evaluation/reports/search.md) |
-| Agent task success: invoice named / found from the question / policy question | 100% / 100% / 100% (development, 70 runs) · 100% / 100% held-out (seed 11, 60 runs, run only after development) — deterministic mode | [agent](evaluation/reports/agent.md) |
-| Agent: unsafe recommendations (payment of a defective invoice) / planted defect reported / false failures on clean invoices | 0 / 100% / 0 on both datasets | [agent](evaluation/reports/agent.md) |
-| Agent tool selection precision / recall; findings whose evidence exists | 99.2% / 100% on both datasets; 236 of 236 (held-out 206 of 206) | [agent](evaluation/reports/agent.md) |
-| Agent: governing policy among the sources (defective invoices) | 85.7% — on both datasets the vendor-mismatch invoices miss the vendor section with the lexical embeddings | [agent](evaluation/reports/agent.md) |
-| Agent guardrails vs a scripted adversarial model (16 defective invoices per dataset) | 0 payment recommendations accepted, 0 adversarial statements or summaries kept | [agent](evaluation/reports/agent.md) |
-| Agent with an LLM (Gemini or Ollama planning and analysis) | Not yet measured (no key or local model in the build environment) | |
-| Workflows: final proposal as expected — invoice processing / contract review | 100% of 22 + 22 invoices (development seed 7, held-out seed 11) / 100% of 36 contract versions (12 families × 3, seed 73) — deterministic mode | [workflow](evaluation/reports/workflow.md) |
-| Workflows: unsafe proposals (approval where the ground truth says stop) | 0 | [workflow](evaluation/reports/workflow.md) |
-| Maker-checker: attempts by a maker or a too-junior role refused / bypasses | 152 of 152 (through the service and by direct table writes) / 0; every refusal audited | [workflow](evaluation/reports/workflow.md) |
-| Action state changes with an audit event | 284 of 284 | [workflow](evaluation/reports/workflow.md) |
-| Reports: re-render to the stored hash / regenerated from unchanged data with the same SHA-256 | 100% / 100% of finished workflows | [workflow](evaluation/reports/workflow.md) |
-| Contract guideline rules (required clauses, notice period, governing law, expiry) as expected | 144 of 144 rule outcomes; version comparison step exactly right on 24 of 24 steps | [workflow](evaluation/reports/workflow.md) |
-| Workflow proposals with an LLM | Not yet measured (no key or local model in the build environment) | |
-| Latency / throughput / cost per document | Not yet measured | |
+<!-- evaluation:begin - generated by `docintel evaluation readme`, do not edit -->
+<!-- evaluation:end -->
 
-Preprocessing choices were made by ablation, which is also in the OCR report. Without
-upscaling, a 100 DPI page goes to 7.1% CER and 18.7% WER. Without deskew, a 3° page goes to
-3.7% CER and 9.8% WER. Removing ruling lines made results worse, so it is off by default.
-Scanned tables are the weakest area today, and the dataset's own four scanned documents
-have too few rows to be meaningful (see the tables report). Extraction routing is deliberately
-conservative on scans: header fields are 99.3% right, but line-item cells are not reliable
-enough to auto-accept, so a person checks every scanned document. The layout extractor's label
-vocabulary was written with the synthetic templates visible, so these numbers measure the
-pipeline, not generalization to unseen layouts.
-Matching is deterministic, so on native documents it finds exactly the planted defects; on scans
-the 7 remaining false FAILs come from values OCR misread with high confidence (an amount
-without its decimals, a quantity of 1 for 100), table rows lost from long or scanned tables
-and a date it did not find; planted defects that only warn there involve a value or item code
-read with low confidence, which is what a warning means. A warning still puts the document in
-the review queue. The synthetic generator plants one defect per bundle in a fixed
-set of layouts, so these numbers say the rules and their wiring are right, not how often real
-suppliers' documents trip them.
-The agent suite investigates every synthetic invoice twice through the job queue — named, and
-found from a question with its number and vendor — plus held-out policy questions, and runs a
-scripted adversary that always proposes payment against every defective invoice. Its
-development dataset drove three fixes (identification by document number, the keyword planner
-and a guardrail); the held-out dataset was generated with another seed and run only afterwards.
-These numbers measure the graph, tools, rules and guardrails in deterministic mode; an LLM's
-planning and analysis are not measured yet.
-The workflow suite runs every synthetic invoice and every version of 12 synthetic contracts
-through a workflow started by one manager and decided by another, and tries to get each
-pending proposal decided by its makers and by a too-junior role, through the service and by
-writing to the table directly. Its contract dataset comes from a generator that records the
-clauses, notice period and governing law it wrote; the documents come from the templates the
-extractors were built on, so these numbers show that the workflows and their controls work as
-designed, not accuracy on real documents.
-Since Phase 9, a confirmed price or tax-rate difference is put to the vendor as the invoice
-processing procedure says (a reviewer approves the request) instead of being held, so both
-suites were re-run: the expected actions already allowed either, every result still matches,
-and the workflow suite now has 32 more maker-checker probes (16 per invoice dataset) on those proposals.
-The browser test of the demonstration path (`make e2e`) is pass/fail, not a metric.
+What the numbers mean:
+
+* **OCR** preprocessing was chosen by ablation (the rows above and the OCR report); removing
+  ruling lines made results worse, so it is off by default.
+* **Scanned tables** are the weakest area; the dataset's own scanned documents have too few rows
+  to be meaningful on their own (see the tables report).
+* **Extraction routing** is deliberately conservative on scans: header fields are almost always
+  right, but line-item cells are not reliable enough to auto-accept, so a person checks every
+  scanned document. The calibration row shows why the auto-accept threshold sits where it does:
+  chosen on one dataset by a rule fixed in advance, then confirmed on a held-out one.
+* **Matching** is deterministic, so on native documents it finds exactly the planted defects.
+  On scans the remaining false failures come from values OCR misread with high confidence (an
+  amount without its decimals, a quantity of 1 for 100), table rows lost from long or scanned
+  tables and dates it did not find; planted defects that only warn there involve a value read
+  with low confidence, which is what a warning means, and a warning still opens a review task.
+  The generator plants one defect per bundle in a fixed set of layouts, so these numbers say the
+  rules and their wiring are right, not how often real suppliers' documents trip them.
+* The **agent** suite investigates every synthetic invoice twice through the job queue (named,
+  and found from a question), answers held-out policy questions, and runs a scripted adversary
+  that always proposes payment against every defective invoice. Its development dataset drove
+  three fixes; the held-out dataset was generated with another seed and run only afterwards.
+  It measures the graph, tools, rules and guardrails in deterministic mode, not an LLM.
+* The **workflow** suite runs every synthetic invoice and every version of the synthetic
+  contracts through a workflow started by one manager and decided by another, and tries to get
+  each pending proposal decided by its makers and by a too-junior role, through the service and
+  by writing to the table directly.
+* The **system** suite processes the dataset with the production worker on this machine (its
+  CPU count is in the report) and times the API in process; it is a baseline for regressions,
+  not a capacity promise. The browser test of the demonstration path (`make e2e`) is pass/fail.
+
 See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 
 ## Roadmap

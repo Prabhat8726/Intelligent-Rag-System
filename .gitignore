@@ -41,3 +41,5 @@ evaluation/reports/*
 # Playwright end-to-end output
 frontend/e2e-report/
 frontend/e2e-results/
+# Quick evaluation runs (make evaluate-quick); full reports are committed.
+evaluation/quick/

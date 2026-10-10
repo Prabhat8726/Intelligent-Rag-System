@@ -9,6 +9,8 @@ import { DashboardPage } from "./dashboard/DashboardPage";
 import { AppLayout } from "./components/AppLayout";
 import { DocumentDetailPage } from "./documents/DocumentDetailPage";
 import { DocumentsPage } from "./documents/DocumentsPage";
+import { EvaluationPage } from "./evaluation/EvaluationPage";
+import { EvaluationRunPage } from "./evaluation/EvaluationRunPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { KnowledgeDocumentPage } from "./knowledge/KnowledgeDocumentPage";
 import { KnowledgePage } from "./knowledge/KnowledgePage";
@@ -48,6 +50,8 @@ export const routes: RouteObject[] = [
           { path: "/workflows/:workflowId", element: <WorkflowPage /> },
           { path: "/reports", element: <ReportsPage /> },
           { path: "/reports/:reportId", element: <ReportPage /> },
+          { path: "/evaluation", element: <EvaluationPage /> },
+          { path: "/evaluation/:evaluationId", element: <EvaluationRunPage /> },
           { path: "/settings/tokens", element: <ApiTokensPage /> },
           { path: "/admin/audit", element: <AuditLogPage /> },
           { path: "/admin/users", element: <UsersPage /> },

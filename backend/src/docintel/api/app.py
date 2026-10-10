@@ -26,6 +26,7 @@ from docintel.api.routers import (
     comparisons,
     dashboard,
     documents,
+    evaluations,
     health,
     knowledge,
     reports,
@@ -98,6 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api_v1.include_router(workflows.router)
     api_v1.include_router(reports.router)
     api_v1.include_router(admin.router)
+    api_v1.include_router(evaluations.router)
     app.include_router(health.router)
     app.include_router(api_v1)
 

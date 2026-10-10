@@ -702,6 +702,7 @@ async def run_agent_suite(output: Path, *, database_url: str, quick: bool = Fals
         )
     )
     report = Report(
+        quick=quick,
         suite="agent",
         title="Agent investigation evaluation",
         dataset={
