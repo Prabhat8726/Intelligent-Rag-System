@@ -13,6 +13,7 @@ page defines conventions and the full planned surface, marking what exists now.
 | Authorization | Permission checks server-side on every endpoint (`require_permission`). Resource-level checks via the access-policy module. Resources the caller cannot see return **404**, not 403, to prevent ID enumeration. |
 | Content type | `application/json`; uploads `multipart/form-data`. Request models reject unknown fields (`extra="forbid"`). |
 | Errors | RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, `instance`, `request_id`, optional `errors[]` (field, message). No stack traces, no internal identifiers beyond `request_id`. |
+| Rate limits | Per caller, per minute, shared by every API replica (ADR-074): `POST /auth/login` per client address; document and knowledge uploads, new versions and reprocessing; document and knowledge search; knowledge questions, investigations, workflow starts and report generation per user. Over a limit: 429 problem with `Retry-After` (seconds). nginx adds per-address limits on `/api/` (429 problem document). |
 | Request IDs | `X-Request-ID` accepted (validated, ≤ 64 safe chars) or generated; echoed on every response and bound into logs + audit. |
 | Pagination | `?limit=` (1–100, default 25) `&offset=`; responses `{items, total, limit, offset}`. Audit logs use keyset `?before_id=`. |
 | Async work | Long operations return **202** with a resource id + `status`; clients poll the resource (`GET /analysis/{id}`). |
@@ -28,7 +29,7 @@ Legend: ✅ implemented (phase in which it shipped) · 🔜 planned (phase numbe
 |---|---|---|---|---|
 | GET | `/health` | none | Liveness: process is up. `{"status":"ok"}` | ✅ |
 | GET | `/health/ready` | none | Readiness: DB reachable, migrations at head. 503 + per-check status otherwise | ✅ |
-| GET | `/metrics` | bearer `METRICS_TOKEN` | Prometheus exposition | 🔜 11 |
+| GET | `/metrics` | bearer `METRICS_TOKEN` when set (required in staging/production; 401 otherwise) | Prometheus text format: this process's counters and histograms, then gauges read from the database (queue, review backlog, model use today); not in OpenAPI, not proxied by nginx ([monitoring](../operations/monitoring.md)) | ✅ 11 |
 
 ### Auth & users
 | Method | Path | Permission | Description | Status |

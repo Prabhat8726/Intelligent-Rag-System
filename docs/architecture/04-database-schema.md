@@ -285,6 +285,12 @@ are enabled for filtered queries so access/metadata filters don't under-fill top
 |---|---|
 | `evaluations` | One evaluation report per row, copied verbatim (ADR-067): `suite` (CHECK `^[a-z][a-z_]{0,39}$`: ocr, classification, tables, extraction, discrepancies, versions, retrieval, search, agent, workflow, system), `title`, `quick` (small smoke-test datasets), `git_revision`, `run_at` (when the suite produced it), `dataset` / `config` / `environment` / `metrics` / `notes` / `tables` (JSONB as written), `report_markdown`, `report_sha256` (SHA-256 of the canonical JSON; UNIQUE with `suite`, so a report is stored once), `gates` (regression gate results when it was recorded; NULL when none applied), `source` (`RUN` — `docintel evaluate --record`, `IMPORT` — `docintel evaluation import`), `recorded_by_id` FK `SET NULL`, `recorded_at`. Index on (`suite`, `run_at`). Migration 0010. Nothing is computed here: the reports in `evaluation/reports/` stay the record. |
 
+### Phase 11 — rate limits (migration 0011, as built)
+
+| Table | Purpose / notable columns |
+|---|---|
+| `rate_limit_counters` | Request counts per key and one-minute window, shared by the API replicas (ADR-074): `key` (scope and caller, e.g. `search:<user id>`, `login:<address>`; up to 120 chars) and `window_start` form the primary key; `expires_at` (indexed: expired windows are deleted as new ones are written), `hits` (CHECK ≥ 1). **UNLOGGED**: counters are short-lived, and a crash only resets the current window. No foreign keys and no personal data beyond the key. |
+
 ## 3. Integrity rules worth calling out
 
 * `documents.current_version_id` → `document_versions.id` closes a cycle with `document_versions.document_id`. The FK is added after both tables exist (`ON DELETE SET NULL`), and the ORM inserts the document, then the version, then sets `current_version_id` with a follow-up `UPDATE` in the same transaction (SQLAlchemy `post_update`), so no deferrable constraint is needed.

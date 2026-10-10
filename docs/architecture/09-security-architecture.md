@@ -83,7 +83,17 @@ and model output as untrusted input** at every boundary.
 
 ### API hardening
 * Phase 0: request IDs, security headers (`X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, restrictive CSP for API responses, `Permissions-Policy`; HSTS when `APP_ENV` is staging/production), CORS allowlist, `extra="forbid"` request models, RFC 9457 errors without internals, OpenAPI docs disabled by default in production.
-* Phase 11: per-IP/per-user rate limiting, request body limits for JSON.
+* Request body limits for JSON and uploads (Phase 2, ADR-016).
+* Phase 11 (ADR-074): per-caller limits counted in PostgreSQL so every API replica shares them —
+  login per client address, uploads, searches and model-backed work per user — answered with
+  429 and `Retry-After`; coarse per-address limits at nginx. The client address is the one
+  nginx saw (or the TLS proxy in front of it): nginx overwrites `X-Forwarded-For` instead of
+  appending, because uvicorn trusts the header's first entry. Before this, a client could set
+  the address recorded in the audit log (reproduced on the Phase 10 stack; the smoke test and
+  the deployment rehearsal now check it).
+* Phase 11 (ADR-073): `/metrics` is outside `/api/`, not proxied by nginx, refused by Caddy, and
+  needs a bearer token (`METRICS_TOKEN`, constant-time comparison) in staging and production;
+  metric labels are closed sets, never identifiers or content.
 
 ### LLM / agent security
 * System prompts are constants in code, versioned; user/document text goes only in delimited data sections.
@@ -161,12 +171,24 @@ and model output as untrusted input** at every boundary.
 * Extracted values live in `extracted_fields`, readable only through the document's access
   policy. Field corrections are audited with field, document and actor — never the old or new
   value (ADR-032).
-* Production: TLS at the edge, encryption at rest via storage/DB provider, least-privilege DB roles (migration role vs runtime role), backups.
+* Production ([deployment](../operations/deployment.md)): TLS at the edge (Caddy, HSTS), encryption at
+  rest via the storage and database provider, nightly backups and a dump before every
+  migration. Migrations and the application use the same database role: separate migration
+  and runtime roles are not implemented.
+* Retention (ADR-075): deleted documents are purged with their files after
+  `RETENTION_DELETED_DAYS`; each purge is audited; storage reconciliation reports files without
+  rows and rows without files.
 
 ### Supply chain & CI
 * Locked dependencies (`uv.lock`, `package-lock.json`).
 * CI: ruff, mypy, tests, `pip-audit`, `npm audit --audit-level=high`, gitleaks secret scan, container build.
-* Containers run as non-root, slim bases, health checks, no secrets baked into images.
+* Containers run as non-root, slim bases, health checks, no secrets baked into images; since
+  Phase 11 (ADR-077) with read-only root filesystems, no Linux capabilities, no privilege
+  escalation and CPU, memory and process limits.
+* Release images are scanned with Trivy before they are pushed (a fixable critical
+  vulnerability blocks the release) and get an SBOM and build provenance (ADR-078); the scan has
+  not run yet (the workflow has not run on GitHub).
+* Architecture contracts (`lint-imports`, ADR-076): only `docintel.ai` imports the model SDK.
 
 ## 3. Security test plan (Module 35)
 
@@ -197,3 +219,6 @@ and model output as untrusted input** at every boundary.
 | MCP access | Tokens shown once and stored hashed; scopes cannot exceed the role or the tool permissions; missing, forged or revoked tokens and foreign Host headers rejected; calls logged and audited (**7**, `tests/integration/test_mcp.py`) |
 | Data leakage | Restricted knowledge never returned to other departments on any read path (detail, chunks, list, search, query, even when named by key); CONFIDENTIAL sources and content-detected RESTRICTED chunks never sent to an external model or embedder; superseded and archived content not cited (**6**, `tests/security/test_knowledge_security.py`, `tests/integration/test_knowledge_rag.py`, `test_knowledge_api.py`) |
 | RAG injection | Instructions planted in a knowledge document stay inside the nonce-delimited sources block; hostile query strings (SQL, tsquery operators, NUL bytes) are plain text or a 422 (**6**, `tests/security/test_knowledge_security.py`) |
+| Rate limits | Logins over the per-address limit get 429 with `Retry-After` (failed logins count); searches are limited per user, another user is unaffected; anonymous calls are refused before they are counted; switching off works; expired windows are deleted (**11**, `tests/integration/test_rate_limits.py`); nginx answers 429 at the edge and ignores a client's `X-Forwarded-For` (**11**, `scripts/smoke_test.sh`) |
+| Metrics endpoint | With a token configured, a missing, wrong or non-bearer token gets 401 without metrics, on the API and the worker; routes are labelled by template, never the raw path; unknown methods share one label (**11**, `tests/integration/test_metrics.py`, `tests/unit/test_metrics.py`) |
+| Retention | Purge removes rows before files and audits each document; a failed file deletion leaves an orphan the reconciliation finds; missing files are reported, never "repaired" (**11**, `tests/integration/test_retention.py`) |

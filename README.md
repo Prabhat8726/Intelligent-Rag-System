@@ -4,16 +4,17 @@ Multimodal AI for document understanding, verification, RAG, agentic reasoning a
 human-in-the-loop workflow automation — built as a compact, enterprise-grade platform rather
 than an OCR demo or LLM wrapper.
 
-> **Status: Phase 10 complete — ingestion, OCR, layout, tables, classification, structured
-> extraction with evidence, document comparison, business rules, duplicate detection, the
-> review queue, contract version comparison, the knowledge base with cited RAG, document
-> search, the investigation agent (LangGraph, controlled tools, MCP server), workflows with
-> human approval, maker-checker, reproducible reports, the audit API and user administration,
-> the full web app, and the evaluation harness: eleven suites with regression gates, a
-> performance baseline, calibrated confidence routing, a README table generated from the
-> reports, and the demonstration as one command (`make demo`).** Production deployment is
-> designed (see [`docs/`](docs/README.md)) and is implemented in Phase 11. Nothing below
-> claims a capability that has not been built and tested.
+> **Status: Phase 11 complete — the platform (ingestion, OCR, layout, tables, classification,
+> structured extraction with evidence, comparison, business rules, duplicates, the review queue,
+> contract versions, cited RAG, document search, the LangGraph agent with controlled tools and an
+> MCP server, workflows with maker-checker approval, reproducible reports, the audit API, the web
+> app, and the evaluation harness with regression gates) is now productionized: Prometheus
+> metrics with alerts and a dashboard, per-caller rate limits, retention, hardened containers,
+> architecture contracts, a staging/production configuration with release and deploy workflows,
+> and a load test against the NFR-09 targets.** The deployment configuration was rehearsed on a
+> local Docker host; **no staging or production deployment has been performed** and the GitHub
+> workflows have not run yet. Nothing below claims a capability that has not been built and
+> tested. Overview for reviewers: [project overview](docs/project-overview.md).
 
 ## What the platform will do
 
@@ -38,7 +39,7 @@ LLM self-assessment; the agent can only *propose* high-impact actions; PostgreSQ
 single stateful service (no Redis, no external vector DB); every AI provider sits behind an
 interface; sensitive documents are never sent to free-tier external AI.
 
-## What works today (Phases 0–10, verified by tests)
+## What works today (Phases 0–11, verified by tests)
 
 | Area | Implemented |
 |---|---|
@@ -81,11 +82,18 @@ interface; sensitive documents are never sent to free-tier external AI.
 | Synthetic data | Seeded generator for linked purchase orders, delivery notes and invoices (12 scenarios, incl. price/quantity/tax/vendor defects, duplicates, multi-page and scanned documents) with JSON ground truth; `make process` ingests a dataset through the API |
 | CLI | `docintel seed` (users and vendor master), `create-user`, `check-ai` (real end-to-end verification of the Gemini key or Ollama models), `check-ocr`, `llm-usage`, `worker`, `worker-health`, `generate-documents`, `ingest`, `knowledge-ingest`, `reembed`, `match` (re-run matching for every processed document), `mcp`, `evaluate` |
 | Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, sessions that survive reloads and renew in the background; dashboard (key figures, extraction confidence trend, documents per day, documents by status and type, failing rules, workflow outcomes and investigation recommendations as small SVG charts with table views and keyboard readouts, recent activity; 7, 30 or 90 days); documents inbox with upload, type/status filters, vendor and extraction-confidence columns and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; review queue (filters, claim, priority, due dates), each document's checks, comparisons, duplicates and review decision, comparison view whose evidence links open the source field on its page, business rules (read-only, or editable with validation for administrators), versions with upload and clause comparison; knowledge page (ask with cited answers, library, upload, document passages, archive); document search with the query's interpretation; AI analysis (start an investigation or Investigate from a document; findings with evidence, policy sources, confidence factors, recommendation and the action taken or proposed, steps and tool calls); workflows (awaiting my decision, steps, proposal with its investigation, why you cannot decide, approve or reject with a reason, history) with a badge for decisions waiting; reports (content, verify, downloads, generate from a document, comparison or investigation); evaluation results (latest run of every suite, regression gates, report tables, provenance, history); audit log; user administration; API tokens; system status page |
-| Delivery | Non-root multi-stage images, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, every evaluation suite on quick datasets checked against the regression gates, the committed reports against their gates and the README table, dependency audits, secret scan, container smoke test, synthetic dataset, knowledge base and evaluation results loaded through the stack, `make demo` through the API, and a Playwright browser test of the demonstration path: generate an order and an invoice with a price difference, upload, classification, extraction, comparison, mismatch, policy retrieval, the agent's recommendation, a reviewer's approval, the workflow result, the audit log and the dashboard) |
+| Observability (Phase 11) | Prometheus metrics on every API replica (`/metrics`, by route template; database gauges such as queue age and review backlog read at scrape time) and every worker (jobs, stages, OCR, model calls, tokens and estimated cost, agent tools), token-protected when deployed; Prometheus and Grafana as an optional compose file with an operations dashboard and 13 alert rules with unit tests and runbooks |
+| Rate limits (Phase 11) | Per-caller limits counted in PostgreSQL and shared by every replica — login per address; uploads, searches and model-backed work per user — answered with 429 and `Retry-After`; per-address limits at nginx; the client address in the audit log can no longer be forged with `X-Forwarded-For` |
+| Retention (Phase 11) | `docintel purge-deleted` removes documents deleted 30 days ago (rows, then files, audited); `docintel storage-reconcile` finds files without rows and rows without files |
+| Deployment (Phase 11) | `deploy/`: staging/production on one Docker host — registry images, Caddy TLS, API and worker replicas, nightly backups and a dump before each migration, daily retention; a deploy script that rolls back automatically; release (build, Trivy scan, SBOM, push) and deploy workflows. Rehearsed locally, not yet deployed |
+| Load testing (Phase 11) | `docintel loadtest` drives concurrent users through nginx, optionally uploading a dataset, and checks the NFR-09 targets ([results](docs/operations/load-testing.md)) |
+| Delivery | Non-root, read-only multi-stage images without Linux capabilities and with resource limits, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, every evaluation suite on quick datasets checked against the regression gates, the committed reports against their gates and the README table, dependency audits, secret scan, container smoke test, synthetic dataset, knowledge base and evaluation results loaded through the stack, `make demo` through the API, and a Playwright browser test of the demonstration path: generate an order and an invoice with a price difference, upload, classification, extraction, comparison, mismatch, policy retrieval, the agent's recommendation, a reviewer's approval, the workflow result, the audit log and the dashboard) |
 
-Test suites: 872 backend tests (unit, integration against real PostgreSQL, security), 78
-frontend tests, a browser test of the demonstration path (`make e2e`) and the checked
-demonstration through the API (`make demo`).
+Test suites: 904 backend tests (unit, integration against real PostgreSQL, security), 78
+frontend tests, a browser test of the demonstration path (`make e2e`), the checked
+demonstration through the API (`make demo`), the smoke test of the Docker stack (`make smoke`)
+and unit tests of the alert rules (`make alerts-test`); `make lint` also checks the
+architecture contracts (import-linter).
 
 ## Quick start
 
@@ -108,6 +116,11 @@ or `make e2e` in a browser (once: `cd frontend && npx playwright install chromiu
 Try it with synthetic documents: `make generate-documents && make process`
 (add `API_URL=http://localhost:8080` for the Docker stack), then open the Documents page.
 Load the policy knowledge base with `make seed-knowledge` and ask on the Knowledge page.
+
+Monitoring: `GRAFANA_ADMIN_PASSWORD=... docker compose -f docker-compose.yml -f
+deploy/compose.observability.yml up -d prometheus grafana` → Grafana on http://127.0.0.1:3000.
+Load test: `make loadtest` ([how](docs/operations/load-testing.md)). Staging and production:
+[deployment](docs/operations/deployment.md).
 
 Verify your Gemini key: `make check-ai`. The key is optional: without it, classification and
 extraction run on local models and rules and send uncertain documents to review. **Free-tier
@@ -182,7 +195,7 @@ Every number in this table is generated from the committed reports by `docintel 
 | Generated answers: citation precision/recall, unsupported claims | Not yet measured (needs an LLM) | |
 | Agent and workflow proposals with an LLM (Gemini or Ollama) | Not yet measured (no key or local model in the build environment) | |
 | Model latency and cost per document | Not yet measured (no model in the build environment) | |
-| Latency and throughput of a deployment (network, nginx, several workers) | Not yet measured (no deployment yet: Phase 11) | |
+| Latency and throughput on a deployment host (own load generator, real network) | Not yet measured (no deployment yet; a local load test through nginx: docs/operations/load-testing.md) | |
 <!-- evaluation:end -->
 
 What the numbers mean:
@@ -231,7 +244,7 @@ See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 | 8 | Workflows, human approval, reports, audit API, user administration | **Complete** |
 | 9 | Full enterprise UI: dashboard, browser sessions, end-to-end test of the demo path | **Complete** |
 | 10 | Evaluation harness, regression gates, performance baseline, calibration, reproducible demo | **Complete** |
-| 11 | Productionization & deployment | Next |
+| 11 | Productionization: metrics, alerts, rate limits, retention, hardening, deployment configuration and workflows, load tests | **Complete** (deployment rehearsed locally, not performed) |
 
 ## Repository layout
 
@@ -239,9 +252,11 @@ See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 backend/     Python package `docintel` (API, worker, agent, MCP server, CLI), tests
 synthetic_data/  generated datasets (git-ignored output of `make generate-documents`)
 frontend/    React SPA + nginx image
-docs/        architecture, decisions, development guides
+deploy/      staging/production compose, Caddy, backups, deploy script, Prometheus/Grafana, alerts
+evaluation/  gates, committed evaluation reports, load test reports
+docs/        architecture and decisions, development guides, operations, project overview
 scripts/     smoke test and helper scripts
-.github/     CI
+.github/     CI, release and deploy workflows
 ```
 
 ## License

@@ -87,9 +87,10 @@ with the lexical hashing model), **generated RAG answers** (citation precision/r
 unsupported-claim rate: need an LLM; the citation and grounding checks are covered by tests),
 **model-assisted agent runs and workflow proposals** (planning and analysis with Gemini or a
 local model: the validators and guardrails are measured against a scripted adversary instead),
-model latency and cost per document, and the latency and throughput of a deployment (network,
-nginx, several worker and API processes: Phase 11 load tests; the system suite measures one
-worker process and the API in process). Public datasets (SROIE, CORD, FUNSD) are not used:
+model latency and cost per document, and the latency and throughput on a deployment host (the
+Phase 11 load test measured the deployed shape — nginx, several API processes, a worker — on the
+build machine itself, with the load generator sharing its CPUs: [load
+testing](../operations/load-testing.md), ADR-080). Public datasets (SROIE, CORD, FUNSD) are not used:
 their licences have not been reviewed and the build environment does not download them.
 Reranking is not measured: no reranking model is available offline, and the hybrid retrieval's
 tuning-set MRR leaves little room to show a gain on this knowledge base. Human corrections are

@@ -18,7 +18,9 @@ Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 | Auth | **PyJWT** + **pwdlib[argon2]** | Both are what current FastAPI docs recommend; python-jose and passlib are effectively unmaintained | Authlib, external IdP (OIDC later) |
 | Settings | pydantic-settings | Typed env config with validation, `SecretStr` | dynaconf |
 | Logging | **structlog** (JSON in prod) | Structured, contextvars for request ids, redaction processor | std logging only |
-| Metrics | prometheus-client (Phase 11) | De-facto standard, free | OpenTelemetry metrics (can be added) |
+| Metrics | **prometheus-client** (process-local registries; API at `/metrics`, worker on its own port; ADR-073) | De-facto standard, free, pull-based: works with any number of replicas without a collector | OpenTelemetry metrics (can be added), statsd (needs an aggregator) |
+| Monitoring stack | **Prometheus 3.5 + Grafana 12** as an optional compose file, alert rules tested with `promtool` (ADR-079) | Free, self-hosted, scrapes replicas by DNS | Hosted observability (cost, data leaves the deployment) |
+| Architecture checks | **import-linter** (ADR-076) | Layering and "only `docintel.ai` imports the SDK" as CI-checked contracts | Code review only |
 | LLM SDK | **google-genai 2.x** | Google's current unified SDK; `google-generativeai` is legacy | REST by hand |
 | Local LLM | **Ollama** HTTP API via httpx (`/api/chat` with a JSON-schema `format`, Phase 4) | Self-hosted models keep confidential documents in the deployment (ADR-029); no extra SDK — one small client with the same retries, errors and accounting as Gemini | `ollama` Python package (thin wrapper), vLLM / llama.cpp server (OpenAI-compatible; possible later) |
 | Agent framework | **LangGraph 1.2** (`StateGraph` only; no LangChain model wrappers, no checkpointer — runs are stored in `agent_runs`) | Explicit typed state, conditional edges and bounded loops; nodes call our own `LLMProvider`, so accounting, budget and the sensitivity gate apply | Custom state machine (would re-implement routing and tracing), CrewAI / free-form ReAct agents (model picks tools: harder to bound and test) |
@@ -58,7 +60,9 @@ Exact versions are locked in `backend/uv.lock` and `frontend/package-lock.json`.
 | Local orchestration | docker compose with health checks and a one-shot `migrate` service | Ordered, reproducible startup |
 | CI | GitHub Actions | Required; free for public repos |
 | Object storage (prod) | S3-compatible API (AWS S3, Cloudflare R2, MinIO) | One implementation covers most clouds; R2 has a free tier |
-| Hosting (Phase 11) | Single VM with docker compose (e.g. an always-free ARM VM) + managed backups | Workers need a long-running process; most PaaS free tiers sleep or disallow workers |
+| Hosting (Phase 11, ADR-078) | One Docker host with the same compose files, registry images (GHCR), nightly `pg_dump` and a dump before each migration | Workers need a long-running process; most PaaS free tiers sleep or disallow workers; any VM provider works |
+| TLS edge | **Caddy 2.10** (automatic certificates, HSTS) in front of nginx | Certificates without cron jobs; drops client-supplied forwarding headers | nginx + certbot, a cloud load balancer (provider-specific) |
+| Image scanning | **Trivy** in the release workflow (table + CycloneDX SBOM; fixable criticals block) | Free, scans OS packages and Python/npm dependencies in the image | Grype, Docker Scout |
 
 ## 4. Free / low-cost strategy
 

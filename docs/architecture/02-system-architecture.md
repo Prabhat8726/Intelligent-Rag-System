@@ -97,7 +97,7 @@ flowchart LR
 | `evaluation` | Datasets, metric computation, reports generated only from real runs | Hand-written numbers |
 | `synthetic` | Generates PDFs/images with controlled defects + ground-truth JSON | Production data |
 
-## 4. Layering rules (enforced in code review; `import-linter` contract added in Phase 11)
+## 4. Layering rules (checked by `import-linter` in CI, ADR-076)
 
 ```
 api / workers / mcp_server   (entrypoints: transport only)
@@ -113,17 +113,24 @@ ai · storage · db · core      (infrastructure + primitives)
 * Domain services never import entrypoints.
 * `ai` providers never import domain modules (prompts live with their domain).
 
+As built, the contract (`backend/pyproject.toml`) is: `cli` > `evaluation | tools` > `api` >
+the domain packages (one layer: they call each other, e.g. documents → processing → workers)
+> `ai | audit | storage` > `db` > `core`; FastAPI is imported directly only by the HTTP API (and
+the two upload services, for `UploadFile`); the Gemini SDK only by `docintel.ai`.
+
 ## 5. Runtime topology per environment
 
 | Env | Topology | Storage | AI |
 |---|---|---|---|
 | `local` | `make dev`: Postgres in Docker; API (`uvicorn --reload`) + Vite on host. Or `make up`: everything in Docker | Local FS volume | Gemini (synthetic data only) |
 | `test` | CI: Postgres service container; providers mocked at HTTP transport level | tmp dir | none (mocked) |
-| `staging` | Single VM, `docker compose` (prod images), Caddy/nginx TLS | S3-compatible bucket | Gemini paid tier or local |
-| `production` | Same images; managed Postgres (pgvector) or VM Postgres with backups; ≥2 worker replicas | S3-compatible bucket, encryption at rest | Paid tier / local per sensitivity policy |
+| `staging` | Single Docker host: `docker-compose.yml` + `deploy/compose.prod.yml`, registry images, Caddy TLS, `API_REPLICAS`/`WORKER_REPLICAS`, nightly backups, daily retention | Local volume or S3-compatible bucket | Gemini paid tier or local |
+| `production` | Same images and files as staging; VM PostgreSQL with backups, or managed PostgreSQL (pgvector) via `DATABASE_URL` | Local volume or S3-compatible bucket, encryption at rest by the provider | Paid tier / local per sensitivity policy |
 
-Cloud-specific code stays behind `DocumentStorage` and provider interfaces
-(Module 33). Deployment is documented in Phase 11 and **not claimed until done**.
+Cloud-specific code stays behind `DocumentStorage` and provider interfaces (Module 33). The
+deployment configuration, release and deploy workflows are in [deployment](../operations/deployment.md)
+(ADR-078); it was rehearsed on a local Docker host, and **no staging or production deployment
+has been performed**.
 
 ## 6. Repository structure
 

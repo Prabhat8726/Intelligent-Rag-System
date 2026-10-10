@@ -65,6 +65,13 @@ make smoke        # end-to-end checks through nginx, including an upload process
 Open http://localhost:8080. `make logs` follows logs, `make down` stops the stack,
 `make reset-db` destroys the database and document-storage volumes.
 
+The containers run read-only, without Linux capabilities and with resource limits.
+`API_REPLICAS=2 make up` runs two API processes behind nginx. Metrics: `GET /metrics` on each
+API container and port 9100 on the worker (internal network only); for dashboards and alerts
+add `deploy/compose.observability.yml` ([monitoring](../operations/monitoring.md)). Batch
+clients that upload many files meet the per-user limits (30 uploads a minute by default) and
+wait as `Retry-After` says; the command-line tools do this for you.
+
 ## Synthetic documents
 
 ```bash
@@ -222,7 +229,7 @@ every call is logged and audited, and revoking the token takes effect on the nex
 | Command | What it does |
 |---|---|
 | `make test` | Backend (unit + integration + security, real Postgres) and frontend tests |
-| `make lint` | ruff, ruff format check, mypy --strict, eslint, tsc |
+| `make lint` | ruff, ruff format check, mypy --strict, import-linter architecture contracts, eslint, tsc |
 | `make format` | Auto-format backend code |
 | `make migrate` | Apply migrations to the local database |
 | `make match` | Re-run comparisons, rules and review tasks for every processed document (after upgrading to Phase 5, or after changing rules) |
@@ -236,6 +243,9 @@ every call is logged and audited, and revoking the token takes effect on the nex
 | `make seed-knowledge` | Load `knowledge_base/` through the API |
 | `make reembed` | Add vectors of the configured embedding model to passages that have none (after switching `EMBEDDING_PROVIDER`, or after a provider outage) |
 | `make llm-usage` | LLM calls, tokens and estimated cost per day for the last 7 days (from `llm_calls`) |
+| `make loadtest` | Concurrent readers (and optional uploads) through the running stack, checked against NFR-09 ([load testing](../operations/load-testing.md)) |
+| `make alerts-test` | Unit tests of the Prometheus alert rules (`promtool` in Docker) |
+| `make purge-deleted` / `make storage-reconcile` | Retention in the running stack: purge documents deleted `RETENTION_DELETED_DAYS` ago (`DRY_RUN=1` to count) / compare stored files with the database |
 | `cd backend && uv run --env-file ../.env alembic revision -m "..."` | New migration (write it by hand, then `alembic check`) |
 
 ## Troubleshooting

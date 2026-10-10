@@ -1,0 +1,105 @@
+{
+  "run_at": "2026-10-10T19:36:05+00:00",
+  "api_url": "http://127.0.0.1:8091",
+  "labels": {
+    "api_replicas": "1",
+    "workers": "1",
+    "worker_concurrency": "1",
+    "phase": "mixed"
+  },
+  "client": {
+    "cpus": 4,
+    "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39"
+  },
+  "users": 8,
+  "duration_s": 60.0,
+  "warmup_s": 5.0,
+  "reads": {
+    "inbox": {
+      "requests": 497,
+      "p50_ms": 137.4,
+      "p95_ms": 189.5,
+      "p99_ms": 362.9,
+      "max_ms": 385.7
+    },
+    "document": {
+      "requests": 499,
+      "p50_ms": 129.8,
+      "p95_ms": 175.4,
+      "p99_ms": 328.3,
+      "max_ms": 377.1
+    },
+    "extraction": {
+      "requests": 497,
+      "p50_ms": 128.8,
+      "p95_ms": 169.6,
+      "p99_ms": 197.9,
+      "max_ms": 350.4
+    },
+    "findings": {
+      "requests": 497,
+      "p50_ms": 187.7,
+      "p95_ms": 242.6,
+      "p99_ms": 399.8,
+      "max_ms": 425.3
+    },
+    "review_queue": {
+      "requests": 497,
+      "p50_ms": 125.2,
+      "p95_ms": 175.1,
+      "p99_ms": 318.1,
+      "max_ms": 354.6
+    },
+    "dashboard": {
+      "requests": 497,
+      "p50_ms": 218.9,
+      "p95_ms": 280.4,
+      "p99_ms": 428.4,
+      "max_ms": 467.0
+    },
+    "all": {
+      "requests": 2984,
+      "p50_ms": 145.5,
+      "p95_ms": 245.2,
+      "p99_ms": 354.6,
+      "max_ms": 467.0
+    }
+  },
+  "throughput_rps": 49.7,
+  "statuses": {
+    "200": 2984
+  },
+  "transport_errors": {},
+  "processing": {
+    "documents": 131,
+    "native_documents": 105,
+    "scanned_documents": 26,
+    "native_document_p50_s": 0.156,
+    "native_document_p95_s": 0.271,
+    "scanned_page_p50_s": 1.988,
+    "scanned_page_p95_s": 2.225,
+    "failed": 0,
+    "failed_files": [],
+    "unfinished": 0
+  },
+  "targets": {
+    "read_p95_ms": {
+      "target": 300.0,
+      "measured": 245.2,
+      "met": true
+    },
+    "native_document_p95_s": {
+      "target": 1.0,
+      "measured": 0.271,
+      "met": true
+    },
+    "scanned_page_p95_s": {
+      "target": 5.0,
+      "measured": 2.225,
+      "met": true
+    },
+    "no_failed_jobs": {
+      "met": true
+    }
+  }
+}

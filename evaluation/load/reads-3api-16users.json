@@ -1,0 +1,80 @@
+{
+  "run_at": "2026-10-10T19:30:58+00:00",
+  "api_url": "http://127.0.0.1:8091",
+  "labels": {
+    "api_replicas": "3",
+    "workers": "1",
+    "phase": "reads"
+  },
+  "client": {
+    "cpus": 4,
+    "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39"
+  },
+  "users": 16,
+  "duration_s": 60.0,
+  "warmup_s": 5.0,
+  "reads": {
+    "inbox": {
+      "requests": 1106,
+      "p50_ms": 120.8,
+      "p95_ms": 300.2,
+      "p99_ms": 441.7,
+      "max_ms": 592.4
+    },
+    "document": {
+      "requests": 1106,
+      "p50_ms": 105.0,
+      "p95_ms": 250.5,
+      "p99_ms": 382.0,
+      "max_ms": 548.0
+    },
+    "extraction": {
+      "requests": 1108,
+      "p50_ms": 103.5,
+      "p95_ms": 253.1,
+      "p99_ms": 413.6,
+      "max_ms": 537.5
+    },
+    "findings": {
+      "requests": 1105,
+      "p50_ms": 143.5,
+      "p95_ms": 322.9,
+      "p99_ms": 463.4,
+      "max_ms": 614.6
+    },
+    "review_queue": {
+      "requests": 1107,
+      "p50_ms": 110.9,
+      "p95_ms": 251.0,
+      "p99_ms": 378.2,
+      "max_ms": 518.4
+    },
+    "dashboard": {
+      "requests": 1108,
+      "p50_ms": 187.6,
+      "p95_ms": 405.7,
+      "p99_ms": 556.3,
+      "max_ms": 702.4
+    },
+    "all": {
+      "requests": 6640,
+      "p50_ms": 125.8,
+      "p95_ms": 319.1,
+      "p99_ms": 457.1,
+      "max_ms": 702.4
+    }
+  },
+  "throughput_rps": 110.7,
+  "statuses": {
+    "200": 6640
+  },
+  "transport_errors": {},
+  "processing": null,
+  "targets": {
+    "read_p95_ms": {
+      "target": 300.0,
+      "measured": 319.1,
+      "met": false
+    }
+  }
+}

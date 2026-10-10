@@ -19,7 +19,7 @@ architecture decisions are validated by running code immediately.
 | **8 — Workflow automation** ✅ | Workflows, HITL state machine, executors, reports, audit API, user management | `/workflows/*`, `/reports`, `/audit-logs`, `/users` | Maker-checker enforced; transitions audited; reports reproducible |
 | **9 — Frontend** ✅ | Dashboard, inbox, viewer with evidence highlights, comparison, AI analysis, approvals, audit, search; refresh tokens | Full SPA, `/dashboard/summary`, `/auth/refresh`, `/auth/logout`, `make e2e` | E2E (Playwright) for the demo path |
 | **10 — Evaluation** ✅ | Datasets, all suites, reports, regression gates, demo script | `make evaluate`, `make demo`, `evaluation/gates.toml`, `/evaluations` | README metrics generated from reports |
-| 11 — Productionization | Prometheus metrics, rate limiting, hardening, deployment configs (staging/prod), performance tests, runbooks, import-linter | `/metrics`, deploy docs | Deployment claimed only after it is actually performed |
+| **11 — Productionization** ✅ (no deployment performed) | Prometheus metrics, rate limiting, retention, hardening, deployment configs (staging/prod), release and deploy workflows, load tests, monitoring, runbooks, import-linter | `/metrics`, `deploy/`, `docintel loadtest`, `docs/operations/` | Deployment claimed only after it is actually performed — see §11 |
 
 ## 1. Phase 0 acceptance criteria
 
@@ -398,3 +398,46 @@ Delivery
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 10 (by design): public datasets (licence review), reranking (no reranker model offline), an evaluation dataset built from human corrections (none in the synthetic setting), LLM-judged answer quality (no model), load tests of a deployment (Phase 11).
+
+## 11. Phase 11 acceptance criteria
+
+Status as of 2026-10-10, same legend as §1. Operations documents: [deployment](../operations/deployment.md),
+[monitoring](../operations/monitoring.md), [runbooks](../operations/runbooks.md),
+[load testing](../operations/load-testing.md), [readiness checklist](../operations/production-readiness.md).
+
+Observability (Module 24, ADR-073, ADR-079)
+- ✅ `GET /metrics` on the API (HTTP by route template, database statements, model calls, tokens, cost, rate-limit refusals, gauges read from the database at scrape time) and on the worker's port (jobs by outcome, stages, OCR pages, extraction confidence, agent runs and tool calls); labels are closed sets; bearer token required in staging/production (`unit/test_metrics.py`, `integration/test_metrics.py`, `integration/test_worker.py`)
+- ✅ Prometheus discovers every API and worker replica by DNS and scrapes with the token; 13 alert rules with `promtool` unit tests (`make alerts-test`); Grafana dashboard provisioned; verified on the rehearsal stack, where a stopped worker fired `DocintelWorkerDown` after five minutes
+
+Security hardening (ADR-074, ADR-077)
+- ✅ Per-caller rate limits counted in PostgreSQL (migration 0011), shared by replicas: login per address, uploads, searches and model-backed work per user; 429 with `Retry-After` (`integration/test_rate_limits.py`); command-line clients wait and retry (`unit/test_tools_http.py`); observed on a two-replica stack: the 31st upload in a minute refused, retried, all 37 processed
+- ✅ Found and fixed: a client could choose the address recorded in the audit log (`X-Forwarded-For` appended by nginx, first entry trusted by uvicorn); reproduced on the Phase 10 stack, now refused (smoke test, rehearsal through Caddy)
+- ✅ nginx per-address limits answered as problem documents (smoke test); containers read-only, without capabilities or privilege escalation, with CPU, memory and process limits (fresh stack, rehearsal)
+
+Retention (ADR-075)
+- ✅ `docintel purge-deleted` (rows then files, audited, ended session tokens) and `docintel storage-reconcile` (orphans by age, missing files reported, exit non-zero), with `list_objects` on both storage backends (`integration/test_retention.py`, `unit/test_storage.py`); daily maintenance service in production
+
+Architecture contracts (ADR-076)
+- ✅ `lint-imports` in `make lint` and CI: layers, FastAPI only in the API (two documented exceptions), the model SDK only in `docintel.ai`; a planted violation fails it
+
+Deployment (Module 33, ADR-078)
+- ✅ `deploy/compose.prod.yml` (registry images, Caddy TLS, unpublished database, backups, maintenance), `deploy/deploy.sh` (pull, back up, migrate, health checks, readiness through the public URL, automatic return to the previous release), production `.env` template
+- ✅ Release workflow (build, Trivy report and SBOM, fixable criticals block, push with provenance) and manual deploy workflow per GitHub environment; actionlint clean
+- ✅ Rehearsed on a local Docker host: three releases (normal, with pre-deploy dump, and a deliberately broken one rolled back automatically), TLS and redirect, edge refusal of `/metrics`, real client address in the audit log, token-protected metrics, backups and a restore drill
+- ❌ **No staging or production deployment** (no host, domain or credentials in this environment); the GitHub workflows have not run; the Trivy scan has not run (the scanner could not be downloaded here)
+
+Performance (NFR-09, ADR-080)
+- ✅ `docintel loadtest` (`make loadtest`): readers through nginx plus optional uploads, NFR-09 targets checked, JSON and Markdown reports in `evaluation/load/` (`integration/test_loadtest.py`)
+- ✅ 8 concurrent users: every target met with one or two API processes, also while 131 documents were processed (read p95 245 / 214 ms; native p95 0.27 / 0.36 s; scanned p95 2.2 / 2.3 s per page; 0 failed jobs)
+- ⚠️ 16 concurrent users miss the read target on the 4-CPU build machine (p95 386 ms with two API processes, 319 ms with three), which also ran the load generator
+- ✅ Database tuning from measurements: planning cost three times execution; the review queue and inbox now load people in batches (planning 9.1 → 1.7 ms and 2.5 → 0.7 ms); one replica 46.7 → 58.0 reads/s, p95 284 → 207 ms
+
+Delivery
+- ✅ 904 backend tests, ruff, ruff format, mypy --strict (src and tests), import contracts; 78 frontend tests, ESLint, `tsc`, production build
+- ✅ Quick evaluation of all eleven suites on the final code: every gate passed; README table regenerated (one "Not yet measured" row reworded: the load test is local, not a deployment)
+- ✅ Fresh hardened stack with two API replicas: migration 0011, smoke test (17 checks), `make seed-docker`, `make process` (37 documents), `make seed-knowledge`, `make demo` (twice) and `make e2e`; long-lived stack upgraded to migration 0011 and `make demo` passes
+- ⚠️ `make e2e` failed once in seven runs on the fresh stack, in the browser, with no server-side error (no 5xx, no error log, no 429 on its routes); six later runs passed, including two under CPU contention and one repeating the exact demo → e2e sequence; the run's artifacts were overwritten by the rerun, so the cause is not identified
+- ✅ gitleaks: history clean; `actionlint` clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+
+Not in Phase 11: a deployment (no host), Alertmanager receivers (organisation-specific), separate database roles for migrations and runtime, model-assisted measurements (no model), load tests from a separate machine.

@@ -22,3 +22,15 @@
 
 * [Local setup](development/local-setup.md)
 * [Configuration reference](development/configuration.md) (including Gemini key handling)
+
+## Operations (Phase 11)
+
+* [Deployment](operations/deployment.md) — environments, topology, first-time host setup, releases, the rehearsal (no deployment performed yet)
+* [Monitoring](operations/monitoring.md) — metric catalogue, Prometheus and Grafana, alerts, logs
+* [Runbooks](operations/runbooks.md) — one per alert, plus deploy, roll back, restore, reconcile, purge, rotate secrets
+* [Load testing](operations/load-testing.md) — method, results against NFR-09, what the test changed
+* [Production readiness checklist](operations/production-readiness.md) — the master prompt's §52, item by item with evidence
+
+## Overview
+
+* [Project overview](project-overview.md) — what was built and why, resume bullets, explanations of the architecture, ML, agent, RAG, security, evaluation and deployment, interview questions
