@@ -23,6 +23,8 @@ class AuditAction(StrEnum):
     AUTH_LOGIN_SUCCEEDED = "auth.login.succeeded"
     AUTH_LOGIN_FAILED = "auth.login.failed"
     AUTH_ACCOUNT_LOCKED = "auth.account.locked"
+    AUTH_LOGOUT = "auth.logout"
+    AUTH_REFRESH_REUSED = "auth.refresh_reused"
     AUTHZ_DENIED = "authz.denied"
     USER_CREATED = "user.created"
     DEPARTMENT_CREATED = "department.created"

@@ -166,6 +166,7 @@ def state(
 
 PASSING = [rule("INV_PO_UNIT_PRICE", "PASS"), rule("INV_PO_QUANTITY", "PASS")]
 FAILING = [rule("INV_PO_UNIT_PRICE", "FAIL"), rule("INV_PO_QUANTITY", "PASS")]
+QUANTITY_FAILING = [rule("INV_PO_UNIT_PRICE", "PASS"), rule("INV_PO_QUANTITY", "FAIL")]
 
 
 # ------------------------------------------------------------------------------ guardrails
@@ -197,9 +198,24 @@ def test_baseline_actions() -> None:
     assert baseline_action(situation(state(PASSING)), ConfidenceLevel.LOW)[0] == (
         ActionType.HOLD_FOR_REVIEW
     )
-    assert baseline_action(situation(state(FAILING)), ConfidenceLevel.HIGH)[0] == (
-        ActionType.HOLD_FOR_REVIEW
+    # Procedure 3.2/3.3: a confirmed price or tax difference is put to the vendor...
+    action, reason = baseline_action(situation(state(FAILING)), ConfidenceLevel.HIGH)
+    assert action == ActionType.REQUEST_VENDOR_CLARIFICATION
+    assert "corrected invoice or a credit note" in reason
+    tax = [rule("INV_PO_TAX_RATE", "FAIL", rule_type="header_match")]
+    assert baseline_action(situation(state(tax)), ConfidenceLevel.MEDIUM)[0] == (
+        ActionType.REQUEST_VENDOR_CLARIFICATION
     )
+    # ...anything else failing, an unconfirmed value or weak evidence goes to a reviewer.
+    for results, level in (
+        (QUANTITY_FAILING, ConfidenceLevel.HIGH),
+        ([*FAILING, rule("INV_PO_QUANTITY", "FAIL")], ConfidenceLevel.HIGH),
+        ([*FAILING, rule("INV_DELIVERED_QUANTITY", "WARN")], ConfidenceLevel.HIGH),
+        (FAILING, ConfidenceLevel.LOW),
+    ):
+        assert baseline_action(situation(state(results)), level)[0] == (
+            ActionType.HOLD_FOR_REVIEW
+        ), (results, level)
     duplicate = state(
         [rule("INV_DUPLICATE", "FAIL", rule_type="duplicate_document")],
         duplicates=[{"document_id": "d0", "kind": "SAME_NUMBER", "strong": True}],
@@ -213,7 +229,7 @@ def test_baseline_actions() -> None:
 
 
 def test_a_model_proposal_stands_only_if_allowed() -> None:
-    failing = state(FAILING)
+    failing = state(QUANTITY_FAILING)
     confidence = assess_confidence(failing, dropped_model_findings=0)
     refused = recommend(
         failing, confidence, proposed=ActionType.APPROVE_FOR_PAYMENT, rationale="ok",

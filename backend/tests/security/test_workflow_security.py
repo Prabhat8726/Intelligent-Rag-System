@@ -96,8 +96,13 @@ async def test_a_hijacked_model_cannot_get_a_defective_invoice_paid(
     await worker(env, llm=HijackedLLM()).run_until_idle()
     workflow = await get(env, started["id"])
     (action,) = workflow["actions"]
-    assert action["action_type"] == "HOLD_FOR_REVIEW"  # the guardrails refused payment
-    assert action["proposed_by_type"] == "RULES"
-    assert workflow["outcome"] == "SENT_TO_REVIEW"
+    # The guardrails refused payment; the rules put the price difference to the vendor, which
+    # still needs a reviewer's approval.
+    assert (action["action_type"], action["proposed_by_type"], action["required_role"]) == (
+        "REQUEST_VENDOR_CLARIFICATION",
+        "RULES",
+        "REVIEWER",
+    )
+    assert workflow["status"] == "AWAITING_APPROVAL"
     notes = workflow["analysis"]["recommendation"]["guardrail_notes"]
     assert any("APPROVE_FOR_PAYMENT, not allowed" in note for note in notes)

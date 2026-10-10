@@ -142,7 +142,7 @@ async def test_analysis_and_comparison_reports(env: Env, tmp_path: Path) -> None
     assert analysis.status_code == 201, analysis.text
     content = analysis.json()["content"]
     assert "# AI analysis: Can we pay this invoice?" in content
-    assert "Recommendation: HOLD_FOR_REVIEW (rules)" in content
+    assert "Recommendation: REQUEST_VENDOR_CLARIFICATION (rules)" in content
     assert "### Invoice processing workflow" in content
     assert mismatch["INV"] in analysis.json()["document_ids"]
 

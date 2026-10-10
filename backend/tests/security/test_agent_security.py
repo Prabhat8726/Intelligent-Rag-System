@@ -124,7 +124,8 @@ async def test_a_hostile_request_cannot_choose_tools_or_actions(env: Env, tmp_pa
     assert all(call["status"] == "SUCCEEDED" for call in data["tool_call_log"])
     result = data["result"]
     recommendation = result["recommendation"]
-    assert recommendation["action"] == "HOLD_FOR_REVIEW"  # the failed price rule decides
+    # The failed price rule decides: the vendor is asked (procedure 3.2), nothing is paid.
+    assert recommendation["action"] == "REQUEST_VENDOR_CLARIFICATION"
     assert recommendation["guardrail_notes"][0].startswith(
         "The model proposed APPROVE_FOR_PAYMENT, not allowed"
     )

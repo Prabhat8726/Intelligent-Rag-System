@@ -20,6 +20,7 @@ from docintel.db.models import (
     ExtractionMethod,
     JobStatus,
     JobType,
+    ReviewLevelValue,
     ReviewPriority,
     ReviewTaskStatus,
     ReviewTaskType,
@@ -76,6 +77,13 @@ class ReviewTaskBrief(ResponseModel):
     assigned_to: UserSummary | None
 
 
+class ExtractionBrief(ResponseModel):
+    """The current extraction's overall confidence and review routing (inbox)."""
+
+    overall_confidence: Decimal
+    review_level: ReviewLevelValue
+
+
 class DocumentRead(ResponseModel):
     id: uuid.UUID
     display_filename: str
@@ -103,6 +111,9 @@ class DocumentRead(ResponseModel):
         default=None,
         validation_alias="open_review_task",
         description="The open review task (present exactly while the status is REVIEW_REQUIRED)",
+    )
+    extraction: ExtractionBrief | None = Field(
+        default=None, description="The current extraction (lists only; null before extraction)"
     )
 
 

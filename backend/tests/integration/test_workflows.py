@@ -247,7 +247,7 @@ async def test_a_duplicate_is_proposed_for_rejection_and_the_approver_can_say_no
 async def test_a_discrepancy_goes_to_review_without_waiting_for_approval(
     env: Env, tmp_path: Path
 ) -> None:
-    mismatch = await processed(env, tmp_path, Scenario.UNIT_PRICE_MISMATCH, 21)
+    mismatch = await processed(env, tmp_path, Scenario.QUANTITY_MISMATCH, 21)
     workflow = await run(env, env.analyst, mismatch["INV"], "INVOICE_PROCESSING")
     assert (workflow["status"], workflow["outcome"]) == ("COMPLETED", "SENT_TO_REVIEW"), workflow
     (action,) = workflow["actions"]
@@ -471,6 +471,31 @@ class ClarifyingLLM(ScriptedLLM):
         )
 
 
+async def test_a_price_difference_is_put_to_the_vendor_once_a_reviewer_approves(
+    env: Env, tmp_path: Path
+) -> None:
+    # Invoice processing procedure 3.2: the rules alone propose asking the vendor.
+    mismatch = await processed(env, tmp_path, Scenario.UNIT_PRICE_MISMATCH, 21)
+    workflow = await run(env, env.analyst, mismatch["INV"], "INVOICE_PROCESSING")
+    assert workflow["status"] == "AWAITING_APPROVAL", workflow
+    (action,) = workflow["actions"]
+    assert (action["action_type"], action["proposed_by_type"], action["required_role"]) == (
+        "REQUEST_VENDOR_CLARIFICATION",
+        "RULES",
+        "REVIEWER",
+    )
+    assert "corrected invoice or a credit note" in action["rationale"]
+    # The analyst started it and uploaded the documents: a reviewer decides.
+    assert (await decide(env, env.analyst, workflow["id"], "approve")).status_code == 403
+    approved = await decide(env, env.reviewer, workflow["id"], "approve", "Price confirmed.")
+    assert approved.status_code == 200, approved.text
+    done = approved.json()
+    assert (done["status"], done["outcome"]) == ("COMPLETED", "AWAITING_VENDOR_CLARIFICATION")
+    result = done["actions"][0]["execution_result"]
+    assert result["sent"] is False
+    assert "unit price" in result["message"].lower()
+
+
 async def test_a_model_proposal_to_ask_the_vendor_waits_for_a_reviewer(
     env: Env, tmp_path: Path
 ) -> None:
@@ -500,7 +525,7 @@ async def test_a_model_proposal_to_ask_the_vendor_waits_for_a_reviewer(
 # ------------------------------------------------------------------------------ auto-start
 async def test_workflows_start_when_a_document_is_processed(env: Env, tmp_path: Path) -> None:
     settings = env.settings.model_copy(update={"workflow_auto_start": ["INVOICE_PROCESSING"]})
-    docs = bundle(tmp_path, Scenario.UNIT_PRICE_MISMATCH, seed=24)
+    docs = bundle(tmp_path, Scenario.QUANTITY_MISMATCH, seed=24)
     for suffix, (content, _) in docs.items():
         await env.upload(content, f"AUTO-{suffix}.pdf")
     services = build_processing_services(

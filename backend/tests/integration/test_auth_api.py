@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from docintel.api.deps import require_permission
 from docintel.auth.permissions import Permission
 from docintel.db.models import AuditLog, Department, Role, User
-from tests.conftest import TEST_PASSWORD, login, make_user
+from tests.conftest import TEST_PASSWORD, login, make_settings, make_user
 
 pytestmark = pytest.mark.integration
 
@@ -44,7 +44,7 @@ async def test_login_returns_token_and_user(
     assert response.status_code == 200
     body = response.json()
     assert body["token_type"] == "bearer"
-    assert body["expires_in"] == 30 * 60
+    assert body["expires_in"] == make_settings().jwt_access_token_ttl_minutes * 60
     assert body["user"]["email"] == user.email
     assert body["user"]["role"] == "ANALYST"
     assert body["user"]["department"]["name"] == department.name

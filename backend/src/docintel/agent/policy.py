@@ -25,6 +25,8 @@ from docintel.agent.state import (
 
 HIGH_SEVERITIES = ("HIGH", "CRITICAL")
 # Rule types that compare the document with its counterparts (a vendor can explain them).
+# Differences the vendor corrects with a new invoice or a credit note (procedure 3.2, 3.3).
+VENDOR_CORRECTABLE_RULES = frozenset({"INV_PO_UNIT_PRICE", "INV_PO_TAX_RATE"})
 DISCREPANCY_TYPES = frozenset(
     {
         "line_unit_price",
@@ -237,11 +239,32 @@ def guardrail(action: ActionType, facts: Situation, confidence: ConfidenceLevel)
     return None
 
 
+def vendor_correctable(facts: Situation, confidence: ConfidenceLevel) -> bool:
+    """Invoice processing procedure 3.2/3.3: a confirmed price or tax-rate difference against
+    the purchase order is put to the vendor (a corrected invoice or a credit note). Anything
+    else failing, a value the rules could not confirm, or weak evidence goes to a reviewer."""
+    return (
+        facts.target_type == "INVOICE"
+        and bool(facts.failing)
+        and {r["rule_code"] for r in facts.failing} <= VENDOR_CORRECTABLE_RULES
+        and not facts.attention
+        and not facts.strong_duplicate
+        and confidence != ConfidenceLevel.LOW
+    )
+
+
 def baseline_action(facts: Situation, confidence: ConfidenceLevel) -> tuple[ActionType, str]:
     if facts.target is None:
         return ActionType.NO_ACTION, "No document needs an action."
     if facts.strong_duplicate:
         return ActionType.REJECT_DUPLICATE, "The document duplicates an earlier one."
+    if vendor_correctable(facts, confidence):
+        names = "; ".join(r["rule_name"] for r in facts.failing[:3])
+        return (
+            ActionType.REQUEST_VENDOR_CLARIFICATION,
+            f"{names}: the invoice differs from the purchase order. The invoice processing "
+            "procedure (3.2, 3.3) asks the vendor for a corrected invoice or a credit note.",
+        )
     if facts.failing:
         names = "; ".join(r["rule_name"] for r in facts.failing[:3])
         return ActionType.HOLD_FOR_REVIEW, f"Failed rule(s) need a reviewer's decision: {names}."

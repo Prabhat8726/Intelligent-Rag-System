@@ -116,7 +116,7 @@ def rule_codes(data: dict[str, Any], category: str = "RULE_RESULT") -> list[str]
 
 
 # ------------------------------------------------------------------------------ deterministic
-async def test_a_price_mismatch_is_investigated_and_sent_for_review(
+async def test_a_price_mismatch_is_investigated_and_put_to_the_vendor(
     env: Env, tmp_path: Path
 ) -> None:
     await seed_knowledge_base(env)
@@ -127,7 +127,7 @@ async def test_a_price_mismatch_is_investigated_and_sent_for_review(
     assert data["plan"]["source"] == "rules"
     assert [step["node"] for step in data["trace"]] == [
         *GRAPH_NODES,
-        "execute_safe_action",
+        "propose_for_approval",
         "finalize",
     ]
     result = data["result"]
@@ -146,21 +146,21 @@ async def test_a_price_mismatch_is_investigated_and_sent_for_review(
     sections = [source["section_path"] for source in result["sources"]]
     assert "4. Price variance › 4.1 Tolerance" in sections  # noqa: RUF001 - breadcrumb
 
+    # Invoice processing procedure 3.2: a price difference is put to the vendor (a corrected
+    # invoice or a credit note); asking needs a reviewer's approval, so nothing is executed.
     recommendation = result["recommendation"]
-    assert recommendation["action"] == "HOLD_FOR_REVIEW"
-    assert (recommendation["risk"], recommendation["requires_approval"]) == ("LOW", False)
+    assert recommendation["action"] == "REQUEST_VENDOR_CLARIFICATION"
+    assert (
+        recommendation["risk"],
+        recommendation["requires_approval"],
+        recommendation["required_role"],
+    ) == ("MEDIUM", True, "REVIEWER")
+    assert "corrected invoice or a credit note" in recommendation["rationale"]
     assert recommendation["target_document_id"] == ids["INV"]
-    action = result["action"]
-    assert action["status"] == "EXECUTED"
+    assert result["action"]["status"] == "PROPOSED"
     assert result["confidence"]["level"] in ("HIGH", "MEDIUM")
 
-    # The executed action is a review request on the document's task, linked to the run.
     async with env.maker() as session:
-        task = await session.get(ReviewTask, uuid.UUID(action["review_task_id"]))
-        assert task is not None
-        requested = [reason for reason in task.reasons if reason["category"] == "REQUESTED"]
-        assert len(requested) == 1
-        assert requested[0]["message"].startswith(f"Investigation {data['id'][:8]}:")
         calls = list(
             await session.scalars(
                 select(AgentToolCall)
@@ -175,15 +175,43 @@ async def test_a_price_mismatch_is_investigated_and_sent_for_review(
             )
         }
     assert [call.tool_name for call in calls][:2] == ["get_document", "get_extracted_fields"]
-    assert calls[-1].tool_name == "create_review_task"
+    assert "create_review_task" not in [call.tool_name for call in calls]
     assert all(call.status.value == "SUCCEEDED" for call in calls)
     assert len(data["tool_call_log"]) == data["usage"]["tool_calls"] == len(calls)
     assert data["usage"]["llm_calls"] == 0
     assert set(audits) == {"analysis.requested", "analysis.completed"}
     assert audits["analysis.completed"].actor_type.value == "AGENT"
     assert audits["analysis.completed"].actor_id == env.reviewer.id
-    assert audits["analysis.completed"].details["recommendation"] == "HOLD_FOR_REVIEW"
+    assert audits["analysis.completed"].details["recommendation"] == "REQUEST_VENDOR_CLARIFICATION"
     assert "Can we pay" not in str(audits["analysis.requested"].details)  # fingerprint only
+
+
+async def test_a_quantity_difference_is_held_and_sent_for_review(env: Env, tmp_path: Path) -> None:
+    ids = await processed(env, tmp_path, Scenario.QUANTITY_MISMATCH, 21)
+    data = await investigate(env, env.reviewer, "Can we pay this invoice?", [ids["INV"]])
+    assert [step["node"] for step in data["trace"]][-2:] == ["execute_safe_action", "finalize"]
+    result = data["result"]
+    recommendation = result["recommendation"]
+    assert recommendation["action"] == "HOLD_FOR_REVIEW"
+    assert (recommendation["risk"], recommendation["requires_approval"]) == ("LOW", False)
+    action = result["action"]
+    assert action["status"] == "EXECUTED"
+
+    # The executed action is a review request on the document's task, linked to the run.
+    async with env.maker() as session:
+        task = await session.get(ReviewTask, uuid.UUID(action["review_task_id"]))
+        assert task is not None
+        requested = [reason for reason in task.reasons if reason["category"] == "REQUESTED"]
+        assert len(requested) == 1
+        assert requested[0]["message"].startswith(f"Investigation {data['id'][:8]}:")
+        calls = list(
+            await session.scalars(
+                select(AgentToolCall.tool_name)
+                .where(AgentToolCall.run_id == uuid.UUID(data["id"]))
+                .order_by(AgentToolCall.created_at)
+            )
+        )
+    assert calls[-1] == "create_review_task"
 
 
 async def test_clean_invoices_are_proposed_for_payment_and_duplicates_for_rejection(
@@ -228,8 +256,8 @@ async def test_documents_are_found_from_the_question_or_not_guessed(
     assert found["plan"]["document_query"] == "invoice from Bluepeak Office Solutions"
     subjects = [d["filename"] for d in found["result"]["documents"] if d["role"] == "subject"]
     assert subjects == ["UNIT-INV.pdf"]
-    assert found["result"]["recommendation"]["action"] == "HOLD_FOR_REVIEW"
-    assert found["result"]["action"]["status"] == "SKIPPED"  # safe actions were not allowed
+    assert found["result"]["recommendation"]["action"] == "REQUEST_VENDOR_CLARIFICATION"
+    assert found["result"]["action"]["status"] == "PROPOSED"  # for a reviewer to approve
     assert any(f["detail"].startswith("Documents were identified by search") for f in
                found["result"]["confidence"]["factors"])  # fmt: skip
 
@@ -361,7 +389,7 @@ async def test_model_findings_are_validated_and_guardrails_overrule_the_model(
     assert analysis["effect"] == -0.1
 
     recommendation = result["recommendation"]
-    assert recommendation["action"] == "HOLD_FOR_REVIEW"
+    assert recommendation["action"] == "REQUEST_VENDOR_CLARIFICATION"  # procedure 3.2
     assert recommendation["source"] == "rules"
     assert recommendation["guardrail_notes"] == [
         "The model proposed APPROVE_FOR_PAYMENT, not allowed: a rule failed, could not "
@@ -401,4 +429,4 @@ async def test_content_above_the_sensitivity_limit_is_not_sent_to_the_model(
     result = data["result"]
     assert result["summary_source"] == "rules"
     assert any("sensitivity limit" in notice for notice in result["notices"])
-    assert result["recommendation"]["action"] == "HOLD_FOR_REVIEW"
+    assert result["recommendation"]["action"] == "REQUEST_VENDOR_CLARIFICATION"

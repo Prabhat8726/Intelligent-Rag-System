@@ -100,11 +100,16 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- auth
     jwt_secret_key: SecretStr
     jwt_algorithm: Literal["HS256"] = "HS256"
-    jwt_access_token_ttl_minutes: int = Field(default=30, ge=1, le=24 * 60)
+    jwt_access_token_ttl_minutes: int = Field(default=15, ge=1, le=24 * 60)
     jwt_issuer: str = "docintel"
     jwt_audience: str = "docintel-api"
     auth_max_failed_logins: int = Field(default=5, ge=1, le=100)
     auth_lockout_minutes: int = Field(default=15, ge=1, le=24 * 60)
+    # Browser sessions (ADR-063): an httpOnly refresh cookie, rotated on every use.
+    auth_refresh_idle_hours: int = Field(default=12, ge=1, le=24 * 30)
+    auth_session_max_hours: int = Field(default=168, ge=1, le=24 * 90)
+    # None = Secure in staging and production; local stacks run on plain http.
+    auth_cookie_secure: bool | None = None
 
     # ---------------------------------------------------------------- AI providers
     llm_provider: LLMProviderName = LLMProviderName.GEMINI
@@ -336,6 +341,10 @@ class Settings(BaseSettings):
     def is_deployed(self) -> bool:
         """True for shared environments where insecure defaults must be refused."""
         return self.app_env in (Environment.STAGING, Environment.PRODUCTION)
+
+    @property
+    def effective_cookie_secure(self) -> bool:
+        return self.is_deployed if self.auth_cookie_secure is None else self.auth_cookie_secure
 
     @property
     def effective_log_format(self) -> LogFormat:

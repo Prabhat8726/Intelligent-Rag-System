@@ -34,7 +34,7 @@ from docintel.db.models.extraction import (
     ReviewLevelValue,
     Vendor,
 )
-from docintel.db.models.identity import Department, Role, User
+from docintel.db.models.identity import Department, RefreshToken, Role, User
 from docintel.db.models.knowledge import (
     DocumentChunk,
     KnowledgeCategory,
@@ -149,6 +149,7 @@ __all__ = [
     "LLMCallStatus",
     "ProcessingJob",
     "ProposerType",
+    "RefreshToken",
     "Report",
     "ReportSubject",
     "ReportType",

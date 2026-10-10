@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 
 from docintel.api.deps import (
     RequestMetaDep,
@@ -26,6 +27,7 @@ from docintel.api.schemas.documents import (
     DocumentPage,
     DocumentRead,
     DocumentVersionRead,
+    ExtractionBrief,
     PageDetail,
     PageSummary,
     ProcessingJobRead,
@@ -48,7 +50,13 @@ from docintel.api.schemas.matching import (
 from docintel.api.schemas.vendors import VendorSummary
 from docintel.auth.permissions import Permission
 from docintel.comparisons.service import ComparisonService
-from docintel.db.models import DocumentStatus, DocumentType, Sensitivity, User
+from docintel.db.models import (
+    DocumentExtraction,
+    DocumentStatus,
+    DocumentType,
+    Sensitivity,
+    User,
+)
 from docintel.documents.content import DocumentContentService
 from docintel.documents.extraction import ExtractionService
 from docintel.documents.findings import FindingsService
@@ -140,8 +148,26 @@ async def list_documents(
     items, total = await DocumentService(session, storage, settings).list(
         user, filters, limit=limit, offset=offset
     )
+    extractions = {
+        row.document_id: ExtractionBrief.model_validate(row)
+        for row in await session.execute(
+            select(
+                DocumentExtraction.document_id,
+                DocumentExtraction.overall_confidence,
+                DocumentExtraction.review_level,
+            ).where(
+                DocumentExtraction.document_id.in_([item.id for item in items]),
+                DocumentExtraction.is_current.is_(True),
+            )
+        )
+    }
     return DocumentPage(
-        items=[DocumentRead.model_validate(item) for item in items],
+        items=[
+            DocumentRead.model_validate(item).model_copy(
+                update={"extraction": extractions.get(item.id)}
+            )
+            for item in items
+        ],
         total=total,
         limit=limit,
         offset=offset,

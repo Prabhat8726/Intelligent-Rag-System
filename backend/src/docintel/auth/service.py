@@ -25,6 +25,7 @@ from docintel.auth.passwords import (
     validate_password_policy,
     verify_password_async,
 )
+from docintel.auth.sessions import IssuedSession, SessionService
 from docintel.auth.tokens import IssuedToken, create_access_token
 from docintel.core.config import Settings
 from docintel.core.errors import AuthenticationError, ConflictError
@@ -45,6 +46,7 @@ def normalize_email(email: str) -> str:
 class LoginResult:
     user: User
     token: IssuedToken
+    session: IssuedSession | None = None  # a browser session's refresh token (ADR-063)
 
 
 class AuthService:
@@ -52,7 +54,9 @@ class AuthService:
         self._session = session
         self._settings = settings
 
-    async def login(self, *, email: str, password: str, meta: RequestMeta) -> LoginResult:
+    async def login(
+        self, *, email: str, password: str, meta: RequestMeta, browser_session: bool = False
+    ) -> LoginResult:
         normalized = normalize_email(email)
         now = datetime.now(UTC)
         user = await self._session.scalar(
@@ -91,9 +95,17 @@ class AuthService:
             actor=user,
             entity_type="user",
             entity_id=user.id,
+            details={"browser_session": browser_session},
+        )
+        issued = (
+            SessionService(self._session, self._settings).start(user, now=now)
+            if browser_session
+            else None
         )
         await self._session.commit()
         logger.info("auth.login.succeeded", user_id=str(user.id))
+        if issued is not None:
+            return LoginResult(user=user, token=issued.access, session=issued)
         token = create_access_token(user_id=user.id, role=user.role, settings=self._settings)
         return LoginResult(user=user, token=token)
 

@@ -3,7 +3,8 @@
 Guards: nobody changes their own role or deactivates themselves; the last active administrator
 cannot be demoted or deactivated; every role but ADMIN belongs to a department (department
 scoping depends on it). Deactivation takes effect on the next request (users are reloaded per
-request) and revokes the user's API tokens. Every change is audited without secrets.
+request) and revokes the user's API tokens and browser sessions; a password reset ends every
+browser session too. Every change is audited without secrets.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from docintel.auth.passwords import (
     validate_password_policy,
 )
 from docintel.auth.service import UserService, normalize_email
+from docintel.auth.sessions import RevokeReason, revoke_user_sessions
 from docintel.core.errors import ConflictError, NotFoundError, UnprocessableContentError
 from docintel.db.models import ApiToken, AuditOutcome, Department, Role, User
 
@@ -179,7 +181,7 @@ class UserAdminService:
             "is_active": user.is_active,
         }
         changed = {key: [before[key], after[key]] for key in before if before[key] != after[key]}
-        revoked = 0
+        revoked = sessions_ended = 0
         if before["is_active"] and not active:
             result = await self._session.execute(
                 update(ApiToken)
@@ -188,6 +190,9 @@ class UserAdminService:
                 .returning(ApiToken.id)
             )
             revoked = len(result.all())
+            sessions_ended = await revoke_user_sessions(
+                self._session, user.id, RevokeReason.DEACTIVATED
+            )
         if changed:
             record_audit_event(
                 self._session,
@@ -204,6 +209,7 @@ class UserAdminService:
                         for key, value in changed.items()
                     },
                     "api_tokens_revoked": revoked,
+                    "sessions_ended": sessions_ended,
                 },
             )
         await self._session.flush()
@@ -224,6 +230,10 @@ class UserAdminService:
         user.password_hash = await hash_password_async(password)
         user.failed_login_attempts = 0
         user.locked_until = None
+        # Whoever knew the old password may hold a session: every session ends.
+        sessions_ended = await revoke_user_sessions(
+            self._session, user.id, RevokeReason.PASSWORD_RESET
+        )
         record_audit_event(
             self._session,
             action=AuditAction.USER_PASSWORD_RESET,
@@ -232,7 +242,7 @@ class UserAdminService:
             actor=actor,
             entity_type="user",
             entity_id=user.id,
-            details={"by_self": user.id == actor.id},
+            details={"by_self": user.id == actor.id, "sessions_ended": sessions_ended},
         )
 
     async def departments(self) -> list[Department]:

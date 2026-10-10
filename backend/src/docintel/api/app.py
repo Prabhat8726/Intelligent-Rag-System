@@ -24,6 +24,7 @@ from docintel.api.routers import (
     analysis,
     auth,
     comparisons,
+    dashboard,
     documents,
     health,
     knowledge,
@@ -85,6 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     api_v1 = APIRouter(prefix=API_V1_PREFIX)
     api_v1.include_router(auth.router)
+    api_v1.include_router(dashboard.router)
     api_v1.include_router(documents.router)
     api_v1.include_router(vendors.router)
     api_v1.include_router(comparisons.router)
