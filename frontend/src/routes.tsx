@@ -1,5 +1,7 @@
 import { Navigate, type RouteObject } from "react-router";
 
+import { AnalysisPage } from "./analysis/AnalysisPage";
+import { AnalysisRunPage } from "./analysis/AnalysisRunPage";
 import { ComparisonPage } from "./comparisons/ComparisonPage";
 import { AppLayout } from "./components/AppLayout";
 import { DocumentDetailPage } from "./documents/DocumentDetailPage";
@@ -13,6 +15,7 @@ import { SystemStatusPage } from "./pages/SystemStatusPage";
 import { ReviewQueuePage } from "./review/ReviewQueuePage";
 import { RulesPage } from "./rules/RulesPage";
 import { SearchPage } from "./search/SearchPage";
+import { ApiTokensPage } from "./settings/ApiTokensPage";
 
 export const routes: RouteObject[] = [
   { path: "/login", element: <LoginPage /> },
@@ -31,6 +34,9 @@ export const routes: RouteObject[] = [
           { path: "/search", element: <SearchPage /> },
           { path: "/knowledge", element: <KnowledgePage /> },
           { path: "/knowledge/:documentId", element: <KnowledgeDocumentPage /> },
+          { path: "/analysis", element: <AnalysisPage /> },
+          { path: "/analysis/:runId", element: <AnalysisRunPage /> },
+          { path: "/settings/tokens", element: <ApiTokensPage /> },
           { path: "/status", element: <SystemStatusPage /> },
         ],
       },

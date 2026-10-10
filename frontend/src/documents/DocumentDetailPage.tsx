@@ -129,6 +129,14 @@ export function DocumentDetailPage() {
           >
             Download original
           </button>
+          {can("analysis:run") && (
+            <Link
+              to={`/analysis?document=${document.id}`}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+            >
+              Investigate
+            </Link>
+          )}
           {can("documents:process") && (
             <button
               type="button"

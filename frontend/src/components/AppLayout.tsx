@@ -8,9 +8,11 @@ const NAV_ITEMS: { to: string; label: string; permission?: string }[] = [
   { to: "/documents", label: "Documents" },
   { to: "/search", label: "Search", permission: "documents:read" },
   { to: "/knowledge", label: "Knowledge", permission: "knowledge:read" },
+  { to: "/analysis", label: "AI analysis", permission: "analysis:read" },
   { to: "/reviews", label: "Review queue", permission: "reviews:work" },
   { to: "/rules", label: "Rules", permission: "rules:read" },
   { to: "/status", label: "System status" },
+  { to: "/settings/tokens", label: "API tokens" },
 ];
 
 export function AppLayout() {

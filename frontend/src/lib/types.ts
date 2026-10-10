@@ -309,7 +309,12 @@ export type ComparisonType = "INVOICE_PO" | "INVOICE_DELIVERY" | "INVOICE_PO_DEL
 export type RuleOutcome = "PASS" | "FAIL" | "WARN" | "ERROR" | "NOT_APPLICABLE";
 export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type ReviewPriority = "URGENT" | "HIGH" | "NORMAL" | "LOW";
-export type ReviewTaskType = "DUPLICATE_REVIEW" | "DISCREPANCY_REVIEW" | "EXTRACTION_REVIEW" | "CLASSIFICATION_REVIEW";
+export type ReviewTaskType =
+  | "DUPLICATE_REVIEW"
+  | "DISCREPANCY_REVIEW"
+  | "EXTRACTION_REVIEW"
+  | "CLASSIFICATION_REVIEW"
+  | "REQUESTED_REVIEW";
 export type ReviewTaskStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
 export type ReviewResolution = "APPROVED" | "CORRECTED" | "REJECTED" | "CLEARED";
 
@@ -664,4 +669,181 @@ export interface DocumentSearchResponse {
   interpretation: SearchInterpretation;
   total: number;
   results: SearchHit[];
+}
+
+// ---------------------------------------------------------------- agent analysis (Phase 7)
+export type AnalysisStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+export type AnalysisIntent =
+  | "VERIFY_DOCUMENT"
+  | "INVESTIGATE_DISCREPANCY"
+  | "CHECK_DUPLICATE"
+  | "COMPARE_DOCUMENTS"
+  | "POLICY_QUESTION"
+  | "FIND_DOCUMENTS";
+export type FindingCategory =
+  | "OBSERVED_FACT"
+  | "RULE_RESULT"
+  | "RETRIEVED_KNOWLEDGE"
+  | "AI_INFERENCE"
+  | "UNCERTAINTY";
+export type ActionType =
+  | "APPROVE_FOR_PAYMENT"
+  | "HOLD_FOR_REVIEW"
+  | "REQUEST_VENDOR_CLARIFICATION"
+  | "REJECT_DUPLICATE"
+  | "NO_ACTION";
+export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
+
+export interface AnalysisFinding {
+  category: FindingCategory;
+  statement: string;
+  evidence: string[];
+  source: "rules" | "model";
+  grounded: boolean;
+}
+
+export interface AnalysisEvidence {
+  label: string;
+  kind: "DOCUMENT" | "FIELD" | "RULE" | "COMPARISON" | "KNOWLEDGE";
+  document_id: string | null;
+  ref: string;
+  text: string;
+}
+
+export interface AnalysisDocument {
+  label: string | null;
+  role: "subject" | "related";
+  document_id: string;
+  filename: string;
+  document_type: DocumentType | null;
+  status: string;
+  vendor_name: string | null;
+  document_date: string | null;
+  total: string | null;
+  currency: string | null;
+  effective_sensitivity: string | null;
+}
+
+export interface AnalysisSource {
+  label: string | null;
+  sent_to_model: boolean;
+  chunk_id: string;
+  knowledge_document_id: string;
+  title: string;
+  version_label: string | null;
+  section_path: string;
+  page_start: number | null;
+  page_end: number | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  content: string;
+  query: string | null;
+}
+
+export interface Recommendation {
+  action: ActionType;
+  target_document_id: string | null;
+  rationale: string;
+  evidence: string[];
+  risk: "NONE" | "LOW" | "MEDIUM" | "HIGH";
+  requires_approval: boolean;
+  required_role: string | null;
+  source: "rules" | "model";
+  guardrail_notes: string[];
+}
+
+export interface ActionRecord {
+  action: ActionType;
+  status: "EXECUTED" | "PROPOSED" | "SKIPPED" | "FAILED";
+  detail: string;
+  tool_call_id: string | null;
+  review_task_id: string | null;
+  required_role: string | null;
+}
+
+export interface AnalysisResult {
+  summary: string;
+  summary_source: "rules" | "model";
+  intent: AnalysisIntent;
+  documents: AnalysisDocument[];
+  findings: AnalysisFinding[];
+  evidence: AnalysisEvidence[];
+  sources: AnalysisSource[];
+  comparisons: { comparison_id: string; comparison_type: ComparisonType; summary: Record<string, number> }[];
+  confidence: { level: ConfidenceLevel; score: number; factors: { factor: string; effect: number; detail: string }[] };
+  recommendation: Recommendation;
+  action: ActionRecord | null;
+  notices: string[];
+  model: { provider: string; model: string } | null;
+}
+
+export interface ToolCallRecord {
+  id: string;
+  node_name: string | null;
+  tool_name: string;
+  status: "SUCCEEDED" | "FAILED" | "DENIED" | "INVALID";
+  error: string | null;
+  latency_ms: string;
+  arguments: Record<string, unknown>;
+  result_summary: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AnalysisSummary {
+  id: string;
+  status: AnalysisStatus;
+  query: string;
+  document_ids: string[];
+  intent: AnalysisIntent | null;
+  recommendation: ActionType | null;
+  confidence: ConfidenceLevel | null;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface AnalysisRun extends AnalysisSummary {
+  graph_version: string;
+  allow_safe_actions: boolean;
+  plan: {
+    intent: AnalysisIntent;
+    document_query: string | null;
+    identifiers: string[];
+    knowledge_questions: string[];
+    focus_fields: string[];
+    source: "rules" | "model";
+  } | null;
+  result: AnalysisResult | null;
+  trace: { node: string; duration_ms: number; tool_calls: number }[];
+  tool_call_log: ToolCallRecord[];
+  usage: {
+    tool_calls: number;
+    llm_calls: number;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    estimated_cost_usd: string | null;
+  };
+}
+
+export interface AnalysisPage {
+  items: AnalysisSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface ApiTokenCreated extends ApiToken {
+  token: string;
 }

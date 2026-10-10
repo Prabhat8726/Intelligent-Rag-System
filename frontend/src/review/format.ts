@@ -54,6 +54,7 @@ export const TASK_TYPE_LABELS: Record<ReviewTaskType, string> = {
   DISCREPANCY_REVIEW: "Discrepancy",
   EXTRACTION_REVIEW: "Extraction",
   CLASSIFICATION_REVIEW: "Document type",
+  REQUESTED_REVIEW: "Requested review",
 };
 
 export const RESOLUTION_LABELS: Record<ReviewResolution, string> = {
