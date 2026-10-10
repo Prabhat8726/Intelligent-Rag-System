@@ -847,3 +847,204 @@ export interface ApiToken {
 export interface ApiTokenCreated extends ApiToken {
   token: string;
 }
+
+// ---------------------------------------------------------------- workflows (Phase 8)
+export type WorkflowType = "INVOICE_PROCESSING" | "CONTRACT_REVIEW";
+export type WorkflowStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "AWAITING_APPROVAL"
+  | "COMPLETED"
+  | "REJECTED"
+  | "FAILED"
+  | "CANCELLED";
+export type StepStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SKIPPED";
+export type WorkflowActionType =
+  | "APPROVE_FOR_PAYMENT"
+  | "REJECT_DUPLICATE"
+  | "REQUEST_VENDOR_CLARIFICATION"
+  | "HOLD_FOR_REVIEW"
+  | "APPROVE_CONTRACT"
+  | "REQUEST_LEGAL_REVIEW";
+export type ActionStatus = "PROPOSED" | "AWAITING_APPROVAL" | "APPROVED" | "REJECTED" | "EXECUTED" | "FAILED";
+export type ActionRisk = "LOW" | "MEDIUM" | "HIGH";
+
+export interface PersonRef {
+  id: string;
+  email: string;
+  full_name: string;
+}
+
+export interface WorkflowDocument {
+  id: string;
+  filename: string;
+  document_type: DocumentType | null;
+  status: DocumentStatus;
+  version_number: number | null;
+  is_current_version: boolean;
+}
+
+export interface WorkflowStep {
+  sequence: number;
+  step_name: string;
+  status: StepStatus;
+  output: Record<string, unknown>;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface ActionTransition {
+  from_status: ActionStatus | null;
+  to_status: ActionStatus;
+  actor_type: "USER" | "SYSTEM" | "AGENT" | "WORKER" | "ANONYMOUS";
+  actor: PersonRef | null;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface WorkflowAction {
+  id: string;
+  action_type: WorkflowActionType;
+  title: string;
+  status: ActionStatus;
+  risk_level: ActionRisk;
+  requires_approval: boolean;
+  required_role: string | null;
+  proposed_by_type: "RULES" | "AGENT" | "USER";
+  rationale: string;
+  confidence_level: string | null;
+  confidence_score: number | null;
+  payload: Record<string, unknown>;
+  decided_by: PersonRef | null;
+  decided_at: string | null;
+  decision_reason: string | null;
+  executed_at: string | null;
+  execution_result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string;
+  transitions: ActionTransition[];
+  can_decide: boolean;
+  blockers: string[];
+}
+
+export interface PendingAction {
+  id: string;
+  action_type: WorkflowActionType;
+  title: string;
+  risk_level: ActionRisk;
+  required_role: string | null;
+}
+
+export interface WorkflowSummary {
+  id: string;
+  workflow_type: WorkflowType;
+  title: string;
+  status: WorkflowStatus;
+  outcome: string | null;
+  trigger: "MANUAL" | "AUTO";
+  document: WorkflowDocument;
+  initiated_by: PersonRef;
+  current_step: string | null;
+  pending_action: PendingAction | null;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface Workflow extends WorkflowSummary {
+  definition_version: number;
+  steps: WorkflowStep[];
+  actions: WorkflowAction[];
+  agent_run_id: string | null;
+  analysis: AnalysisResult | null;
+  report_ids: string[];
+}
+
+export interface WorkflowPage {
+  items: WorkflowSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface WorkflowCounts {
+  awaiting_my_decision: number;
+}
+
+// ---------------------------------------------------------------- reports (Phase 8)
+export type ReportType =
+  | "INVOICE_VERIFICATION"
+  | "CONTRACT_REVIEW"
+  | "DOCUMENT_COMPARISON"
+  | "COMPLIANCE_REVIEW"
+  | "AI_ANALYSIS";
+
+export interface ReportSummary {
+  id: string;
+  report_type: ReportType;
+  subject_type: "DOCUMENT" | "COMPARISON" | "AGENT_RUN";
+  subject_id: string;
+  title: string;
+  document_ids: string[];
+  workflow_id: string | null;
+  template_version: number;
+  content_sha256: string;
+  as_of: string;
+  generated_by_email: string;
+  created_at: string;
+}
+
+export interface Report extends ReportSummary {
+  content: string;
+  snapshot: Record<string, unknown>;
+}
+
+export interface ReportPage {
+  items: ReportSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ReportVerification {
+  report_id: string;
+  matches: boolean;
+  content_sha256: string;
+}
+
+// ---------------------------------------------------------------- administration (Phase 8)
+export interface AdminUser extends User {
+  failed_login_attempts: number;
+  locked_until: string | null;
+  created_at: string;
+}
+
+export interface UserPage {
+  items: AdminUser[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AuditEvent {
+  id: number;
+  occurred_at: string;
+  actor: PersonRef | null;
+  actor_type: string;
+  actor_role: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  outcome: "SUCCESS" | "FAILURE" | "DENIED";
+  request_id: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface AuditEventPage {
+  items: AuditEvent[];
+  next_before_id: number | null;
+}

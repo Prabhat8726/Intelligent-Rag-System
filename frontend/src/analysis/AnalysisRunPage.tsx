@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router";
 import { useAuth } from "../auth/useAuth";
 import { DOCUMENT_TYPE_LABELS } from "../documents/format";
 import { formatPeriod } from "../knowledge/format";
+import { GenerateReportButton } from "../reports/GenerateReportButton";
 import { ApiError, apiRequest } from "../lib/api";
 import type { AnalysisEvidence, AnalysisResult, AnalysisRun, AnalysisSource } from "../lib/types";
 import {
@@ -38,7 +39,7 @@ function EvidenceChip({ label, evidence }: { label: string; evidence: AnalysisEv
   );
 }
 
-function Findings({ result }: { result: AnalysisResult }) {
+export function Findings({ result }: { result: AnalysisResult }) {
   const evidence = new Map(result.evidence.map((item) => [item.label, item]));
   const findings = [...result.findings].sort(
     (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
@@ -67,7 +68,7 @@ function Findings({ result }: { result: AnalysisResult }) {
   );
 }
 
-function SourceItem({ source }: { source: AnalysisSource }) {
+export function SourceItem({ source }: { source: AnalysisSource }) {
   const [open, setOpen] = useState(false);
   const period = formatPeriod(source.effective_from, source.effective_to);
   return (
@@ -182,6 +183,7 @@ export function AnalysisRunPage() {
               confidence {result.confidence.level.toLowerCase()} ({Math.round(result.confidence.score * 100)}%)
             </span>
           )}
+          {result && result.documents.length > 0 && <GenerateReportButton reportType="AI_ANALYSIS" subjectId={data.id} />}
         </div>
       </div>
       {ACTIVE.includes(data.status) && (

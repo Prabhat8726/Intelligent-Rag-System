@@ -11,6 +11,8 @@ const SCOPES: { scope: string; label: string }[] = [
   { scope: "knowledge:read", label: "Search the knowledge base" },
   { scope: "comparisons:create", label: "Compare documents" },
   { scope: "reviews:work", label: "Request reviews" },
+  { scope: "reports:create", label: "Generate reports" },
+  { scope: "workflows:read", label: "Read workflow status" },
 ];
 
 function errorText(error: unknown): string {

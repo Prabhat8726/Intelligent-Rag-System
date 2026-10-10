@@ -8,6 +8,7 @@ import { ApiError, apiRequest } from "../lib/api";
 import type { Comparison, ComparisonItem, ComparisonSide, ItemStatus } from "../lib/types";
 import { ItemStatusBadge } from "../review/Badges";
 import { CHECK_LABELS, COMPARISON_TYPE_LABELS, ITEM_STATUS_STYLES, itemValue, ROLE_LABELS } from "../review/format";
+import { GenerateReportButton } from "../reports/GenerateReportButton";
 
 const STATUS_ORDER: ItemStatus[] = ["MISMATCH", "UNCERTAIN", "MISSING", "MATCH"];
 
@@ -125,6 +126,9 @@ export function ComparisonPage() {
           {data.origin === "AUTO" ? "Matched automatically" : `Requested by ${data.requested_by?.full_name ?? "a user"}`} ·{" "}
           {formatDateTime(data.created_at)}
         </p>
+        <div className="mt-2">
+          <GenerateReportButton reportType="DOCUMENT_COMPARISON" subjectId={data.id} />
+        </div>
       </div>
 
       <section aria-label="Compared documents" className="flex flex-wrap gap-2">

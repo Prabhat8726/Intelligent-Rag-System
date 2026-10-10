@@ -21,6 +21,7 @@ import { PageViewer } from "./PageViewer";
 import { DocumentStatusBadge } from "./StatusBadge";
 import { TablesSection } from "./TablesSection";
 import { VersionsSection } from "./VersionsSection";
+import { WorkflowsSection } from "./WorkflowsSection";
 
 const ACTIVE_REFRESH_MS = 2000;
 
@@ -269,6 +270,8 @@ export function DocumentDetailPage() {
       {document.pages.length > 0 && <TablesSection documentId={document.id} />}
 
       {processed && <FindingsSection documentId={document.id} />}
+
+      <WorkflowsSection document={document} />
 
       <VersionsSection documentId={document.id} busy={ACTIVE_STATUSES.has(document.status)} />
 
