@@ -292,22 +292,24 @@ export function UsersPage() {
             {errorText(users.error)}
           </p>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-2 font-medium">User</th>
-                <th className="py-2 font-medium">Role</th>
-                <th className="py-2 font-medium">Department</th>
-                <th className="py-2 font-medium">State</th>
-                <th className="py-2 pr-4 font-medium">Password</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {users.data.items.map((item) => (
-                <UserRow key={item.id} item={item} departments={departments.data} self={item.id === user?.id} />
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2 font-medium">User</th>
+                  <th className="py-2 font-medium">Role</th>
+                  <th className="py-2 font-medium">Department</th>
+                  <th className="py-2 font-medium">State</th>
+                  <th className="py-2 pr-4 font-medium">Password</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {users.data.items.map((item) => (
+                  <UserRow key={item.id} item={item} departments={departments.data} self={item.id === user?.id} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

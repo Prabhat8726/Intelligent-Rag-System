@@ -84,28 +84,30 @@ function StatTile({ label, value, detail, to }: { label: string; value: string; 
 
 function SimpleTable({ head, rows }: { head: string[]; rows: (string | number)[][] }) {
   return (
-    <table className="w-full text-left">
-      <thead className="text-slate-500">
-        <tr>
-          {head.map((cell) => (
-            <th key={cell} className="py-1 pr-3 font-medium">
-              {cell}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
-        {rows.map((row) => (
-          <tr key={String(row[0])} className="border-t border-slate-100">
-            {row.map((cell, index) => (
-              <td key={`${String(row[0])}-${String(index)}`} className="py-1 pr-3">
+    <div className="overflow-x-auto">
+      <table className="w-full text-left">
+        <thead className="text-slate-500">
+          <tr>
+            {head.map((cell) => (
+              <th key={cell} className="py-1 pr-3 font-medium">
                 {cell}
-              </td>
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
+          {rows.map((row) => (
+            <tr key={String(row[0])} className="border-t border-slate-100">
+              {row.map((cell, index) => (
+                <td key={`${String(row[0])}-${String(index)}`} className="py-1 pr-3">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -184,7 +186,7 @@ export function DashboardPage() {
             <StatTile
               label="Awaiting approval"
               value={compact(data.workflows.awaiting_approval)}
-              detail={`${String(data.workflows.finished_in_period)} workflows finished`}
+              detail={`${String(data.workflows.finished_in_period)} ${data.workflows.finished_in_period === 1 ? "workflow" : "workflows"} finished`}
               to="/workflows"
             />
             <StatTile

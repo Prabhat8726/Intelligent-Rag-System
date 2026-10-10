@@ -53,28 +53,27 @@ export function AppLayout() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
-          <div className="flex items-center gap-6">
-            <span className="shrink-0 text-base font-semibold text-blue-950">Document Intelligence</span>
-            <nav aria-label="Main" className="flex flex-wrap gap-1">
-              {NAV_ITEMS.filter(allowed).map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkClass}>
-                  {item.label}
-                  {item.to === "/workflows" && waiting > 0 && (
-                    <span
-                      aria-label={`${String(waiting)} awaiting your decision`}
-                      className="ml-1.5 rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white"
-                    >
-                      {waiting}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
+        {/* Wide screens: name, navigation, user. Narrower: the navigation wraps to its own row. */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
+          <span className="shrink-0 text-base font-semibold text-blue-950">Document Intelligence</span>
+          <nav aria-label="Main" className="order-3 flex w-full flex-wrap gap-1 lg:order-2 lg:w-auto lg:flex-1">
+            {NAV_ITEMS.filter(allowed).map((item) => (
+              <NavLink key={item.to} to={item.to} className={linkClass}>
+                {item.label}
+                {item.to === "/workflows" && waiting > 0 && (
+                  <span
+                    aria-label={`${String(waiting)} awaiting your decision`}
+                    className="ml-1.5 rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white"
+                  >
+                    {waiting}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </nav>
           {user && (
-            <div className="flex shrink-0 items-center gap-4">
-              <div className="text-right text-sm leading-tight">
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-4 lg:order-3">
+              <div className="hidden text-right text-sm leading-tight sm:block">
                 <div className="font-medium">{user.full_name}</div>
                 <div className="text-xs text-slate-500">
                   {user.role}
@@ -91,7 +90,7 @@ export function AppLayout() {
             </div>
           )}
         </div>
-        <nav aria-label="Settings" className="mx-auto flex max-w-6xl justify-end gap-1 px-6 pb-2">
+        <nav aria-label="Settings" className="mx-auto flex max-w-6xl flex-wrap justify-end gap-1 px-4 pb-2 sm:px-6">
           {SETTINGS_ITEMS.filter(allowed).map((item) => (
             <NavLink
               key={item.to}
@@ -105,7 +104,7 @@ export function AppLayout() {
           ))}
         </nav>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <Outlet />
       </main>
     </div>

@@ -279,29 +279,31 @@ export function AnalysisRunPage() {
               </li>
             ))}
           </ol>
-          <table className="mt-3 w-full text-left text-xs">
-            <thead className="text-slate-500">
-              <tr>
-                <th className="py-1 font-medium">Tool</th>
-                <th className="font-medium">Step</th>
-                <th className="font-medium">Outcome</th>
-                <th className="font-medium">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.tool_call_log.map((call) => (
-                <tr key={call.id}>
-                  <td className="py-1 font-mono">{call.tool_name}</td>
-                  <td>{call.node_name ? (NODE_LABELS[call.node_name] ?? call.node_name) : "—"}</td>
-                  <td className={call.status === "SUCCEEDED" ? "text-emerald-700" : "text-red-700"}>
-                    {call.status}
-                    {call.error && ` — ${call.error}`}
-                  </td>
-                  <td>{Math.round(Number(call.latency_ms))} ms</td>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="text-slate-500">
+                <tr>
+                  <th className="py-1 font-medium">Tool</th>
+                  <th className="font-medium">Step</th>
+                  <th className="font-medium">Outcome</th>
+                  <th className="font-medium">Time</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.tool_call_log.map((call) => (
+                  <tr key={call.id}>
+                    <td className="py-1 font-mono">{call.tool_name}</td>
+                    <td>{call.node_name ? (NODE_LABELS[call.node_name] ?? call.node_name) : "—"}</td>
+                    <td className={call.status === "SUCCEEDED" ? "text-emerald-700" : "text-red-700"}>
+                      {call.status}
+                      {call.error && ` — ${call.error}`}
+                    </td>
+                    <td>{Math.round(Number(call.latency_ms))} ms</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </details>
       )}
     </div>

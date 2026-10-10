@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ApiError, apiRequest } from "../lib/api";
 import type { CurrentUser } from "../lib/types";
 import { AuthContext, type AuthContextValue, type AuthStatus } from "./authContext";
-import { forgetLegacySession, refreshDelay, refreshSession, signIn, signOut, type Session } from "./session";
+import {
+  forgetLegacySession,
+  mayHaveSession,
+  refreshDelay,
+  refreshSession,
+  signIn,
+  signOut,
+  type Session,
+} from "./session";
 
 const ME_QUERY_KEY = "current-user";
 const CHANNEL = "docintel-auth";
@@ -26,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     forgetLegacySession();
     let active = true;
-    refreshSession()
+    (mayHaveSession() ? refreshSession() : Promise.resolve(null))
       .then((restored) => {
         if (active) setSession(restored);
       })

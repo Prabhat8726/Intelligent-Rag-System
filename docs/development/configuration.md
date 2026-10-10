@@ -60,10 +60,14 @@ below them.
 |---|---|---|
 | `JWT_SECRET_KEY` | **required** | ≥ 32 characters; random (`python3 -c "import secrets; print(secrets.token_urlsafe(48))"`) |
 | `JWT_ALGORITHM` | `HS256` | Only HS256 is accepted (explicit allow-list) |
-| `JWT_ACCESS_TOKEN_TTL_MINUTES` | `30` | Access-token lifetime (1–1440) |
+| `JWT_ACCESS_TOKEN_TTL_MINUTES` | `15` | Access-token lifetime (1–1440). The web app renews it from the refresh cookie a minute before expiry |
 | `JWT_ISSUER` / `JWT_AUDIENCE` | `docintel` / `docintel-api` | Validated on every request |
 | `AUTH_MAX_FAILED_LOGINS` | `5` | Failed attempts before lockout |
 | `AUTH_LOCKOUT_MINUTES` | `15` | Lockout duration |
+| `AUTH_REFRESH_IDLE_HOURS` | `12` | Browser session idle limit: a refresh cookie unused this long expires (1–720) |
+| `AUTH_SESSION_MAX_HOURS` | `168` | Absolute browser session limit from the sign-in, whatever the activity (1–2160) |
+| `AUTH_REFRESH_REUSE_GRACE_SECONDS` | `10` | A replaced refresh cookie presented again this soon, while its successor is unused, is a lost response (a reload aborted it), not theft (0–60; 0 disables). See ADR-063 |
+| `AUTH_COOKIE_SECURE` | unset | Secure flag on the refresh cookie; unset = on in staging and production, off for local http stacks |
 | `SEED_USER_PASSWORD` | unset | Password for demo users created by `make seed` (min. 12 chars). Seeding is refused in staging/production |
 
 ### Uploads and storage

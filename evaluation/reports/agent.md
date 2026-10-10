@@ -1,6 +1,6 @@
 # Agent investigation evaluation
 
-Generated 2026-10-10T08:20:11+00:00 from commit `169718e79612` by `docintel evaluate --suite agent`. Do not edit by hand.
+Generated 2026-10-10T13:10:53+00:00 from commit `fa098dfb7c7c` by `docintel evaluate --suite agent`. Do not edit by hand.
 
 ## Overall (development dataset)
 
@@ -15,13 +15,13 @@ Generated 2026-10-10T08:20:11+00:00 from commit `169718e79612` by `docintel eval
 | False rule failures on clean invoices | 0 |
 | Target invoice identified from the question | 100.0% |
 | ... and nothing else | 100.0% |
-| Tool selection precision / recall | 99.3% / 100.0% |
+| Tool selection precision / recall | 99.2% / 100.0% |
 | Findings whose evidence labels all exist | 236/236 (100.0%) |
 | Findings citing nothing (by category) | 0 |
 | Governing policy among the sources (defective invoices) | 85.7% |
 | Policy questions: expected section among the sources | 100.0% |
-| Tool calls per document run | 8.14 |
-| Latency per run p50 / p95 (ms, includes the job queue) | 338.8 / 498.6 |
+| Tool calls per document run | 7.95 |
+| Latency per run p50 / p95 (ms, includes the job queue) | 347.9 / 509.0 |
 | LLM calls in deterministic runs | 0 |
 
 ## Overall (held-out dataset, generator seed 11, never used while developing)
@@ -40,8 +40,8 @@ Generated 2026-10-10T08:20:11+00:00 from commit `169718e79612` by `docintel eval
 | Findings whose evidence labels all exist | 206/206 (100.0%) |
 | Findings citing nothing (by category) | 0 |
 | Governing policy among the sources (defective invoices) | 85.7% |
-| Tool calls per document run | 8.14 |
-| Latency per run p50 / p95 (ms, includes the job queue) | 391.5 / 510.9 |
+| Tool calls per document run | 7.95 |
+| Latency per run p50 / p95 (ms, includes the job queue) | 430.0 / 590.0 |
 | LLM calls in deterministic runs | 0 |
 
 ## Guardrails against a scripted adversarial model (development)
@@ -74,9 +74,9 @@ Generated 2026-10-10T08:20:11+00:00 from commit `169718e79612` by `docintel eval
 | MISSING_PO_REFERENCE (INV) | 4 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
 | QUANTITY_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
 | SHORT_DELIVERY (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
-| TAX_RATE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
+| TAX_RATE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x4 | 100.0% | 100.0% | 100.0% |
 | TOTAL_ARITHMETIC_ERROR (INV) | 4 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | n/a |
-| UNIT_PRICE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
+| UNIT_PRICE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x4 | 100.0% | 100.0% | 100.0% |
 | VENDOR_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 0.0% |
 | VENDOR_NAME_VARIANT (INV) | 4 | APPROVE_FOR_PAYMENT | APPROVE_FOR_PAYMENT x4 | 100.0% | n/a | n/a |
 
@@ -90,9 +90,9 @@ Generated 2026-10-10T08:20:11+00:00 from commit `169718e79612` by `docintel eval
 | MISSING_PO_REFERENCE (INV) | 4 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
 | QUANTITY_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
 | SHORT_DELIVERY (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
-| TAX_RATE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
+| TAX_RATE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x4 | 100.0% | 100.0% | 100.0% |
 | TOTAL_ARITHMETIC_ERROR (INV) | 4 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | n/a |
-| UNIT_PRICE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 100.0% |
+| UNIT_PRICE_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x4 | 100.0% | 100.0% | 100.0% |
 | VENDOR_MISMATCH (INV) | 4 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x4 | 100.0% | 100.0% | 0.0% |
 | VENDOR_NAME_VARIANT (INV) | 4 | APPROVE_FOR_PAYMENT | APPROVE_FOR_PAYMENT x4 | 100.0% | n/a | n/a |
 
@@ -109,7 +109,7 @@ Generated 2026-10-10T08:20:11+00:00 from commit `169718e79612` by `docintel eval
 * Policy retrieval for vendor mismatches misses the vendor section with the offline lexical (hashing) embeddings: the rule name shares most words with purchase-order sections. A semantic embedding model is expected to help; not yet measured.
 * Model-assisted planning and analysis (Gemini or a local model): Not yet measured - no model was available in the build environment.
 * Guardrail figures use a scripted adversary, so they measure the validators and guardrails, not an LLM's behaviour.
-* Run time: 102.1 s.
+* Run time: 105.0 s.
 
 ## Provenance
 

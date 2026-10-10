@@ -133,6 +133,39 @@ Markdown or JSON, **Verify** re-renders it and compares the SHA-256). Administra
 workflows automatically after processing, set `WORKFLOW_AUTO_START=INVOICE_PROCESSING` (or
 `CONTRACT_REVIEW`, comma-separated).
 
+## Dashboard and sessions
+
+After signing in you land on the **Dashboard** (every role with `dashboard:read`): document
+counts by status and type, processing time and failures, the open review queue, documents
+failing each rule, workflows awaiting approval and their outcomes, your AI investigations,
+extraction confidence per day and recent activity on your department's documents (the
+administrator sees every department). Pick 7, 30 or 90 days; every chart has a *Show as table*
+view, and the status and queue figures open the filtered inbox or queue. The **Documents**
+inbox shows each document's extraction confidence and whether it was accepted or sent to
+review.
+
+The web app keeps your access token in memory only. Signing in also sets an httpOnly refresh
+cookie, so a reload or a new tab stays signed in (12 hours idle, 7 days at most) and the token
+is renewed in the background; **Sign out** ends the session in every tab. API and MCP clients
+keep using bearer tokens and get no cookie.
+
+## End-to-end test (browser)
+
+```bash
+cd frontend && npx playwright install chromium   # once: downloads the test browser
+make up && make seed-docker                      # the stack the test drives
+make e2e                                         # the demo path in Chromium (about 30 s)
+```
+
+`frontend/e2e/demo.spec.ts` walks the master prompt's demonstration through the web app: it
+generates a fresh purchase order, delivery note and invoice with a price difference, loads the
+knowledge base (skipped when already present), uploads the documents as the analyst, checks the
+mismatch and the comparison, starts invoice processing, confirms the analyst cannot approve
+their own case, approves the vendor clarification as the reviewer, verifies the report, finds
+the decision in the administrator's audit log and checks the dashboard after a reload. On
+failure, `frontend/e2e-report/` holds the HTML report and `frontend/e2e-results/` a trace
+(`npx playwright show-trace <file>`).
+
 ## MCP clients
 
 1. Create a personal token on the **API tokens** page (choose the scopes; it is shown once).
@@ -159,6 +192,7 @@ every call is logged and audited, and revoking the token takes effect on the nex
 | `make worker` | Process queued jobs on the host until the queue is empty |
 | `make check-ocr` | Verify Tesseract, the configured languages and TSV output |
 | `make evaluate` | Run every evaluation suite (OCR, classification, tables, extraction, discrepancies, versions, retrieval, search, agent, workflow; ~45 min) → `evaluation/reports/`. Retrieval, search, agent and workflow create and drop a scratch database on the `TEST_DATABASE_URL` server |
+| `make e2e` | Browser test of the demo path against the running stack (see above) |
 | `make mcp` / `make mcp-http` | MCP server over stdio (needs `MCP_API_TOKEN`) / streamable HTTP on port 8001 |
 | `make seed-knowledge` | Load `knowledge_base/` through the API |
 | `make reembed` | Add vectors of the configured embedding model to passages that have none (after switching `EMBEDDING_PROVIDER`, or after a provider outage) |
@@ -187,4 +221,8 @@ every call is logged and audited, and revoking the token takes effect on the nex
 | Knowledge answers show *Passages only* | No LLM is configured (`GEMINI_API_KEY`), `RAG_GENERATION_ENABLED=false`, or every source was above the external sensitivity limit |
 | *Insufficient evidence* for a question you expect to be answered | The knowledge base does not contain the question's terms (the default lexical evidence check); rephrase with the policy's wording, or check the document is ACTIVE and in force for the date asked |
 | `make seed-knowledge`: `Unknown department in front matter: 'Legal'` | The Legal department does not exist yet: run `make seed` first |
+| Signed out after every reload | The refresh cookie is not stored: `AUTH_COOKIE_SECURE=true` on a plain-http stack, or the browser blocks cookies for the site. Leave `AUTH_COOKIE_SECURE` unset locally |
+| `Your session has ended` in every tab at once | Expected after signing out, a password reset or deactivation, after 12 idle hours or 7 days, or when a copy of the refresh cookie was used elsewhere (`auth.refresh_reused` in the audit log): sign in again |
+| `make e2e`: `Set SEED_USER_PASSWORD` or a login failure in global setup | `.env` has no `SEED_USER_PASSWORD`, or the demo users do not exist on the stack: `make seed-docker` |
+| `make e2e`: `Executable doesn't exist` | Chromium for Playwright is missing: `cd frontend && npx playwright install chromium` |
 | Docker build fails with TLS errors behind a corporate proxy | Your proxy intercepts TLS; build on a network without interception or add your corporate CA to the base images |

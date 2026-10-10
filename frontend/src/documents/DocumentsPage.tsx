@@ -66,7 +66,7 @@ export function DocumentsPage() {
           <h2 id="inbox-heading" className="font-medium">
             Inbox
           </h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               type="search"
               aria-label="Search by filename"
@@ -126,72 +126,74 @@ export function DocumentsPage() {
           <p className="px-5 py-6 text-sm text-slate-500">No documents match.</p>
         )}
         {page && page.items.length > 0 && (
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-5 py-2 font-medium">Document</th>
-                <th className="py-2 font-medium">Status</th>
-                <th className="py-2 font-medium">Type</th>
-                <th className="py-2 font-medium">Vendor</th>
-                <th className="py-2 text-right font-medium">Pages</th>
-                <th className="py-2 font-medium">Extraction</th>
-                <th className="py-2 pl-6 font-medium">Uploaded by</th>
-                <th className="px-5 py-2 font-medium">Uploaded</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {page.items.map((document) => (
-                <tr key={document.id} className="hover:bg-slate-50">
-                  <td className="px-5 py-2">
-                    <Link to={`/documents/${document.id}`} className="font-medium text-blue-900 hover:underline">
-                      {document.display_filename}
-                    </Link>
-                    {document.duplicate_of_id && (
-                      <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800">duplicate</span>
-                    )}
-                  </td>
-                  <td className="py-2">
-                    <DocumentStatusBadge status={document.status} />
-                    {document.review && (
-                      <span className="ml-1.5">
-                        <PriorityBadge priority={document.review.priority} />
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 text-slate-700">
-                    {document.document_type ? (
-                      <>
-                        {DOCUMENT_TYPE_LABELS[document.document_type]}
-                        <span className="ml-1 text-xs text-slate-500 tabular-nums">
-                          {formatPercent(document.type_confidence)}
-                        </span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="py-2 text-slate-700">{document.vendor?.canonical_name ?? "—"}</td>
-                  <td className="py-2 text-right tabular-nums">{document.current_version?.page_count ?? "—"}</td>
-                  <td className="py-2 text-xs">
-                    {document.extraction ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="tabular-nums text-slate-700">
-                          {formatPercent(document.extraction.overall_confidence)}
-                        </span>
-                        <span className={`rounded px-1.5 py-0.5 ${REVIEW_LEVEL_STYLES[document.extraction.review_level]}`}>
-                          {REVIEW_LEVEL_LABELS[document.extraction.review_level]}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="py-2 pl-6 text-slate-600">{document.owner.full_name}</td>
-                  <td className="px-5 py-2 text-slate-600">{formatDateTime(document.created_at)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-5 py-2 font-medium">Document</th>
+                  <th className="py-2 font-medium">Status</th>
+                  <th className="py-2 font-medium">Type</th>
+                  <th className="py-2 font-medium">Vendor</th>
+                  <th className="py-2 text-right font-medium">Pages</th>
+                  <th className="py-2 font-medium">Extraction</th>
+                  <th className="py-2 pl-6 font-medium">Uploaded by</th>
+                  <th className="px-5 py-2 font-medium">Uploaded</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {page.items.map((document) => (
+                  <tr key={document.id} className="hover:bg-slate-50">
+                    <td className="px-5 py-2">
+                      <Link to={`/documents/${document.id}`} className="font-medium text-blue-900 hover:underline">
+                        {document.display_filename}
+                      </Link>
+                      {document.duplicate_of_id && (
+                        <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800">duplicate</span>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      <DocumentStatusBadge status={document.status} />
+                      {document.review && (
+                        <span className="ml-1.5">
+                          <PriorityBadge priority={document.review.priority} />
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-slate-700">
+                      {document.document_type ? (
+                        <>
+                          {DOCUMENT_TYPE_LABELS[document.document_type]}
+                          <span className="ml-1 text-xs text-slate-500 tabular-nums">
+                            {formatPercent(document.type_confidence)}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="py-2 text-slate-700">{document.vendor?.canonical_name ?? "—"}</td>
+                    <td className="py-2 text-right tabular-nums">{document.current_version?.page_count ?? "—"}</td>
+                    <td className="py-2 text-xs">
+                      {document.extraction ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="tabular-nums text-slate-700">
+                            {formatPercent(document.extraction.overall_confidence)}
+                          </span>
+                          <span className={`rounded px-1.5 py-0.5 ${REVIEW_LEVEL_STYLES[document.extraction.review_level]}`}>
+                            {REVIEW_LEVEL_LABELS[document.extraction.review_level]}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 pl-6 text-slate-600">{document.owner.full_name}</td>
+                    <td className="px-5 py-2 text-slate-600">{formatDateTime(document.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {page && page.total > 0 && (
           <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-600">

@@ -98,84 +98,86 @@ export function ReviewQueuePage() {
         ) : tasks.data.items.length === 0 ? (
           <p className="p-5 text-sm text-slate-500">Nothing to review.</p>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-5 py-2 font-medium">Document</th>
-                <th className="py-2 font-medium">Priority</th>
-                <th className="py-2 font-medium">Why</th>
-                <th className="py-2 font-medium">Due</th>
-                <th className="py-2 font-medium">Assigned</th>
-                <th className="py-2 pr-5" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {tasks.data.items.map((task) => {
-                const open = task.status === "OPEN" || task.status === "IN_PROGRESS";
-                const mine = task.assigned_to?.id === user?.id;
-                return (
-                  <tr key={task.id} className="align-top">
-                    <td className="px-5 py-2.5">
-                      <Link to={`/documents/${task.document.id}`} className="font-medium text-blue-900 hover:underline">
-                        {task.document.display_filename}
-                      </Link>
-                      <span className="block text-xs text-slate-500">
-                        {task.document.document_type ? DOCUMENT_TYPE_LABELS[task.document.document_type] : "Unclassified"} ·{" "}
-                        {TASK_TYPE_LABELS[task.task_type]}
-                      </span>
-                    </td>
-                    <td className="py-2.5">
-                      <PriorityBadge priority={task.priority} />
-                    </td>
-                    <td className="max-w-md py-2.5 pr-3">
-                      <ul className="space-y-0.5 text-slate-700">
-                        {task.reasons.slice(0, 3).map((reason) => (
-                          <li key={reason.key}>{reason.message}</li>
-                        ))}
-                        {task.reasons.length > 3 && (
-                          <li className="text-xs text-slate-500">and {task.reasons.length - 3} more</li>
-                        )}
-                      </ul>
-                      {!open && task.resolution && (
-                        <span className="mt-1 block text-xs text-slate-500">
-                          {task.resolution.toLowerCase()} by {task.resolved_by?.full_name ?? "the system"}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-5 py-2 font-medium">Document</th>
+                  <th className="py-2 font-medium">Priority</th>
+                  <th className="py-2 font-medium">Why</th>
+                  <th className="py-2 font-medium">Due</th>
+                  <th className="py-2 font-medium">Assigned</th>
+                  <th className="py-2 pr-5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {tasks.data.items.map((task) => {
+                  const open = task.status === "OPEN" || task.status === "IN_PROGRESS";
+                  const mine = task.assigned_to?.id === user?.id;
+                  return (
+                    <tr key={task.id} className="align-top">
+                      <td className="px-5 py-2.5">
+                        <Link to={`/documents/${task.document.id}`} className="font-medium text-blue-900 hover:underline">
+                          {task.document.display_filename}
+                        </Link>
+                        <span className="block text-xs text-slate-500">
+                          {task.document.document_type ? DOCUMENT_TYPE_LABELS[task.document.document_type] : "Unclassified"} ·{" "}
+                          {TASK_TYPE_LABELS[task.task_type]}
                         </span>
-                      )}
-                    </td>
-                    <td className={`py-2.5 text-xs ${task.overdue ? "font-medium text-red-700" : "text-slate-600"}`}>
-                      {formatDateTime(task.due_at)}
-                      {task.overdue && <span className="block">overdue</span>}
-                    </td>
-                    <td className="py-2.5 text-xs text-slate-600">{task.assigned_to?.full_name ?? "—"}</td>
-                    <td className="py-2.5 pr-5 text-right whitespace-nowrap">
-                      {open && !task.assigned_to && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            act.mutate({ id: task.id, action: "claim" });
-                          }}
-                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs hover:bg-slate-100"
-                        >
-                          Claim
-                        </button>
-                      )}
-                      {open && mine && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            act.mutate({ id: task.id, action: "release" });
-                          }}
-                          className="rounded-md px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                        >
-                          Release
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="py-2.5">
+                        <PriorityBadge priority={task.priority} />
+                      </td>
+                      <td className="max-w-md py-2.5 pr-3">
+                        <ul className="space-y-0.5 text-slate-700">
+                          {task.reasons.slice(0, 3).map((reason) => (
+                            <li key={reason.key}>{reason.message}</li>
+                          ))}
+                          {task.reasons.length > 3 && (
+                            <li className="text-xs text-slate-500">and {task.reasons.length - 3} more</li>
+                          )}
+                        </ul>
+                        {!open && task.resolution && (
+                          <span className="mt-1 block text-xs text-slate-500">
+                            {task.resolution.toLowerCase()} by {task.resolved_by?.full_name ?? "the system"}
+                          </span>
+                        )}
+                      </td>
+                      <td className={`py-2.5 text-xs ${task.overdue ? "font-medium text-red-700" : "text-slate-600"}`}>
+                        {formatDateTime(task.due_at)}
+                        {task.overdue && <span className="block">overdue</span>}
+                      </td>
+                      <td className="py-2.5 text-xs text-slate-600">{task.assigned_to?.full_name ?? "—"}</td>
+                      <td className="py-2.5 pr-5 text-right whitespace-nowrap">
+                        {open && !task.assigned_to && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              act.mutate({ id: task.id, action: "claim" });
+                            }}
+                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs hover:bg-slate-100"
+                          >
+                            Claim
+                          </button>
+                        )}
+                        {open && mine && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              act.mutate({ id: task.id, action: "release" });
+                            }}
+                            className="rounded-md px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                          >
+                            Release
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
         {tasks.data && tasks.data.total > PAGE_SIZE && (
           <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3 text-sm">

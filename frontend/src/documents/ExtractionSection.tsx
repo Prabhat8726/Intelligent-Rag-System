@@ -366,29 +366,31 @@ export function ExtractionSection({
         </ul>
       )}
 
-      <table className="mt-4 w-full text-left text-sm">
-        <thead className="text-xs uppercase text-slate-500">
-          <tr>
-            <th className="py-1.5 pr-3 font-medium">Field</th>
-            <th className="py-1.5 pr-3 font-medium">Value</th>
-            <th className="py-1.5 pr-3 font-medium">Evidence</th>
-            <th className="py-1.5 pr-3 text-right font-medium">Confidence</th>
-            <th className="py-1.5" />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {header.map((field) => (
-            <FieldRow
-              key={field.id}
-              documentId={documentId}
-              field={field}
-              canReview={canReview}
-              focused={field.id === focusFieldId}
-              onShow={onShow}
-            />
-          ))}
-        </tbody>
-      </table>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs uppercase text-slate-500">
+            <tr>
+              <th className="py-1.5 pr-3 font-medium">Field</th>
+              <th className="py-1.5 pr-3 font-medium">Value</th>
+              <th className="py-1.5 pr-3 font-medium">Evidence</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Confidence</th>
+              <th className="py-1.5" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {header.map((field) => (
+              <FieldRow
+                key={field.id}
+                documentId={documentId}
+                field={field}
+                canReview={canReview}
+                focused={field.id === focusFieldId}
+                onShow={onShow}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {groups.map((group) => (
         <div key={group} className="mt-5">

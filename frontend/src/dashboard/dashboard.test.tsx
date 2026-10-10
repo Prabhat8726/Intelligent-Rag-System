@@ -96,7 +96,7 @@ describe("dashboard", () => {
       expect.stringContaining("1.3K"),
       expect.stringContaining("2 overdue"),
       expect.stringContaining("6"),
-      expect.stringContaining("3"),
+      expect.stringContaining("7 workflows finished"),
       expect.stringContaining("3.4 s"),
       expect.stringContaining("Your AI investigations"),
     ]);

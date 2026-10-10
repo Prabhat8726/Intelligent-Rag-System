@@ -1,6 +1,6 @@
 # Workflow automation evaluation
 
-Generated 2026-10-10T08:18:23+00:00 from commit `169718e79612` by `docintel evaluate --suite workflow`. Do not edit by hand.
+Generated 2026-10-10T13:09:03+00:00 from commit `fa098dfb7c7c` by `docintel evaluate --suite workflow`. Do not edit by hand.
 
 ## Invoice processing (development dataset)
 
@@ -12,15 +12,15 @@ Generated 2026-10-10T08:18:23+00:00 from commit `169718e79612` by `docintel eval
 | ... when a stop was expected | 100.0% |
 | Unsafe proposals (approval where a stop was expected) | 0 |
 | Held at first because a review task was open (then resolved and re-run) | 0 |
-| Proposals that needed a person's approval | 8 |
+| Proposals that needed a person's approval | 12 |
 | Actions executed | 22 |
-| Maker-checker attempts refused / bypasses | 40/40 / 0 |
+| Maker-checker attempts refused / bypasses | 56/56 / 0 |
 | Refusals with an audit event | 100.0% |
-| Action state changes with an audit event | 74/74 (100.0% of workflows) |
+| Action state changes with an audit event | 78/78 (100.0% of workflows) |
 | Workflow report re-renders to its stored hash | 100.0% |
 | Report generated twice: identical SHA-256 | 100.0% |
-| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 436.5 / 524.1 |
-| Approval p50 / p95 (ms, decision, execution and report) | 117.0 / 208.4 |
+| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 449.8 / 548.4 |
+| Approval p50 / p95 (ms, decision, execution and report) | 155.2 / 182.1 |
 | Workflow errors | 0 |
 
 ## Invoice processing (held-out dataset)
@@ -33,15 +33,15 @@ Generated 2026-10-10T08:18:23+00:00 from commit `169718e79612` by `docintel eval
 | ... when a stop was expected | 100.0% |
 | Unsafe proposals (approval where a stop was expected) | 0 |
 | Held at first because a review task was open (then resolved and re-run) | 0 |
-| Proposals that needed a person's approval | 8 |
+| Proposals that needed a person's approval | 12 |
 | Actions executed | 22 |
-| Maker-checker attempts refused / bypasses | 40/40 / 0 |
+| Maker-checker attempts refused / bypasses | 56/56 / 0 |
 | Refusals with an audit event | 100.0% |
-| Action state changes with an audit event | 74/74 (100.0% of workflows) |
+| Action state changes with an audit event | 78/78 (100.0% of workflows) |
 | Workflow report re-renders to its stored hash | 100.0% |
 | Report generated twice: identical SHA-256 | 100.0% |
-| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 423.2 / 551.3 |
-| Approval p50 / p95 (ms, decision, execution and report) | 126.5 / 163.6 |
+| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 443.6 / 598.0 |
+| Approval p50 / p95 (ms, decision, execution and report) | 156.3 / 167.2 |
 | Workflow errors | 0 |
 
 ## Contract review (generator seed 73, three versions per contract)
@@ -63,8 +63,8 @@ Generated 2026-10-10T08:18:23+00:00 from commit `169718e79612` by `docintel eval
 | Action state changes with an audit event | 128/128 (100.0% of workflows) |
 | Workflow report re-renders to its stored hash | 100.0% |
 | Report generated twice: identical SHA-256 | 100.0% |
-| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 408.0 / 466.5 |
-| Approval p50 / p95 (ms, decision, execution and report) | 119.2 / 133.2 |
+| Workflow run p50 / p95 (ms, start to proposal, includes the job queue) | 455.6 / 563.6 |
+| Approval p50 / p95 (ms, decision, execution and report) | 132.8 / 135.9 |
 | Workflow errors | 0 |
 
 ## Invoice processing per scenario (development)
@@ -77,9 +77,9 @@ Generated 2026-10-10T08:18:23+00:00 from commit `169718e79612` by `docintel eval
 | MISSING_PO_REFERENCE | 2 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
 | QUANTITY_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
 | SHORT_DELIVERY | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
-| TAX_RATE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
+| TAX_RATE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x2 | 100.0% | AWAITING_VENDOR_CLARIFICATION x2 |
 | TOTAL_ARITHMETIC_ERROR | 2 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
-| UNIT_PRICE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
+| UNIT_PRICE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x2 | 100.0% | AWAITING_VENDOR_CLARIFICATION x2 |
 | VENDOR_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
 | VENDOR_NAME_VARIANT | 2 | APPROVE_FOR_PAYMENT | APPROVE_FOR_PAYMENT x2 | 100.0% | APPROVED_FOR_PAYMENT x2 |
 
@@ -93,9 +93,9 @@ Generated 2026-10-10T08:18:23+00:00 from commit `169718e79612` by `docintel eval
 | MISSING_PO_REFERENCE | 2 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
 | QUANTITY_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
 | SHORT_DELIVERY | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
-| TAX_RATE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
+| TAX_RATE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x2 | 100.0% | AWAITING_VENDOR_CLARIFICATION x2 |
 | TOTAL_ARITHMETIC_ERROR | 2 | HOLD_FOR_REVIEW | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
-| UNIT_PRICE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
+| UNIT_PRICE_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | REQUEST_VENDOR_CLARIFICATION x2 | 100.0% | AWAITING_VENDOR_CLARIFICATION x2 |
 | VENDOR_MISMATCH | 2 | HOLD_FOR_REVIEW/REQUEST_VENDOR_CLARIFICATION | HOLD_FOR_REVIEW x2 | 100.0% | SENT_TO_REVIEW x2 |
 | VENDOR_NAME_VARIANT | 2 | APPROVE_FOR_PAYMENT | APPROVE_FOR_PAYMENT x2 | 100.0% | APPROVED_FOR_PAYMENT x2 |
 
@@ -128,9 +128,9 @@ Generated 2026-10-10T08:18:23+00:00 from commit `169718e79612` by `docintel eval
 * Maker-checker probes go through the same service the API calls; the direct table write checks the database constraint behind it.
 * The contract generator was changed in this phase (guideline ground truth; half of the contracts under the company's own law; notice periods up to 120 days); seed 73 was not used while developing the contract rules.
 * The documents are synthetic and come from the templates the extractors and rules were developed on: these figures show that the workflows and their controls behave as designed end to end, not accuracy on real-world documents.
-* REQUEST_VENDOR_CLARIFICATION is only proposed by a model (the deterministic analysis holds such invoices for review); it is covered by an integration test with a scripted model, not here. No contract in this dataset expires within 30 days of the reference date, so the expiry rule is only exercised as PASS here (its other outcomes are unit-tested).
+* A confirmed price or tax-rate difference against the order is put to the vendor (REQUEST_VENDOR_CLARIFICATION, decided by a reviewer or above; invoice processing procedure 3.2, 3.3); other discrepancies are held for review. No contract in this dataset expires within 30 days of the reference date, so the expiry rule is only exercised as PASS here (its other outcomes are unit-tested).
 * Model-assisted proposals (Gemini or a local model): Not yet measured - no model was available in the build environment.
-* Run time: 118.3 s.
+* Run time: 129.3 s.
 
 ## Provenance
 

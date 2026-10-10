@@ -4,14 +4,15 @@ Multimodal AI for document understanding, verification, RAG, agentic reasoning a
 human-in-the-loop workflow automation — built as a compact, enterprise-grade platform rather
 than an OCR demo or LLM wrapper.
 
-> **Status: Phase 8 complete — ingestion, OCR, layout, tables, classification, structured
+> **Status: Phase 9 complete — ingestion, OCR, layout, tables, classification, structured
 > extraction with evidence, document comparison, business rules, duplicate detection, the
 > review queue, contract version comparison, the knowledge base with cited RAG, document
-> search, the investigation agent (LangGraph, controlled tools, MCP server), and workflows
-> with human approval, maker-checker, reproducible reports, the audit API and user
-> administration.** The dashboard, refresh tokens, the evaluation harness and production
-> deployment are designed (see [`docs/`](docs/README.md)) and are implemented in Phases 9–11.
-> Nothing below claims a capability that has not been built and tested.
+> search, the investigation agent (LangGraph, controlled tools, MCP server), workflows with
+> human approval, maker-checker, reproducible reports, the audit API and user administration,
+> and the full web app: dashboard, browser sessions with rotating refresh cookies, and a
+> browser test of the whole demonstration path.** The evaluation harness's demo script and
+> production deployment are designed (see [`docs/`](docs/README.md)) and are implemented in
+> Phases 10–11. Nothing below claims a capability that has not been built and tested.
 
 ## What the platform will do
 
@@ -36,7 +37,7 @@ LLM self-assessment; the agent can only *propose* high-impact actions; PostgreSQ
 single stateful service (no Redis, no external vector DB); every AI provider sits behind an
 interface; sensitive documents are never sent to free-tier external AI.
 
-## What works today (Phases 0–8, verified by tests)
+## What works today (Phases 0–9, verified by tests)
 
 | Area | Implemented |
 |---|---|
@@ -69,16 +70,18 @@ interface; sensitive documents are never sent to free-tier external AI.
 | Workflows (Phase 8) | Invoice processing and contract review as code-defined, versioned step lists run by the worker: check the document → (compare with the previous contract version) → investigate with the agent → propose one action → human approval → execute → report. Contract review checks the Contract Management Guidelines (required clauses, notice of at most 90 days, Ohio law, expiry). Start from the document page, the API, or automatically after processing (`WORKFLOW_AUTO_START`) |
 | Human approval (Phase 8) | Actions PROPOSED → AWAITING_APPROVAL → APPROVED / REJECTED → EXECUTED / FAILED with a risk table (payment, duplicate rejection and contract approval for a manager; vendor clarification for a reviewer; holds and legal reviews at once); **maker-checker** — whoever started the workflow, owns the document or uploaded the version cannot decide it, enforced by the service and a database constraint; rejections need a reason and return the document to the review queue; executors re-check the current data and only record decisions (no external system is connected); append-only transition history, every change audited |
 | Reports (Phase 8) | Invoice verification, contract review, compliance, document comparison and AI analysis reports: a data snapshot, Markdown rendered from it and its SHA-256; regenerating unchanged data gives the same hash, `verify` re-renders it; Markdown/JSON downloads audited; visible only to readers of all its documents |
+| Dashboard (Phase 9) | `GET /dashboard/summary` computed live and scoped to what the user may see: documents by status and type, processing time (mean, p95) and failures, open and overdue review tasks, documents failing each rule, workflows awaiting approval and their outcomes, the user's AI investigations, extraction confidence and auto-acceptance per day, recent activity on visible documents |
+| Browser sessions (Phase 9) | The web app keeps the access token (15 minutes) in memory only; signing in sets an httpOnly, `SameSite=Strict` refresh cookie scoped to the auth endpoints, rotated on every use and stored only as a hash. A replayed cookie ends the whole session and is audited; a refresh response lost to a reload is recognized and not taken for theft. Idle and absolute limits; logout, deactivation and password resets end sessions; cookie calls need a CSRF header; refreshes are serialized across tabs and logout signs every tab out |
 | Audit and users (Phase 8) | `GET /audit-logs` with filters and paging (administrators everything, managers their department); user and department administration with lock-out guards (no self-demotion or self-deactivation, last administrator kept), token revocation on deactivation, password policy |
 | Document search (Phase 6) | Natural-language search over business documents: types, vendor (vendor master or printed name), payment terms ("longer than 60 days", also read from text when not extracted), totals and dates become SQL filters on the current extraction; the rest is hybrid text search with snippets; the interpretation is shown |
 | LLM accounting | Every call recorded in `llm_calls` (tokens, latency, status, purpose, never content), daily request budget, cost estimates from operator-configured prices, `make llm-usage` |
 | Synthetic data | Seeded generator for linked purchase orders, delivery notes and invoices (12 scenarios, incl. price/quantity/tax/vendor defects, duplicates, multi-page and scanned documents) with JSON ground truth; `make process` ingests a dataset through the API |
 | CLI | `docintel seed` (users and vendor master), `create-user`, `check-ai` (real end-to-end verification of the Gemini key or Ollama models), `check-ocr`, `llm-usage`, `worker`, `worker-health`, `generate-documents`, `ingest`, `knowledge-ingest`, `reembed`, `match` (re-run matching for every processed document), `mcp`, `evaluate` |
-| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, session expiry, documents inbox with upload, type/status filters, vendor column and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; review queue (filters, claim, priority, due dates), each document's checks, comparisons, duplicates and review decision, comparison view whose evidence links open the source field on its page, business rules (read-only, or editable with validation for administrators), versions with upload and clause comparison; knowledge page (ask with cited answers, library, upload, document passages, archive); document search with the query's interpretation; AI analysis (start an investigation or Investigate from a document; findings with evidence, policy sources, confidence factors, recommendation and the action taken or proposed, steps and tool calls); workflows (awaiting my decision, steps, proposal with its investigation, why you cannot decide, approve or reject with a reason, history) with a badge for decisions waiting; reports (content, verify, downloads, generate from a document, comparison or investigation); audit log; user administration; API tokens; system status page |
-| Delivery | Non-root multi-stage images, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, quick evaluation incl. retrieval, dependency audits, secret scan, container smoke test, synthetic dataset and knowledge base loaded through the stack) |
+| Frontend | React 19 + TypeScript + Tailwind 4: login, protected routes, sessions that survive reloads and renew in the background; dashboard (key figures, extraction confidence trend, documents per day, documents by status and type, failing rules, workflow outcomes and investigation recommendations as small SVG charts with table views and keyboard readouts, recent activity; 7, 30 or 90 days); documents inbox with upload, type/status filters, vendor and extraction-confidence columns and paging, document detail with review reasons, classification evidence and correction, extracted fields with evidence, confidence, competing readings, line items, consistency checks and field correction, "show on page" highlight in the page viewer (preview, word boxes, text), tables, processing timings, download, reprocess, delete; review queue (filters, claim, priority, due dates), each document's checks, comparisons, duplicates and review decision, comparison view whose evidence links open the source field on its page, business rules (read-only, or editable with validation for administrators), versions with upload and clause comparison; knowledge page (ask with cited answers, library, upload, document passages, archive); document search with the query's interpretation; AI analysis (start an investigation or Investigate from a document; findings with evidence, policy sources, confidence factors, recommendation and the action taken or proposed, steps and tool calls); workflows (awaiting my decision, steps, proposal with its investigation, why you cannot decide, approve or reject with a reason, history) with a badge for decisions waiting; reports (content, verify, downloads, generate from a document, comparison or investigation); audit log; user administration; API tokens; system status page |
+| Delivery | Non-root multi-stage images, docker compose (db, migrate, api, worker, web) with health-checked startup ordering, nginx with strict CSP, smoke test incl. a processed upload, GitHub Actions CI (lint, types, migrations, tests, quick evaluation incl. retrieval, dependency audits, secret scan, container smoke test, synthetic dataset and knowledge base loaded through the stack, and a Playwright browser test of the demonstration path: generate an order and an invoice with a price difference, upload, classification, extraction, comparison, mismatch, policy retrieval, the agent's recommendation, a reviewer's approval, the workflow result, the audit log and the dashboard) |
 
-Test suites: 824 backend tests (unit, integration against real PostgreSQL, security) and 68
-frontend tests.
+Test suites: 837 backend tests (unit, integration against real PostgreSQL, security), 74
+frontend tests and a browser test of the demonstration path (`make e2e`).
 
 ## Quick start
 
@@ -95,6 +98,7 @@ make dev        # API :8000 + worker + UI http://localhost:5173
 ```
 
 Or the production-like stack: `make up && make seed-docker && make smoke` → http://localhost:8080.
+Then watch the whole demonstration run in a browser: `make e2e` (once: `cd frontend && npx playwright install chromium`).
 
 Try it with synthetic documents: `make generate-documents && make process`
 (add `API_URL=http://localhost:8080` for the Docker stack), then open the Documents page.
@@ -152,14 +156,14 @@ lists its datasets, seeds, engine versions and caveats.
 | Document search, free text: recall@10 / precision@10 | 100% / 52.5% (6 line-item queries) | [search](evaluation/reports/search.md) |
 | Agent task success: invoice named / found from the question / policy question | 100% / 100% / 100% (development, 70 runs) · 100% / 100% held-out (seed 11, 60 runs, run only after development) — deterministic mode | [agent](evaluation/reports/agent.md) |
 | Agent: unsafe recommendations (payment of a defective invoice) / planted defect reported / false failures on clean invoices | 0 / 100% / 0 on both datasets | [agent](evaluation/reports/agent.md) |
-| Agent tool selection precision / recall; findings whose evidence exists | 99.3% / 100% (held-out 99.2% / 100%); 236 of 236 (206 of 206) | [agent](evaluation/reports/agent.md) |
+| Agent tool selection precision / recall; findings whose evidence exists | 99.2% / 100% on both datasets; 236 of 236 (held-out 206 of 206) | [agent](evaluation/reports/agent.md) |
 | Agent: governing policy among the sources (defective invoices) | 85.7% — on both datasets the vendor-mismatch invoices miss the vendor section with the lexical embeddings | [agent](evaluation/reports/agent.md) |
 | Agent guardrails vs a scripted adversarial model (16 defective invoices per dataset) | 0 payment recommendations accepted, 0 adversarial statements or summaries kept | [agent](evaluation/reports/agent.md) |
 | Agent with an LLM (Gemini or Ollama planning and analysis) | Not yet measured (no key or local model in the build environment) | |
 | Workflows: final proposal as expected — invoice processing / contract review | 100% of 22 + 22 invoices (development seed 7, held-out seed 11) / 100% of 36 contract versions (12 families × 3, seed 73) — deterministic mode | [workflow](evaluation/reports/workflow.md) |
 | Workflows: unsafe proposals (approval where the ground truth says stop) | 0 | [workflow](evaluation/reports/workflow.md) |
-| Maker-checker: attempts by a maker or a too-junior role refused / bypasses | 120 of 120 (through the service and by direct table writes) / 0; every refusal audited | [workflow](evaluation/reports/workflow.md) |
-| Action state changes with an audit event | 276 of 276 | [workflow](evaluation/reports/workflow.md) |
+| Maker-checker: attempts by a maker or a too-junior role refused / bypasses | 152 of 152 (through the service and by direct table writes) / 0; every refusal audited | [workflow](evaluation/reports/workflow.md) |
+| Action state changes with an audit event | 284 of 284 | [workflow](evaluation/reports/workflow.md) |
 | Reports: re-render to the stored hash / regenerated from unchanged data with the same SHA-256 | 100% / 100% of finished workflows | [workflow](evaluation/reports/workflow.md) |
 | Contract guideline rules (required clauses, notice period, governing law, expiry) as expected | 144 of 144 rule outcomes; version comparison step exactly right on 24 of 24 steps | [workflow](evaluation/reports/workflow.md) |
 | Workflow proposals with an LLM | Not yet measured (no key or local model in the build environment) | |
@@ -196,6 +200,11 @@ writing to the table directly. Its contract dataset comes from a generator that 
 clauses, notice period and governing law it wrote; the documents come from the templates the
 extractors were built on, so these numbers show that the workflows and their controls work as
 designed, not accuracy on real documents.
+Since Phase 9, a confirmed price or tax-rate difference is put to the vendor as the invoice
+processing procedure says (a reviewer approves the request) instead of being held, so both
+suites were re-run: the expected actions already allowed either, every result still matches,
+and the workflow suite now has 32 more maker-checker probes (16 per invoice dataset) on those proposals.
+The browser test of the demonstration path (`make e2e`) is pass/fail, not a metric.
 See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 
 ## Roadmap
@@ -210,8 +219,8 @@ See the [evaluation plan](docs/architecture/10-evaluation-plan.md).
 | 6 | Knowledge base & hybrid RAG with citations, document search | **Complete** |
 | 7 | LangGraph agent, controlled tools, MCP server | **Complete** |
 | 8 | Workflows, human approval, reports, audit API, user administration | **Complete** |
-| 9 | Full enterprise UI | Next |
-| 10 | Evaluation harness & reproducible demo | Planned |
+| 9 | Full enterprise UI: dashboard, browser sessions, end-to-end test of the demo path | **Complete** |
+| 10 | Evaluation harness & reproducible demo | Next |
 | 11 | Productionization & deployment | Planned |
 
 ## Repository layout

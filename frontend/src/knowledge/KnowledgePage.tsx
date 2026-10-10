@@ -111,44 +111,46 @@ export function KnowledgePage() {
           <p className="p-4 text-sm text-slate-600">No knowledge documents match.</p>
         )}
         {documents.data && documents.data.items.length > 0 && (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-2">Title</th>
-                <th className="px-4 py-2">Category</th>
-                <th className="px-4 py-2">Version</th>
-                <th className="px-4 py-2">In force</th>
-                <th className="px-4 py-2">Audience</th>
-                <th className="px-4 py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {documents.data.items.map((item) => (
-                <tr key={item.id}>
-                  <td className="px-4 py-2">
-                    <Link to={`/knowledge/${item.id}`} className="font-medium text-blue-900 hover:underline">
-                      {item.title}
-                    </Link>
-                    <div className="text-xs text-slate-500">{item.document_key}</div>
-                  </td>
-                  <td className="px-4 py-2">{CATEGORY_LABELS[item.category]}</td>
-                  <td className="px-4 py-2">{item.version_label ?? "—"}</td>
-                  <td className="px-4 py-2 text-xs">{formatPeriod(item.effective_from, item.effective_to) || "always"}</td>
-                  <td className="px-4 py-2 text-xs">{item.department ? item.department.name : "Everyone"}</td>
-                  <td className="px-4 py-2">
-                    <span className={`rounded px-2 py-0.5 text-xs ${knowledgeStatusStyle(item.status)}`}>
-                      {knowledgeStatusLabel(item.status)}
-                    </span>
-                    {item.status !== "PROCESSING" && !item.embedding_model && item.status !== "FAILED" && (
-                      <div className="mt-1 text-xs text-slate-500" title={item.embedding_note ?? undefined}>
-                        full-text only
-                      </div>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">Title</th>
+                  <th className="px-4 py-2">Category</th>
+                  <th className="px-4 py-2">Version</th>
+                  <th className="px-4 py-2">In force</th>
+                  <th className="px-4 py-2">Audience</th>
+                  <th className="px-4 py-2">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {documents.data.items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="px-4 py-2">
+                      <Link to={`/knowledge/${item.id}`} className="font-medium text-blue-900 hover:underline">
+                        {item.title}
+                      </Link>
+                      <div className="text-xs text-slate-500">{item.document_key}</div>
+                    </td>
+                    <td className="px-4 py-2">{CATEGORY_LABELS[item.category]}</td>
+                    <td className="px-4 py-2">{item.version_label ?? "—"}</td>
+                    <td className="px-4 py-2 text-xs">{formatPeriod(item.effective_from, item.effective_to) || "always"}</td>
+                    <td className="px-4 py-2 text-xs">{item.department ? item.department.name : "Everyone"}</td>
+                    <td className="px-4 py-2">
+                      <span className={`rounded px-2 py-0.5 text-xs ${knowledgeStatusStyle(item.status)}`}>
+                        {knowledgeStatusLabel(item.status)}
+                      </span>
+                      {item.status !== "PROCESSING" && !item.embedding_model && item.status !== "FAILED" && (
+                        <div className="mt-1 text-xs text-slate-500" title={item.embedding_note ?? undefined}>
+                          full-text only
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {documents.data && documents.data.total > PAGE_SIZE && (
           <div className="flex items-center justify-between border-t border-slate-200 p-3 text-sm">

@@ -196,32 +196,34 @@ function ActionCard({ workflow, action }: { workflow: Workflow; action: Workflow
       )}
       <details className="mt-4 text-sm">
         <summary className="cursor-pointer text-slate-700">History ({action.transitions.length})</summary>
-        <table className="mt-2 w-full text-left text-xs" aria-label="Action history">
-          <thead className="text-slate-500">
-            <tr>
-              <th className="py-1 font-medium">When</th>
-              <th className="font-medium">Change</th>
-              <th className="font-medium">By</th>
-              <th className="font-medium">Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {action.transitions.map((item) => (
-              <tr key={`${item.to_status}-${item.created_at}`} className="align-top">
-                <td className="py-1 pr-2">{when(item.created_at)}</td>
-                <td className="pr-2">
-                  {item.from_status ?? "new"} → {item.to_status}
-                </td>
-                <td className="pr-2">
-                  {item.actor_type === "USER"
-                    ? (item.actor?.full_name ?? "—")
-                    : `${item.actor_type.toLowerCase()}${item.actor ? ` for ${item.actor.full_name}` : ""}`}
-                </td>
-                <td>{item.reason ?? ""}</td>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-left text-xs" aria-label="Action history">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="py-1 font-medium">When</th>
+                <th className="font-medium">Change</th>
+                <th className="font-medium">By</th>
+                <th className="font-medium">Reason</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {action.transitions.map((item) => (
+                <tr key={`${item.to_status}-${item.created_at}`} className="align-top">
+                  <td className="py-1 pr-2">{when(item.created_at)}</td>
+                  <td className="pr-2">
+                    {item.from_status ?? "new"} → {item.to_status}
+                  </td>
+                  <td className="pr-2">
+                    {item.actor_type === "USER"
+                      ? (item.actor?.full_name ?? "—")
+                      : `${item.actor_type.toLowerCase()}${item.actor ? ` for ${item.actor.full_name}` : ""}`}
+                  </td>
+                  <td>{item.reason ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </details>
     </section>
   );

@@ -79,3 +79,9 @@ and system latency. The retrieval, search, agent and workflow suites need a Post
 discrepancy on native documents is a unit test (`tests/unit/test_rules.py`), so CI catches a
 regression without running the evaluation. All current
 datasets are synthetic; reports say so next to the numbers.
+
+End to end (Phase 9, ADR-066): `make e2e` drives the demonstration path (master prompt §50)
+through the web app in Chromium against a running stack, and CI runs it after the container
+smoke test. It is a pass/fail check that the pieces work together the way a person uses them,
+not a measurement; it generates a fresh bundle per run, so earlier data on the stack does not
+change its outcome.

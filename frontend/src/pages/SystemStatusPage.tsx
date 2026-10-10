@@ -61,30 +61,32 @@ export function SystemStatusPage() {
         )}
         {readiness.data && (
           <>
-            <table className="mt-4 w-full text-left text-sm">
-              <thead className="text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2 font-medium">Check</th>
-                  <th className="py-2 font-medium">Status</th>
-                  <th className="py-2 font-medium">Detail</th>
-                  <th className="py-2 text-right font-medium">Latency</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {Object.entries(readiness.data.checks).map(([name, check]) => (
-                  <tr key={name}>
-                    <td className="py-2 capitalize">{name}</td>
-                    <td className="py-2">
-                      <StatusBadge ok={check.status === "ok"} label={check.status === "ok" ? "OK" : "Failing"} />
-                    </td>
-                    <td className="py-2 text-slate-600">{check.detail ?? "—"}</td>
-                    <td className="py-2 text-right tabular-nums text-slate-600">
-                      {check.latency_ms === null ? "—" : `${check.latency_ms.toFixed(1)} ms`}
-                    </td>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2 font-medium">Check</th>
+                    <th className="py-2 font-medium">Status</th>
+                    <th className="py-2 font-medium">Detail</th>
+                    <th className="py-2 text-right font-medium">Latency</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {Object.entries(readiness.data.checks).map(([name, check]) => (
+                    <tr key={name}>
+                      <td className="py-2 capitalize">{name}</td>
+                      <td className="py-2">
+                        <StatusBadge ok={check.status === "ok"} label={check.status === "ok" ? "OK" : "Failing"} />
+                      </td>
+                      <td className="py-2 text-slate-600">{check.detail ?? "—"}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-600">
+                        {check.latency_ms === null ? "—" : `${check.latency_ms.toFixed(1)} ms`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="mt-4 text-xs text-slate-500">API version {readiness.data.version}</p>
           </>
         )}

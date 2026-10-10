@@ -27,7 +27,8 @@ and model output as untrusted input** at every boundary.
 * A dummy hash is verified for unknown emails to equalize timing (anti-enumeration).
 * Lockout: `AUTH_MAX_FAILED_LOGINS` failures → locked for `AUTH_LOCKOUT_MINUTES` (stored in DB → works across replicas).
 * JWT: HS256, ≥ 32-byte secret validated at startup (weak/default secrets refused outside `local`/`test`), claims `sub, role, iat, nbf, exp, iss, aud, jti`, 15-minute default TTL (30 before Phase 9); the user is re-loaded from DB on every request so deactivation and role changes apply immediately.
-* Browser sessions (Phase 9, ADR-063): the SPA holds the access token in memory only. The
+* Browser sessions (Phase 9, ADR-063): the SPA holds the access token in memory only
+  (localStorage keeps just a `docintel.signed-in` flag, no token or user data). The
   web login sets an httpOnly, `SameSite=Strict` refresh cookie scoped to `/api/v1/auth`
   (Secure outside `local`/`test`, or `AUTH_COOKIE_SECURE`); only its SHA-256 is stored.
   Every refresh rotates it; presenting a replaced cookie revokes the whole sign-in and is

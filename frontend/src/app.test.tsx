@@ -37,8 +37,8 @@ describe("authentication flow", () => {
 
     expect(await screen.findByRole("heading", { name: "Document Intelligence" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
-    // One attempt to restore a session from the cookie, then nothing.
-    expect(calls(fetchMock, "/api/v1/auth/refresh")).toHaveLength(1);
+    // This browser never signed in: no session request that could only fail.
+    expect(calls(fetchMock, "/api/v1/auth/refresh")).toHaveLength(0);
   });
 
   it("signs in and lands on the requested page", async () => {
@@ -71,8 +71,9 @@ describe("authentication flow", () => {
     expect(meCall?.[1]?.headers).toMatchObject({
       Authorization: "Bearer header.payload.signature",
     });
+    // Only a note that this browser signed in is kept, never the token.
     expect(window.sessionStorage.length).toBe(0);
-    expect(window.localStorage.length).toBe(0);
+    expect(Object.entries(window.localStorage)).toEqual([["docintel.signed-in", "1"]]);
   });
 
   it("shows the server's message for invalid credentials", async () => {
@@ -87,6 +88,16 @@ describe("authentication flow", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid email or password.");
+  });
+
+  it("forgets a session the server has ended", async () => {
+    window.localStorage.setItem("docintel.signed-in", "1"); // signed in once; the cookie is gone
+    const fetchMock = mockFetch({});
+    renderApp("/status");
+
+    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(calls(fetchMock, "/api/v1/auth/refresh")).toHaveLength(1);
+    expect(window.localStorage.getItem("docintel.signed-in")).toBeNull();
   });
 
   it("restores the session from the cookie after a reload", async () => {
@@ -109,6 +120,7 @@ describe("authentication flow", () => {
   });
 
   it("renews a rejected token from the cookie once, then gives up", async () => {
+    browserHasSession();
     let issued = 0;
     let attempts = 0;
     const fetchMock = mockFetch({
@@ -152,6 +164,7 @@ describe("authentication flow", () => {
     });
     const [logoutCall] = calls(fetchMock, "/api/v1/auth/logout");
     expect(logoutCall?.[1]).toMatchObject({ method: "POST" });
+    expect(window.localStorage.getItem("docintel.signed-in")).toBeNull();
     expect(logoutCall?.[1]?.headers).toMatchObject({
       "X-Docintel-Session": "1",
     });

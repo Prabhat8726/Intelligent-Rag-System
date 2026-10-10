@@ -107,51 +107,53 @@ export function WorkflowsPage() {
             {view === "mine" ? "Nothing waits for your decision." : "No workflow yet."}
           </p>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-5 py-2 font-medium">Document</th>
-                <th className="py-2 font-medium">Workflow</th>
-                <th className="py-2 font-medium">Status</th>
-                <th className="py-2 font-medium">Waiting for</th>
-                <th className="py-2 font-medium">Started by</th>
-                <th className="py-2 pr-5 font-medium">Started</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {workflows.data.items.map((item) => (
-                <tr key={item.id} className="align-top">
-                  <td className="px-5 py-2.5">
-                    <Link to={`/workflows/${item.id}`} className="font-medium text-blue-900 hover:underline">
-                      {item.document.filename}
-                    </Link>
-                    {!item.document.is_current_version && (
-                      <span className="block text-xs text-amber-800">a newer version exists</span>
-                    )}
-                  </td>
-                  <td className="py-2.5">{WORKFLOW_TYPE_LABELS[item.workflow_type]}</td>
-                  <td className="py-2.5">
-                    <span className={`rounded px-2 py-0.5 text-xs ${WORKFLOW_STATUS_STYLES[item.status]}`}>
-                      {WORKFLOW_STATUS_LABELS[item.status]}
-                    </span>
-                    {item.outcome && item.status !== "AWAITING_APPROVAL" && (
-                      <span className="block text-xs text-slate-500">{outcomeLabel(item.outcome)}</span>
-                    )}
-                  </td>
-                  <td className="py-2.5">
-                    {item.pending_action
-                      ? `${item.pending_action.title} (${item.pending_action.required_role?.toLowerCase() ?? "anyone"})`
-                      : "—"}
-                  </td>
-                  <td className="py-2.5">
-                    {item.initiated_by.full_name}
-                    {item.trigger === "AUTO" && <span className="block text-xs text-slate-500">started automatically</span>}
-                  </td>
-                  <td className="py-2.5 pr-5 text-slate-600">{when(item.created_at)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-5 py-2 font-medium">Document</th>
+                  <th className="py-2 font-medium">Workflow</th>
+                  <th className="py-2 font-medium">Status</th>
+                  <th className="py-2 font-medium">Waiting for</th>
+                  <th className="py-2 font-medium">Started by</th>
+                  <th className="py-2 pr-5 font-medium">Started</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {workflows.data.items.map((item) => (
+                  <tr key={item.id} className="align-top">
+                    <td className="px-5 py-2.5">
+                      <Link to={`/workflows/${item.id}`} className="font-medium text-blue-900 hover:underline">
+                        {item.document.filename}
+                      </Link>
+                      {!item.document.is_current_version && (
+                        <span className="block text-xs text-amber-800">a newer version exists</span>
+                      )}
+                    </td>
+                    <td className="py-2.5">{WORKFLOW_TYPE_LABELS[item.workflow_type]}</td>
+                    <td className="py-2.5">
+                      <span className={`rounded px-2 py-0.5 text-xs ${WORKFLOW_STATUS_STYLES[item.status]}`}>
+                        {WORKFLOW_STATUS_LABELS[item.status]}
+                      </span>
+                      {item.outcome && item.status !== "AWAITING_APPROVAL" && (
+                        <span className="block text-xs text-slate-500">{outcomeLabel(item.outcome)}</span>
+                      )}
+                    </td>
+                    <td className="py-2.5">
+                      {item.pending_action
+                        ? `${item.pending_action.title} (${item.pending_action.required_role?.toLowerCase() ?? "anyone"})`
+                        : "—"}
+                    </td>
+                    <td className="py-2.5">
+                      {item.initiated_by.full_name}
+                      {item.trigger === "AUTO" && <span className="block text-xs text-slate-500">started automatically</span>}
+                    </td>
+                    <td className="py-2.5 pr-5 text-slate-600">{when(item.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

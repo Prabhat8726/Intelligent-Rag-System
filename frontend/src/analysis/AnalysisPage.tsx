@@ -155,44 +155,46 @@ export function AnalysisPage() {
           <p className="mt-2 text-sm text-slate-500">No investigations yet.</p>
         )}
         {runs.data && runs.data.items.length > 0 && (
-          <table className="mt-2 w-full text-left text-sm">
-            <thead className="text-xs text-slate-500">
-              <tr>
-                <th className="py-2 font-medium">Question</th>
-                <th className="font-medium">Kind</th>
-                <th className="font-medium">Status</th>
-                <th className="font-medium">Recommendation</th>
-                <th className="font-medium">Confidence</th>
-                <th className="font-medium">Started</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {runs.data.items.map((run) => (
-                <tr key={run.id}>
-                  <td className="max-w-md py-2 pr-3">
-                    <Link to={`/analysis/${run.id}`} className="text-blue-900 hover:underline">
-                      {run.query}
-                    </Link>
-                  </td>
-                  <td className="pr-3 text-slate-600">{run.intent ? INTENT_LABELS[run.intent] : "—"}</td>
-                  <td className="pr-3">
-                    <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLES[run.status]}`}>{run.status}</span>
-                  </td>
-                  <td className="pr-3">{run.recommendation ? ACTION_LABELS[run.recommendation] : "—"}</td>
-                  <td className="pr-3">
-                    {run.confidence ? (
-                      <span className={`rounded px-2 py-0.5 text-xs ${CONFIDENCE_STYLES[run.confidence]}`}>
-                        {run.confidence}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="text-xs text-slate-500">{new Date(run.created_at).toLocaleString()}</td>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-slate-500">
+                <tr>
+                  <th className="py-2 font-medium">Question</th>
+                  <th className="font-medium">Kind</th>
+                  <th className="font-medium">Status</th>
+                  <th className="font-medium">Recommendation</th>
+                  <th className="font-medium">Confidence</th>
+                  <th className="font-medium">Started</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {runs.data.items.map((run) => (
+                  <tr key={run.id}>
+                    <td className="max-w-md py-2 pr-3">
+                      <Link to={`/analysis/${run.id}`} className="text-blue-900 hover:underline">
+                        {run.query}
+                      </Link>
+                    </td>
+                    <td className="pr-3 text-slate-600">{run.intent ? INTENT_LABELS[run.intent] : "—"}</td>
+                    <td className="pr-3">
+                      <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLES[run.status]}`}>{run.status}</span>
+                    </td>
+                    <td className="pr-3">{run.recommendation ? ACTION_LABELS[run.recommendation] : "—"}</td>
+                    <td className="pr-3">
+                      {run.confidence ? (
+                        <span className={`rounded px-2 py-0.5 text-xs ${CONFIDENCE_STYLES[run.confidence]}`}>
+                          {run.confidence}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="text-xs text-slate-500">{new Date(run.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

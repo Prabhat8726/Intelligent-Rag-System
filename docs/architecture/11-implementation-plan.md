@@ -17,7 +17,7 @@ architecture decisions are validated by running code immediately.
 | **6 — Knowledge & RAG** ✅ | KB ingestion, chunking, embeddings, hybrid retrieval, citations, semantic search, fastembed local provider | `/knowledge/*`, `/search`, `make seed-knowledge`, `docintel reembed` | Retrieval metrics measured with ablations; access filters proven by tests |
 | **7 — Agent** ✅ | LangGraph graph, tool registry, planner, guardrails, MCP server, API tokens | `/analysis`, `mcp` entrypoint | Agent scenario success/tool-selection measured; injection tests pass |
 | **8 — Workflow automation** ✅ | Workflows, HITL state machine, executors, reports, audit API, user management | `/workflows/*`, `/reports`, `/audit-logs`, `/users` | Maker-checker enforced; transitions audited; reports reproducible |
-| 9 — Frontend | Dashboard, inbox, viewer with evidence highlights, comparison, AI analysis, approvals, audit, search; refresh tokens | Full SPA | E2E (Playwright) for the demo path |
+| **9 — Frontend** ✅ | Dashboard, inbox, viewer with evidence highlights, comparison, AI analysis, approvals, audit, search; refresh tokens | Full SPA, `/dashboard/summary`, `/auth/refresh`, `/auth/logout`, `make e2e` | E2E (Playwright) for the demo path |
 | 10 — Evaluation | Datasets, all suites, reports, regression gates, demo script | `make evaluate`, `make demo` | README metrics generated from reports |
 | 11 — Productionization | Prometheus metrics, rate limiting, hardening, deployment configs (staging/prod), performance tests, runbooks, import-linter | `/metrics`, deploy docs | Deployment claimed only after it is actually performed |
 
@@ -326,3 +326,36 @@ Delivery
 - ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
 
 Not in Phase 8 (by design): connections to external systems (ERP payment, e-mail, e-signature — executors record decisions only), PDF reports, workflow definitions edited at run time, escalation and reminders for decisions waiting too long.
+
+## 9. Phase 9 acceptance criteria
+
+Status as of 2026-10-10, same legend as §1.
+
+Browser sessions (refresh tokens, ADR-063)
+- ✅ The web login (`X-Docintel-Session: 1`) sets an httpOnly, `SameSite=Strict` refresh cookie scoped to `/api/v1/auth`, never in a body, stored as SHA-256; API clients get no cookie (`integration/test_sessions.py::test_the_web_app_gets_an_httponly_cookie_and_api_clients_do_not`)
+- ✅ Every refresh rotates the cookie within one family (`::test_refresh_rotates_the_cookie_and_returns_a_working_token`); a replayed cookie revokes the family and is audited as `auth.refresh_reused` (`::test_a_replayed_cookie_ends_the_whole_session`); a refresh response lost to a reload is not theft, and its orphan presented later is (`::test_a_lost_refresh_response_is_not_theft`, `::test_the_grace_window_ends_and_a_used_successor_closes_it`)
+- ✅ Logout (CSRF header required, no alarm), idle expiry, password reset and deactivation end sessions (`::test_logout_revokes_the_session_without_an_alarm`, `::test_refresh_needs_the_header_and_a_live_cookie`, `::test_deactivation_and_password_reset_end_sessions`); access tokens default to 15 minutes
+- ✅ The SPA keeps the token in memory, restores it after a reload, renews a rejected token once, renews a minute before expiry, signs out every tab (`src/app.test.tsx`)
+
+Dashboard and inbox (Module 19, ADR-064)
+- ✅ `GET /dashboard/summary?days=1..90`: documents by status and type, processing time (mean, p95) and failures, review queue (open, overdue, priority, type), documents failing each rule, investigations (personal; administrators all), workflows awaiting approval and outcomes, extraction confidence and auto-acceptance per UTC day, recent activity from an allowlist of audit actions on visible documents; nothing from another department (`integration/test_dashboard.py`)
+- ✅ Dashboard page: key figures linking to the inbox and queues, confidence trend and documents per day, bars for status, type, failing rules, outcomes and recommendations, each chart with a table view and a keyboard readout, period selector, recent activity (`src/dashboard/dashboard.test.tsx`); the inbox shows each document's extraction confidence and review level and opens filtered from the dashboard (`src/documents/documents.test.tsx`)
+- ✅ Viewer with evidence highlights, comparison, AI analysis, approvals, audit and search were delivered with their back ends (Phases 4–8) and are part of the demo path below
+
+Demo path end to end (master prompt §50, ADR-066)
+- ✅ `frontend/e2e/demo.spec.ts` in Chromium against the Docker stack: a fresh order, delivery note and invoice with a planted price difference (`generate-documents --scenario UNIT_PRICE_MISMATCH`), uploaded by the analyst, classified, extracted, compared; the mismatch and the comparison shown; invoice processing retrieves the invoice processing procedure and proposes asking the vendor; the analyst is shown why they cannot decide; the reviewer approves, the drafted vendor message and the verified report appear; the administrator's audit log shows `workflow.action.approved` by the reviewer; the dashboard after a reload lists the activity and the failing rule. `make e2e`; CI runs it in the containers job and keeps the trace on failure
+- ✅ A confirmed price or tax-rate difference (and nothing else) is put to the vendor as the invoice processing procedure says, with a reviewer's approval; quantity, missing order, total and vendor problems are still held (ADR-065; `integration/test_agent_analysis.py::test_a_price_mismatch_is_investigated_and_put_to_the_vendor`, `::test_a_quantity_difference_is_held_and_sent_for_review`, `integration/test_workflows.py::test_a_price_difference_is_put_to_the_vendor_once_a_reviewer_approves`)
+
+Evaluation (deterministic mode, synthetic data)
+- ✅ Agent and workflow suites re-run from a clean checkout after the vendor-clarification change: price and tax-rate mismatches now end in REQUEST_VENDOR_CLARIFICATION (agent: 8 of 8 per dataset; workflows: awaiting the vendor after a reviewer's approval), every expectation still met on the development and held-out datasets, 0 unsafe recommendations or proposals; maker-checker 152 of 152 refused, 0 bypasses; 284 of 284 action state changes audited
+- ⏳ Model-assisted runs (Gemini or a local model) — no model in the build environment
+
+Delivery
+- ✅ 837 backend tests, ruff, ruff format, mypy --strict (src and tests); 74 frontend tests, ESLint, `tsc`, production build
+- ✅ Docker images rebuilt (sandbox-only base-image shim); on a fresh stack migration 0009 applies and the smoke test passes; the end-to-end test passes on the fresh stack (knowledge base loaded from scratch) and on the upgraded long-lived stack
+- ✅ Verification found and fixed: a reload that aborted a refresh after the cookie rotated looked like theft and signed the user out (grace window, ADR-063); nginx resolved the API once at start-up, so a recreated API container got 502s until nginx restarted (now resolved per request, cached 10 s; checked by recreating only the API); an anonymous visitor's start-up refresh produced a 401 in the console (the app now asks only when this browser signed in before); at phone width (390 px) the header overlapped and nine screens scrolled sideways (the header wraps, tables scroll inside their cards, filter and action rows wrap: no screen overflows); "1 workflows finished"
+- ✅ Browser check on the stack: the dashboard at 1366 px and 390 px (screenshots reviewed); at 390 px also the inbox, review queue, workflows, reports, AI analysis, knowledge, search, rules, audit log, users, a document and a workflow; no horizontal page scroll, no console errors
+- ✅ gitleaks clean; `actionlint` clean
+- ⏳ CI run on GitHub — happens on the first pull request (or manual `workflow_dispatch`)
+
+Not in Phase 9 (by design): a dark theme (the app is light-only), editable dashboards or saved views, notifications, and browser tests beyond the demo path (component tests cover the screens).

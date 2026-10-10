@@ -222,30 +222,32 @@ export function VersionsSection({ documentId, busy }: { documentId: string; busy
       <h2 id="versions-heading" className="font-medium">
         Versions
       </h2>
-      <table className="mt-3 w-full text-left text-sm">
-        <thead className="text-xs uppercase text-slate-500">
-          <tr>
-            <th className="py-1.5 font-medium">Version</th>
-            <th className="py-1.5 font-medium">File</th>
-            <th className="py-1.5 font-medium">Uploaded</th>
-            <th className="py-1.5 text-right font-medium">Size</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {list.map((version) => (
-            <tr key={version.id}>
-              <td className="py-1.5">
-                {version.version_number}
-                {version.is_current && <span className="ml-2 text-xs text-slate-500">current</span>}
-                {!version.processed && <span className="ml-2 text-xs text-amber-700">not processed</span>}
-              </td>
-              <td className="py-1.5 break-all">{version.original_filename}</td>
-              <td className="py-1.5 text-slate-600">{formatDateTime(version.created_at)}</td>
-              <td className="py-1.5 text-right tabular-nums">{formatBytes(version.size_bytes)}</td>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs uppercase text-slate-500">
+            <tr>
+              <th className="py-1.5 font-medium">Version</th>
+              <th className="py-1.5 font-medium">File</th>
+              <th className="py-1.5 font-medium">Uploaded</th>
+              <th className="py-1.5 text-right font-medium">Size</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {list.map((version) => (
+              <tr key={version.id}>
+                <td className="py-1.5">
+                  {version.version_number}
+                  {version.is_current && <span className="ml-2 text-xs text-slate-500">current</span>}
+                  {!version.processed && <span className="ml-2 text-xs text-amber-700">not processed</span>}
+                </td>
+                <td className="py-1.5 break-all">{version.original_filename}</td>
+                <td className="py-1.5 text-slate-600">{formatDateTime(version.created_at)}</td>
+                <td className="py-1.5 text-right tabular-nums">{formatBytes(version.size_bytes)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {processed.length >= 2 && fromValue !== null && toValue !== null && (
         <div className="mt-4 border-t border-slate-100 pt-4">

@@ -188,6 +188,8 @@ a person decides.
 | 16 Audit log records it | all | audit |
 | 17 Dashboard displays it | — | SPA |
 
+Phase 9 runs this path in a browser on every CI run: `frontend/e2e/demo.spec.ts` (`make e2e`).
+
 ## Data classification along the flow
 
 | Data | Where it lives | Leaves the platform? |

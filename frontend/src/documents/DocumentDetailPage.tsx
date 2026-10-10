@@ -118,7 +118,7 @@ export function DocumentDetailPage() {
             <span className="text-xs text-slate-500">{document.sensitivity.toLowerCase()} · {document.source.toLowerCase()}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
@@ -314,30 +314,32 @@ export function DocumentDetailPage() {
               {inspection.pages_needing_ocr.length > 0 &&
                 ` · OCR needed on ${inspection.pages_needing_ocr.length} of ${inspection.page_count} page(s)`}
             </p>
-            <table className="mt-3 w-full text-left text-sm">
-              <thead className="text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2 font-medium">Page</th>
-                  <th className="py-2 font-medium">Text source</th>
-                  <th className="py-2 text-right font-medium">Text characters</th>
-                  <th className="py-2 text-right font-medium">Images</th>
-                  <th className="py-2 text-right font-medium">Size</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {inspection.pages.map((page) => (
-                  <tr key={page.page_number}>
-                    <td className="py-1.5">{page.page_number}</td>
-                    <td className="py-1.5">{page.method === "NATIVE" ? "Text layer" : "Needs OCR"}</td>
-                    <td className="py-1.5 text-right tabular-nums">{page.text_chars}</td>
-                    <td className="py-1.5 text-right tabular-nums">{page.image_objects}</td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-600">
-                      {Math.round(page.width)} × {Math.round(page.height)} {page.unit}
-                    </td>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2 font-medium">Page</th>
+                    <th className="py-2 font-medium">Text source</th>
+                    <th className="py-2 text-right font-medium">Text characters</th>
+                    <th className="py-2 text-right font-medium">Images</th>
+                    <th className="py-2 text-right font-medium">Size</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {inspection.pages.map((page) => (
+                    <tr key={page.page_number}>
+                      <td className="py-1.5">{page.page_number}</td>
+                      <td className="py-1.5">{page.method === "NATIVE" ? "Text layer" : "Needs OCR"}</td>
+                      <td className="py-1.5 text-right tabular-nums">{page.text_chars}</td>
+                      <td className="py-1.5 text-right tabular-nums">{page.image_objects}</td>
+                      <td className="py-1.5 text-right tabular-nums text-slate-600">
+                        {Math.round(page.width)} × {Math.round(page.height)} {page.unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         ) : (
           <p className="mt-2 text-sm text-slate-500">Not inspected yet.</p>

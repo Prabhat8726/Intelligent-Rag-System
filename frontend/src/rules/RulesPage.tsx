@@ -143,7 +143,7 @@ export function RulesPage() {
               className={`rounded-xl border border-slate-200 bg-white p-4 ${rule.is_enabled ? "" : "opacity-70"}`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="font-medium">
                     {rule.name}
                     {!rule.is_enabled && <span className="ml-2 text-xs font-normal text-slate-500">(disabled)</span>}
@@ -155,7 +155,7 @@ export function RulesPage() {
                   </p>
                   <p className="mt-1 text-sm text-slate-700">{rule.description}</p>
                   {Object.keys(rule.params).length > 0 && (
-                    <p className="mt-1 font-mono text-xs text-slate-500">{JSON.stringify(rule.params)}</p>
+                    <p className="mt-1 break-all font-mono text-xs text-slate-500">{JSON.stringify(rule.params)}</p>
                   )}
                 </div>
                 {canManage && editing !== rule.code && (

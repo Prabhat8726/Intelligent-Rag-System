@@ -11,4 +11,5 @@ afterEach(() => {
   cleanup();
   resetBrowserSession();
   window.sessionStorage.clear();
+  window.localStorage.clear();
 });

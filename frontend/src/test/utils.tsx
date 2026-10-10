@@ -32,9 +32,11 @@ export function problem(status: number, detail: string): Response {
 // The browser's session cookie (httpOnly, so the app never sees it): set by `browserHasSession`.
 let sessionCookie = false;
 
-/** Start the test with a session cookie: the app restores the session via /auth/refresh. */
+/** Start the test with a session cookie (and the app's note that this browser signed in): the
+ *  app restores the session via /auth/refresh. */
 export function browserHasSession(): void {
   sessionCookie = true;
+  window.localStorage.setItem("docintel.signed-in", "1");
 }
 
 export function resetBrowserSession(): void {

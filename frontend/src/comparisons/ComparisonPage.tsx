@@ -160,22 +160,24 @@ export function ComparisonPage() {
             className="rounded-xl border border-slate-200 bg-white"
           >
             <h2 className="px-5 pt-4 font-medium">{group.category === "HEADER" ? "Header" : "Line items"}</h2>
-            <table className="mt-2 w-full text-left text-sm">
-              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2 pr-3 pl-5 font-medium">Item</th>
-                  <th className="py-2 pr-3 font-medium">{leftRole}</th>
-                  <th className="py-2 pr-3 font-medium">{rightRole}</th>
-                  <th className="py-2 pr-3 font-medium">Result</th>
-                  <th className="py-2 pr-5" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {group.items.map((item) => (
-                  <ItemRow key={item.id} item={item} />
-                ))}
-              </tbody>
-            </table>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2 pr-3 pl-5 font-medium">Item</th>
+                    <th className="py-2 pr-3 font-medium">{leftRole}</th>
+                    <th className="py-2 pr-3 font-medium">{rightRole}</th>
+                    <th className="py-2 pr-3 font-medium">Result</th>
+                    <th className="py-2 pr-5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {group.items.map((item) => (
+                    <ItemRow key={item.id} item={item} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </section>
         ),
       )}

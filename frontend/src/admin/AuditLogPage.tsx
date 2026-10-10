@@ -89,42 +89,44 @@ export function AuditLogPage() {
         ) : items.length === 0 ? (
           <p className="p-5 text-sm text-slate-500">No events.</p>
         ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-200 uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-2 font-medium">When</th>
-                <th className="py-2 font-medium">Event</th>
-                <th className="py-2 font-medium">Who</th>
-                <th className="py-2 font-medium">About</th>
-                <th className="py-2 font-medium">Outcome</th>
-                <th className="py-2 pr-4 font-medium">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((item) => (
-                <tr key={item.id} className="align-top">
-                  <td className="whitespace-nowrap px-4 py-2">{new Date(item.occurred_at).toLocaleString()}</td>
-                  <td className="py-2 font-mono">{item.action}</td>
-                  <td className="py-2">
-                    {item.actor ? item.actor.email : item.actor_type.toLowerCase()}
-                    {item.actor && item.actor_type !== "USER" && (
-                      <span className="block text-slate-500">via {item.actor_type.toLowerCase()}</span>
-                    )}
-                    {item.ip_address && <span className="block text-slate-500">{item.ip_address}</span>}
-                  </td>
-                  <td className="py-2">
-                    {item.entity_type ? `${item.entity_type} ${item.entity_id?.slice(0, 8) ?? ""}` : "—"}
-                  </td>
-                  <td className={`py-2 ${item.outcome === "SUCCESS" ? "text-emerald-700" : "text-red-700"}`}>
-                    {item.outcome.toLowerCase()}
-                  </td>
-                  <td className="max-w-sm break-all py-2 pr-4 font-mono text-slate-600">
-                    {Object.keys(item.details).length > 0 ? JSON.stringify(item.details) : ""}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-slate-200 uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2 font-medium">When</th>
+                  <th className="py-2 font-medium">Event</th>
+                  <th className="py-2 font-medium">Who</th>
+                  <th className="py-2 font-medium">About</th>
+                  <th className="py-2 font-medium">Outcome</th>
+                  <th className="py-2 pr-4 font-medium">Details</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((item) => (
+                  <tr key={item.id} className="align-top">
+                    <td className="whitespace-nowrap px-4 py-2">{new Date(item.occurred_at).toLocaleString()}</td>
+                    <td className="py-2 font-mono">{item.action}</td>
+                    <td className="py-2">
+                      {item.actor ? item.actor.email : item.actor_type.toLowerCase()}
+                      {item.actor && item.actor_type !== "USER" && (
+                        <span className="block text-slate-500">via {item.actor_type.toLowerCase()}</span>
+                      )}
+                      {item.ip_address && <span className="block text-slate-500">{item.ip_address}</span>}
+                    </td>
+                    <td className="py-2">
+                      {item.entity_type ? `${item.entity_type} ${item.entity_id?.slice(0, 8) ?? ""}` : "—"}
+                    </td>
+                    <td className={`py-2 ${item.outcome === "SUCCESS" ? "text-emerald-700" : "text-red-700"}`}>
+                      {item.outcome.toLowerCase()}
+                    </td>
+                    <td className="max-w-sm break-all py-2 pr-4 font-mono text-slate-600">
+                      {Object.keys(item.details).length > 0 ? JSON.stringify(item.details) : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
       {events.hasNextPage && (
